@@ -7,12 +7,19 @@ rust-version.workspace = true
 license.workspace = true
 
 [package.metadata.vela]
-rank = 8
+# 9, not 8: the answer this server publishes has to be the answer `vela check` publishes, and that
+# answer includes what the *widgets* have to say — which is `vela-ui`, itself rank 8. At rank 8 this
+# crate could not see it, and the parity criterion in `M10-tooling.md` was unsatisfiable. Rank 9 puts
+# it beside `vela-test`, the other crate that assembles what the lower layers say rather than adding
+# analysis of its own.
+rank = 9
 
 [dependencies]
 vela-span.workspace = true
+vela-syntax = { version = "0.1.0", path = "../vela-syntax" }
 vela-compile.workspace = true
 vela-diag.workspace = true
+vela-ui.workspace = true
 
 [lints]
 workspace = true

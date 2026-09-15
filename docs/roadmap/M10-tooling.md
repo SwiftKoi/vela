@@ -30,6 +30,26 @@ then caught the last of those in the one fixture that had been written around it
 argument for the gate, and the reason the printer's whitespace rules now have tests of their own
 instead of being implied by a round trip that was stable and wrong.
 
+**Item 3's foundation is in, and it changed a rank.** The parity criterion — the editor and
+`vela check` must publish the same diagnostics — turned out to be *unsatisfiable* as the ranks stood:
+what `vela check` publishes includes what the widgets have to say, which is `vela-ui` (rank 8), and
+`vela-lsp` was also rank 8, so it could not see `vela-ui` at all. The comment in `vela-cli` that
+claimed the language server could check screens was the tell. `vela-lsp` is now rank 9
+(`ARCHITECTURE.md §1`), beside `vela-test` — the other crate that assembles what the lower layers say
+rather than adding analysis of its own.
+
+With one crate able to see both, the answer lives in one function (`vela_lsp::diagnostics::project`)
+that `vela check` and `vela build` both call, and the editor calls per file
+(`vela_lsp::diagnostics::file`, which is what an edit wants). The parity test compares the command's
+actual JSON output against the same renderer over the server's answer, so a second list growing in
+either caller is a failure rather than a drift. Moving the screen checks also fixed a bug they had
+carried: they parsed each file with a fixed `FileId`, so every screen warning in a project claimed to
+be in the first file and was rendered against whatever line happened to be there.
+
+**Next: the transport.** `vela-lsp` still has no protocol — no `initialize`, no document sync, no
+publish. That is item 2, and the position mapping it needs (byte offsets to LSP's UTF-16 columns) is
+the next thing to write.
+
 **Input from the Ren'Py reference.** Ren'Py's `developer_tools` and `cli` pages are the closest
 thing to a spec for this milestone, and four of its tools are worth copying rather than inventing:
 

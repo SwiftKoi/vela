@@ -138,12 +138,12 @@ impl Check {
     ) -> Result<(usize, usize), Error> {
         let mut session = load(project)?;
 
-        // Screens are checked here rather than in the compiler, for the rank reason
-        // `vela-ui::check` records: compiling is rank 7 and the widget vocabulary is rank 8,
-        // so the crates that can see both a screen and a registry are the ones that *consume*
-        // screens — this one and the language server.
-        let mut diagnostics = session.diagnostics();
-        diagnostics.extend(project_screen_diagnostics(project));
+        // One answer, asked by both this and the language server (`vela_lsp::diagnostics`): an editor
+        // that disagreed with `vela check` about a file would be worse than no editor, so neither
+        // side assembles its own list. The earlier version of this comment claimed the language
+        // server could check screens; it could not, because the widget vocabulary is rank 8 and the
+        // server was rank 8 too — which is why the server is now rank 9 (`ARCHITECTURE.md §1`).
+        let diagnostics = vela_lsp::diagnostics::project(&mut session);
 
         match emit {
             Emit::Mir => write_mir(&mut session, out)?,
@@ -401,49 +401,4 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
             out.push(path);
         }
     }
-}
-
-/// Checks every screen in a project.
-pub(crate) fn project_screen_diagnostics(project: &Project) -> Vec<vela_diag::Diagnostic> {
-    let mut diagnostics = Vec::new();
-    for path in &project.files {
-        if let Ok(text) = fs::read_to_string(path) {
-            diagnostics.extend(screen_diagnostics(&text));
-        }
-    }
-    diagnostics
-}
-
-/// Checks the screens in one file.
-///
-/// Per file rather than per project: a style table is resolved where it is declared, so a
-/// screen in one module naming a style in another is not yet checked. Worth stating rather
-/// than leaving to be discovered — cross-module *types* have the same shape and were deferred
-/// at M3 for the same reason.
-fn screen_diagnostics(text: &str) -> Vec<vela_diag::Diagnostic> {
-    use vela_syntax::{Item, StyleDecl};
-
-    let parsed = vela_syntax::parse(vela_span::FileId::from_raw(0), text);
-    let registry = vela_ui::WidgetRegistry::builtin();
-    let styles: Vec<&StyleDecl> = parsed
-        .program
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            Item::Style(style) => Some(style),
-            _ => None,
-        })
-        .collect();
-
-    let mut diagnostics = vela_ui::check_inheritance(&styles);
-    for item in &parsed.program.items {
-        let Item::Screen(screen) = item else {
-            continue;
-        };
-        diagnostics.extend(vela_ui::check_screen(&screen.body, &registry));
-        diagnostics.extend(vela_ui::check_screen_styles(&screen.body, &styles));
-        diagnostics.extend(vela_ui::a11y::check_labels(&screen.body, &registry));
-        diagnostics.extend(vela_ui::check_magic_colours(&screen.body));
-    }
-    diagnostics
 }

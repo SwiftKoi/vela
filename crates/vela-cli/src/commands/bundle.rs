@@ -22,7 +22,7 @@ use vela_diag::Severity;
 use vela_span::FileId;
 
 use crate::command::Error;
-use crate::commands::check::{Project, load, module_path, project_screen_diagnostics};
+use crate::commands::check::{Project, load, module_path};
 use crate::commands::target::Target;
 
 /// The directory a project's assets live in, beside `src/`.
@@ -55,7 +55,7 @@ pub struct Counts {
 /// Fails if a source cannot be read, or the story has errors.
 pub fn prepare(project: &Project, out: &mut dyn Write) -> Result<Session, Error> {
     let mut session = load(project)?;
-    refuse_errors(&mut session, project, out)?;
+    refuse_errors(&mut session, out)?;
     Ok(session)
 }
 
@@ -131,13 +131,11 @@ pub fn write(
 /// Errors only: a warning is something the author has decided to live with, and a build that
 /// refused on those is a build people learn to bypass. `vela check --deny-warnings` is where
 /// that decision belongs.
-fn refuse_errors(
-    session: &mut Session,
-    project: &Project,
-    out: &mut dyn Write,
-) -> Result<(), Error> {
-    let mut diagnostics = session.diagnostics();
-    diagnostics.extend(project_screen_diagnostics(project));
+fn refuse_errors(session: &mut Session, out: &mut dyn Write) -> Result<(), Error> {
+    // The same answer `vela check` gives and the editor publishes (`vela_lsp::diagnostics`): a build
+    // that refused on a different list than the one an author sees would be a build they learn to
+    // bypass.
+    let diagnostics = vela_lsp::diagnostics::project(session);
 
     let errors = diagnostics
         .iter()

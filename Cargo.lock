@@ -2119,6 +2119,8 @@ dependencies = [
  "vela-compile",
  "vela-diag",
  "vela-span",
+ "vela-syntax",
+ "vela-ui",
 ]
 
 [[package]]
