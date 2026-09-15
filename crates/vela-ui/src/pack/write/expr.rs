@@ -12,7 +12,8 @@ use super::codec::{Writer, count};
 impl Writer {
     pub(super) fn expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::Int { span, value } => self.number(*span, *value),
+            // The radix is not written: a pack holds what a renderer needs, which is the value.
+            Expr::Int { span, value, .. } => self.number(*span, *value),
             Expr::Float { span, value } => self.decimal(*span, *value),
             Expr::Path { span, value } => self.leaf(2, *span, value),
             Expr::Bool { span, value } => self.boolean(*span, *value),

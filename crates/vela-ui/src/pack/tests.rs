@@ -22,15 +22,19 @@ fn leaf() -> Expr {
     Expr::Int {
         span: span(),
         value: 1,
+        hex: false,
     }
 }
 
 /// One of every expression variant that is not an operator application.
 fn expressions() -> Vec<Expr> {
     vec![
+        // Decimal, because that is the radix the codec stores: a pack keeps the value, and the
+        // source formatter is what keeps the spelling.
         Expr::Int {
             span: span(),
             value: -3,
+            hex: false,
         },
         Expr::Float {
             span: span(),

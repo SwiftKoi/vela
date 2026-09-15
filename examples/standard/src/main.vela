@@ -28,18 +28,18 @@ style aside from body:
 
 screen dialogue(name: str?, line: str):
     layer ui
-    box at bottom, stretch_x, background = theme.bg:
+    box at = bottom, stretch_x, background = theme.bg:
         pad 24
-        column gap 8:
+        column gap = 8:
             if name is not none:
-                text name style = aside
-            text line style = body
+                text name, style = aside
+            text line, style = body
 
 screen pause:
     layer ui
     box stretch_x, stretch_y, background = theme.bg:
         pad 24
-        column gap 12:
+        column gap = 12:
             button background = theme.accent:
                 text "Resume"
                 action close_screen()
@@ -55,7 +55,7 @@ screen pause:
             button background = theme.accent:
                 text "Credits"
                 action open_screen(credits)
-            button label "Leave the story" background = theme.accent:
+            button label = "Leave the story", background = theme.accent:
                 text "Quit"
                 action quit()
 
@@ -63,10 +63,10 @@ screen settings:
     layer ui
     box stretch_x, stretch_y, background = theme.bg:
         pad 24
-        column gap 12:
+        column gap = 12:
             text "Volume"
-            bar value = 5 label "Volume"
-            row gap 8:
+            bar value = 5, label = "Volume"
+            row gap = 8:
                 button background = theme.accent:
                     text "Back"
                     action close_screen()
@@ -75,8 +75,8 @@ screen credits:
     layer ui
     box stretch_x, stretch_y, background = theme.bg:
         pad 24
-        column gap 12:
-            text "Standard" style = aside
+        column gap = 12:
+            text "Standard", style = aside
             text "Four modules, linked into one program."
             spacer
             button background = theme.accent:

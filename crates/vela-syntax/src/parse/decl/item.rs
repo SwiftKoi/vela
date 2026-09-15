@@ -22,7 +22,7 @@ impl Parser<'_> {
             }
         }
 
-        Program { items }
+        Program::with_items(items)
     }
 
     /// Parses one top-level item.

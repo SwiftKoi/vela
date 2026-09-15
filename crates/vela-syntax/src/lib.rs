@@ -2,8 +2,9 @@
 //!
 //! # Owns
 //!
-//! Tokens, indentation handling, syntax tree node types, parse error recovery, and the
-//! lexical (`E0xxx`) and syntactic (`E1xxx`) diagnostics.
+//! Tokens, comments, indentation handling, syntax tree node types, parse error recovery, the
+//! lexical (`E0xxx`) and syntactic (`E1xxx`) diagnostics, and the formatter — which is a function
+//! of the tree, so it lives with the tree (`TOOLING.md §3`).
 //!
 //! # Does not own
 //!
@@ -23,14 +24,17 @@
 mod error;
 mod lex;
 mod parse;
+mod print;
 mod tree;
 
 #[cfg(test)]
 mod tests;
 
+pub use lex::Comment;
 pub use lex::cursor::Cursor;
 pub use lex::indent::{IndentAction, IndentError, IndentStack};
 pub use lex::lexer::{LexResult, lex};
 pub use lex::token::{Keyword, Token, TokenKind};
 pub use parse::{ParseResult, PathRef, parse};
+pub use print::{NotFormatted, format};
 pub use tree::*;

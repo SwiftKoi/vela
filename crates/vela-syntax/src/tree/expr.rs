@@ -84,8 +84,15 @@ pub enum Expr {
     Int {
         /// The literal's span.
         span: Span,
-        /// Its value. `0x` literals are already in base ten here.
+        /// Its value. A `0x` literal is already in base ten here.
         value: i64,
+        /// Whether it was written in hexadecimal.
+        ///
+        /// Kept because `LANGUAGE.md §1` gives hexadecimal a reason — "colours are naturally
+        /// written that way" — and a formatter that cannot see the radix prints `0x10121a` as
+        /// `1053226`, destroying the one thing the spelling exists for. `_` separators are *not*
+        /// kept: they are decoration, and the canonical form has none.
+        hex: bool,
     },
     /// A floating-point literal.
     Float {

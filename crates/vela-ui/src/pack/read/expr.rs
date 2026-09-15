@@ -47,7 +47,13 @@ impl Reader<'_> {
     fn expr_int(&mut self) -> Expr {
         let span = self.span();
         let value = self.i64();
-        Expr::Int { span, value }
+        // The radix is not stored: a renderer needs the value, and the canonical spelling of a
+        // literal is the source formatter's business, not a compiled pack's.
+        Expr::Int {
+            span,
+            value,
+            hex: false,
+        }
     }
 
     fn expr_float(&mut self) -> Expr {

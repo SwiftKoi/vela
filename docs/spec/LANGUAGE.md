@@ -27,7 +27,16 @@ analyzable.*
 - **Indentation**: spaces only. A tab in leading whitespace is `E0003`. The corpus is
   formatted at 4 spaces; indentation width within a block must be consistent (`E0004`).
   Mixed widths at the same level are `E0005`.
-- **Comments**: `#` to end of line. No block comments.
+- **Comments**: `#` to end of line. No block comments. A comment is *trivia with content*: no rule
+  of the grammar mentions one, so the parser never sees it — but a tool that rewrites a file must
+  put it back, and a tool that documents code has to read it, so the lexer records every comment
+  beside the tokens rather than dropping it (`TOOLING.md §3`).
+
+  The comment block directly above a declaration **is that declaration's documentation**. This is a
+  rule, not a marker: consecutive comment lines, the last of which is the line before the
+  declaration, with nothing between them. A blank line ends the block — a comment set apart from
+  what follows is about the file, not about the declaration — and a comment written after code on
+  the same line documents nothing, because it is about the code it sits beside.
 - **Line continuation**: a line ending in `\` continues (used for long expressions).
 - **Identifiers**: `[A-Za-z_][A-Za-z0-9_]*`.
   - values and modules: `snake_case`
@@ -401,6 +410,15 @@ Transforms are declarative and composable; see `SCREENS.md §6` for the animatio
 at build time; a missing asset is `E7001` and an unused asset is `W7001`. The common
 "works on my machine" bug — a file renamed on one machine and missing on another — is a
 compile error here rather than a blank rectangle in front of a playtester.
+
+**Checked, but not *typed* — deliberately, and for now.** A path literal has type `Unknown`, so it
+can be passed where a path is expected and is resolved at build time, but it cannot be stored in a
+`struct` field, held in a `default`, or declared as a parameter type: writing `fn play(track: Audio)`
+is an error, not a feature that is missing. The reason is that asset identity is a *build* fact —
+`BUILD_AND_ASSETS.md §9` answers it against the manifest, and the manifest is not part of the
+program's type environment. Making assets a real type is what would let the save schema and a
+plugin's ABI name one, so it is a change to agree on before either of them ships, not a detail to
+discover while writing a struct.
 
 > **Implemented so far (M9).** `E7001` is reported by `vela check` for every `@"path"` that
 > names nothing in the project's manifest, underlined at the literal itself.

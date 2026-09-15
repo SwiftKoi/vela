@@ -4,7 +4,17 @@
 
 **Depends on.** M2 (can start early), M5, M7 for goldens.
 
-**Crates.** `vela-lsp`, formatter (in `vela-syntax` or its own crate), `vela-test`.
+**Crates.** `vela-lsp`, formatter (landed in `vela-syntax`), `vela-test`.
+
+**Landed early: the formatter.** Item 1's printer and `vela fmt` / `--check` are in, because
+nothing else can *establish* the syntax before this milestone: a formatter is what turns "these are
+the rules" into text that is checked on every file in the repository. It is in `vela-syntax`
+(`format`, `print/`) since it is a function of the tree, and it is pinned by two corpus-wide tests —
+`crates/vela-syntax/tests/format_roundtrip.rs` (idempotent, re-parses, keeps every comment) and
+`crates/vela-mir/tests/format_equivalence.rs` (lowers to the same program before and after).
+`TOOLING.md §3` records the canonical form, including the choices the tree cannot make for itself.
+Still open from item 1: `--diff`, the `W4011` lint for `# fmt: off`, and running `--check` over this
+repository's own fixtures — the last needs the parse goldens re-blessed, because they pin spans.
 
 **Work items.**
 1. Formatter with the rules in `TOOLING.md §3`; `--check` and `--diff`.

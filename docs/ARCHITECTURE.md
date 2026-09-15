@@ -129,6 +129,11 @@ invalidate only the queries downstream of the changed syntax node, which is what
 completion and diagnostics feel instant on a 500k-word project. The LSP is a thin adapter
 over that database — it holds no state of its own.
 
+The formatter is the one editor feature that needs no database at all: it is a function from the
+syntax tree to text, so it sits in `vela-syntax` beside the tree (`TOOLING.md §3`). What it does
+need is the *whole* file rather than a query result — it refuses one that does not parse, because
+the tree's gaps are where the syntax errors were.
+
 ### 3.3 Runtime loop
 
 ```

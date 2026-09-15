@@ -168,6 +168,12 @@ Rules:
   `E5008`).
 - Only tokens and typed values are permitted; a raw magic color in a screen is `W4008`.
 - Theme switching at runtime re-resolves styles without recompiling screens.
+- **Styles and themes resolve within the file that declares them.** A screen uses the styles, theme,
+  and characters of its own module; there is no project-wide style table, and a screen cannot name a
+  style declared in another file. This is the same boundary as `default` and every other
+  non-label name (`LANGUAGE.md §6.1`), and it is why a screen pack is one file's worth (§13). It is
+  written down because it is the sort of thing an editor makes *visible*: a completion list that
+  quietly omits another file's styles looks like a bug unless the rule is the rule.
 - **Contrast checking**: a foreground/background pair below a WCAG threshold is `W4009`, with
   the computed ratio in the message. Accessibility as a lint, not a manual audit.
 
@@ -360,7 +366,7 @@ actually arrives broken — a truncated transfer and a half-written file. It is 
 - **Binary, not text.** A pack is not source and is not meant to be edited; a readable form would
   be a second thing to keep in step with the language.
 - **One per module.** A `ScreenSet` is one file's worth, because styles resolve where they are
-  declared (§7). A module that declares no screens, styles, or theme produces no pack.
+  declared (§5). A module that declares no screens, styles, or theme produces no pack.
 - **Not a second IR.** A screen is evaluated against its arguments and the active theme at layout
   time (§2), so a live expression tree exists at run time however it is encoded. The pack carries
   that tree rather than a widget IR that would need a second evaluator kept in step with this one.
