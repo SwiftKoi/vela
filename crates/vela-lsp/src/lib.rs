@@ -13,6 +13,10 @@
 //! program, which is the only way an editor and CI can be guaranteed to agree.
 
 pub mod diagnostics;
+pub mod position;
 mod server;
+
+#[cfg(test)]
+mod tests;
 
 pub use server::Server;
