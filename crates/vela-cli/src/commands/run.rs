@@ -1,9 +1,14 @@
-//! `vela run` — run a story.
+//! `vela run` — run a story, from a project or from a built bundle.
 //!
 //! Headless, plus `--capture`, which renders a frame to a PNG without opening anything. There
-//! is still no *window*: `vela-host`'s native backend lands later in M6. What exists now is
-//! everything below it — commands become a draw list, and a draw list becomes pixels — so a
-//! run can be looked at without a display, and the same path will back the window.
+//! is still no *window* from a project: `vela-host`'s native backend lands later in M6. What
+//! exists now is everything below it — commands become a draw list, and a draw list becomes
+//! pixels — so a run can be looked at without a display, and the same path will back the window.
+//!
+//! A path naming a **built bundle** — a directory with `manifest.json` and no `vela.toml` — is
+//! run by [`crate::commands::bundle_run`] instead, straight from the bytecode the build wrote.
+//! That is the difference the whole M9 launcher turns on: a game can be given to someone who has
+//! no compiler.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -11,7 +16,9 @@ use std::path::PathBuf;
 use vela_compile::Session;
 
 use crate::command::{Command, Error};
+use crate::commands::bundle_run;
 use crate::commands::check::{Project, collect, module_path};
+use crate::commands::frame;
 use crate::commands::ui::Screens;
 
 /// The `vela run` command.
@@ -46,54 +53,16 @@ impl Command for Run {
     fn run(&self, args: &[String], out: &mut dyn Write) -> Result<(), Error> {
         let target =
             positional(args).map_or_else(|| self.base.clone(), |path| self.base.join(path));
+
+        // A bundle is not a project, and `collect` says so by insisting on `vela.toml`. Asking
+        // which it is comes first, so a bundle never reaches the compiler.
+        if bundle_run::is_bundle(&target) {
+            return bundle_run::run(&target, args, out);
+        }
+
         let project = collect(&target)?;
-
-        let entry = flag_value(args, "--start")
-            .map(ToString::to_string)
-            .or_else(|| {
-                project
-                    .manifest
-                    .as_ref()
-                    .map(|manifest| manifest.project.entry.clone())
-            })
-            .ok_or_else(|| {
-                Error::usage(
-                    "no entry point: pass `--start module.label`, or set `entry` in vela.toml",
-                )
-            })?;
-
-        let Some((module_name, label)) = entry.rsplit_once('.') else {
-            return Err(Error::usage(format!(
-                "`{entry}` is not a valid entry point; expected `module.label`"
-            )));
-        };
-
-        let mut session = load(&project);
-
-        // A story with errors is not worth running: the module would either refuse to verify
-        // or, worse, run a program nobody wrote.
-        if session
-            .diagnostics()
-            .iter()
-            .any(|d| d.severity() == vela_diag::Severity::Error)
-        {
-            return Err(Error::diagnostics(
-                "the project has errors; run `vela check` to see them".to_string(),
-            ));
-        }
-
-        let compiled = compile_entry(&mut session, module_name)?;
-        let module = vela_bytecode::compile(&compiled, true);
-
-        let diagnostics = vela_bytecode::verify(&module);
-        if !diagnostics.is_empty() {
-            for diagnostic in &diagnostics {
-                let _ = out.write_all(vela_diag::render(diagnostic, session.sources()).as_bytes());
-            }
-            return Err(Error::internal(
-                "the compiled module does not verify".to_string(),
-            ));
-        }
+        let (module, entry) = compile_project(&project, args, out)?;
+        let label = entry_label(&entry)?;
 
         // The screens the presenter may draw. Compiled here rather than in the compiler, for
         // the rank reason `commands::ui` records: the CLI is the lowest layer that can see both
@@ -101,12 +70,21 @@ impl Command for Run {
         let screens = Screens::load(&project);
         let images = stage_images(&project, out);
 
-        if !args.iter().any(|arg| arg == "--headless") && flag_value(args, "--capture").is_none() {
+        if wants_a_window(args) {
             let saves = saves_dir(&target);
             let schema = crate::commands::ui::schema(&project.files);
             let title = title_of(project.manifest.as_ref(), &entry);
             return play(
-                &module, label, &title, args, out, screens, saves, schema, images,
+                &module,
+                label,
+                &title,
+                args,
+                out,
+                screens,
+                saves,
+                schema,
+                images,
+                vela_host::Bindings::new(),
             );
         }
 
@@ -115,7 +93,7 @@ impl Command for Run {
             .map_err(|fault| Error::internal(format!("{fault}")))?;
 
         if let Some(path) = flag_value(args, "--capture") {
-            return capture(&execution.commands, path, args, out, &screens, images);
+            return frame::capture(&execution.commands, path, args, out, &screens, images);
         }
 
         for command in &execution.commands {
@@ -123,6 +101,85 @@ impl Command for Run {
         }
         Ok(())
     }
+}
+
+/// Compiles the module a project's entry point names, or says why it will not run.
+///
+/// Separate from `run` because it is the whole front end in order — resolve the entry, check the
+/// project, compile, verify — and `run` is about *what to do with* the module it produces.
+///
+/// # Errors
+///
+/// Fails if there is no entry point, the project has errors, or the module does not verify.
+fn compile_project(
+    project: &Project,
+    args: &[String],
+    out: &mut dyn Write,
+) -> Result<(vela_bytecode::Module, String), Error> {
+    let entry = flag_value(args, "--start")
+        .map(ToString::to_string)
+        .or_else(|| {
+            project
+                .manifest
+                .as_ref()
+                .map(|manifest| manifest.project.entry.clone())
+        })
+        .ok_or_else(|| {
+            Error::usage("no entry point: pass `--start module.label`, or set `entry` in vela.toml")
+        })?;
+    let module_name = entry
+        .rsplit_once('.')
+        .map(|(module, _)| module)
+        .ok_or_else(|| {
+            Error::usage(format!(
+                "`{entry}` is not a valid entry point; expected `module.label`"
+            ))
+        })?;
+
+    let mut session = load(project);
+
+    // A story with errors is not worth running: the module would either refuse to verify
+    // or, worse, run a program nobody wrote.
+    if session
+        .diagnostics()
+        .iter()
+        .any(|d| d.severity() == vela_diag::Severity::Error)
+    {
+        return Err(Error::diagnostics(
+            "the project has errors; run `vela check` to see them".to_string(),
+        ));
+    }
+
+    let compiled = compile_entry(&mut session, module_name)?;
+    let module = vela_bytecode::compile(&compiled, true);
+
+    let diagnostics = vela_bytecode::verify(&module);
+    if !diagnostics.is_empty() {
+        for diagnostic in &diagnostics {
+            let _ = out.write_all(vela_diag::render(diagnostic, session.sources()).as_bytes());
+        }
+        return Err(Error::internal(
+            "the compiled module does not verify".to_string(),
+        ));
+    }
+    Ok((module, entry))
+}
+
+/// The label half of an entry point, which is what the VM starts at.
+fn entry_label(entry: &str) -> Result<&str, Error> {
+    entry
+        .rsplit_once('.')
+        .map(|(_, label)| label)
+        .ok_or_else(|| Error::usage(format!("`{entry}` is not `module.label`")))
+}
+
+/// Whether a run should open a window rather than print its commands.
+///
+/// `--headless` and `--capture` are both ways of asking for no window, and either one decides
+/// it; a bundle run reaches the same question.
+#[must_use]
+pub(crate) fn wants_a_window(args: &[String]) -> bool {
+    !args.iter().any(|arg| arg == "--headless") && flag_value(args, "--capture").is_none()
 }
 
 /// Every `image` declaration's picture, decoded, by the name a scene stages it under.
@@ -185,7 +242,7 @@ pub(crate) fn title_of(manifest: Option<&crate::manifest::Manifest>, entry: &str
 }
 
 /// Where a project's saves live: a `saves/` directory beside it.
-fn saves_dir(target: &std::path::Path) -> std::path::PathBuf {
+pub(crate) fn saves_dir(target: &std::path::Path) -> std::path::PathBuf {
     let base = if target.is_dir() {
         target
     } else {
@@ -196,7 +253,7 @@ fn saves_dir(target: &std::path::Path) -> std::path::PathBuf {
 
 /// Opens a window and plays the story in it.
 #[allow(clippy::too_many_arguments)]
-fn play(
+pub(crate) fn play(
     module: &vela_bytecode::Module,
     label: &str,
     title: &str,
@@ -206,6 +263,7 @@ fn play(
     saves: std::path::PathBuf,
     schema: vela_replay::Schema,
     images: Vec<(String, u32, u32, Vec<u8>)>,
+    bindings: vela_host::Bindings,
 ) -> Result<(), Error> {
     let size = parse_size(args).unwrap_or((1280, 720));
     // Printed, not assumed. A windowed run is the one thing here that can appear on someone's
@@ -223,196 +281,11 @@ fn play(
     writeln!(out, "playing {title}").map_err(|error| Error::internal(error.to_string()))?;
     out.flush()
         .map_err(|error| Error::internal(error.to_string()))?;
-    crate::commands::play::run(player, title, size)
+    crate::commands::play::run(player, title, size, bindings)
 }
-
-/// Renders a frame of the story to a PNG.
-///
-/// The frame is taken *at a command*, not at the end: a visual novel's state is a point in
-/// time, and the last command usually leaves a dialogue on screen. `--frame` picks which one;
-/// the default is the last `Say`, because "what did the player see when they read the last
-/// line" is the question a screenshot is usually asked.
-fn capture(
-    commands: &[vela_world::Command],
-    path: &str,
-    args: &[String],
-    out: &mut dyn Write,
-    screens: &Screens,
-    images: Vec<(String, u32, u32, Vec<u8>)>,
-) -> Result<(), Error> {
-    let size = parse_size(args).unwrap_or((1280, 720));
-    // The face is compiled in. `BUILD_AND_ASSETS.md` makes fonts project assets with a
-    // manifest and a subsetting step, none of which exists yet; until it does, an engine
-    // that ships with a default face is better than one that cannot draw without a flag.
-    let font = vela_text::Font::from_bytes(DEFAULT_FACE.to_vec(), 0)
-        .ok_or_else(|| Error::internal("the bundled font failed to load".to_string()))?;
-
-    let mut text = vela_text::TextEngine::new();
-    text.add_font(FACE_NAME, font);
-
-    let chosen = flag_value(args, "--frame")
-        .and_then(|value| value.parse::<usize>().ok())
-        .or_else(|| {
-            commands
-                .iter()
-                .rposition(|command| matches!(command, vela_world::Command::Say { .. }))
-        })
-        .unwrap_or(commands.len().saturating_sub(1));
-
-    let mut presenter = vela_render::Presenter::new(text, FACE_NAME, size);
-    for (name, width, height, rgba) in images {
-        presenter.stage_image(name, width, height, rgba);
-    }
-    for command in commands.iter().take(chosen + 1) {
-        presenter.apply(command);
-    }
-
-    let Some(mut capture) = vela_render::Capture::new(size.0, size.1) else {
-        return Err(Error::internal(
-            "no GPU adapter available: `--capture` renders with wgpu".to_string(),
-        ));
-    };
-    let screen = named_screen(args, screens)?;
-
-    // Images before the draw list, the atlas after it. Images are already pixels, so the
-    // presenter needs their texture ids *while* it builds; glyphs are rasterised *by* building,
-    // so their atlas cannot exist until it has.
-    presenter.upload_images(capture.renderer_mut());
-
-    // The draw list first, the atlas second. Building is what *rasterises* glyphs, so an
-    // upload before it sends an empty image and every glyph samples nothing — which renders
-    // as a perfectly good dialogue box with no text in it.
-    let mut draw = vela_render::DrawList::new();
-    build_frame(
-        &mut presenter,
-        screens,
-        commands,
-        chosen,
-        size,
-        screen,
-        &mut draw,
-    );
-    capture
-        .renderer_mut()
-        .upload_atlas(presenter.text().atlas());
-
-    let mut graph = vela_render::RenderGraph::new();
-    graph.push(Box::new(vela_render::ClearStage {
-        color: presenter.style().background,
-    }));
-    graph.push(Box::new(vela_render::GeometryStage));
-
-    let path = std::path::Path::new(path);
-    capture
-        .save(&graph, &draw, path)
-        .map_err(|error| Error::internal(format!("cannot write {}: {error}", path.display())))?;
-    report_capture(out, path, screen, chosen, commands.len());
-    Ok(())
-}
-
-/// The screen `--screen` names, checked against the project so a bad name is a usage error
-/// rather than a picture of nothing. It renders instead of the current dialogue, which is how
-/// a menu or a settings panel can be looked at without a window.
-fn named_screen<'a>(args: &'a [String], screens: &Screens) -> Result<Option<&'a str>, Error> {
-    let Some(name) = flag_value(args, "--screen") else {
-        return Ok(None);
-    };
-    if screens.has(name) {
-        Ok(Some(name))
-    } else {
-        Err(Error::usage(format!("there is no screen called `{name}`")))
-    }
-}
-
-/// Says what was written, and at which point in the story.
-fn report_capture(
-    out: &mut dyn Write,
-    path: &std::path::Path,
-    screen: Option<&str>,
-    chosen: usize,
-    total: usize,
-) {
-    match screen {
-        Some(name) => {
-            let _ = writeln!(out, "captured {} (screen {name})", path.display());
-        }
-        None => {
-            let _ = writeln!(
-                out,
-                "captured {} at command {}/{}",
-                path.display(),
-                chosen + 1,
-                total
-            );
-        }
-    }
-}
-
-/// Fills `draw` with the frame: the backdrop, and then either a named screen or the dialogue.
-///
-/// A named screen draws no focus highlight — focus is runtime state, and a still has none.
-fn build_frame(
-    presenter: &mut vela_render::Presenter,
-    screens: &Screens,
-    commands: &[vela_world::Command],
-    chosen: usize,
-    size: (u32, u32),
-    screen: Option<&str>,
-    draw: &mut vela_render::DrawList,
-) {
-    if let Some(name) = screen {
-        presenter.build_backdrop(draw);
-        screens.draw(
-            name,
-            &vela_ui::Args::new(),
-            size,
-            presenter.text_mut(),
-            FACE_NAME,
-            draw,
-        );
-        return;
-    }
-
-    // The line the presenter would draw, read back from the commands so a screen is called
-    // with the same speaker and text. Taken with `take`, not slicing, so an empty command
-    // stream draws the backdrop rather than panicking on `[..=0]`.
-    let line = commands
-        .iter()
-        .take(chosen + 1)
-        .rev()
-        .find_map(|command| match command {
-            vela_world::Command::Say { speaker, text, .. } => Some((speaker.clone(), text.clone())),
-            _ => None,
-        });
-
-    presenter.build_backdrop(draw);
-    if let Some((speaker, text)) = line.filter(|_| screens.has("dialogue")) {
-        let dialogue = Screens::dialogue(speaker.as_deref(), &text);
-        screens.draw(
-            "dialogue",
-            &dialogue,
-            size,
-            presenter.text_mut(),
-            FACE_NAME,
-            draw,
-        );
-    } else {
-        presenter.build_dialogue(draw);
-    }
-    // The menu is the runtime's, not a screen's, so it is drawn whichever way the dialogue was.
-    presenter.build_menu(draw);
-}
-
-/// The name the bundled face is registered under.
-const FACE_NAME: &str = "sans";
-
-/// The default face, compiled into the binary.
-///
-/// See `assets/fonts/README.md` for provenance and licence.
-const DEFAULT_FACE: &[u8] = include_bytes!("../../../../assets/fonts/LiberationSans-Regular.ttf");
 
 /// A `WxH` flag, if given.
-fn parse_size(args: &[String]) -> Option<(u32, u32)> {
+pub(crate) fn parse_size(args: &[String]) -> Option<(u32, u32)> {
     let value = flag_value(args, "--size")?;
     let (width, height) = value.split_once('x')?;
     Some((width.parse().ok()?, height.parse().ok()?))
@@ -445,13 +318,13 @@ fn compile_entry(session: &mut Session, module_name: &str) -> Result<vela_mir::M
 }
 
 /// The value given to a `--flag value` argument, if the flag is present.
-fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+pub(crate) fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
     let index = args.iter().position(|arg| arg == flag)?;
     args.get(index + 1).map(String::as_str)
 }
 
 /// The first positional argument, skipping flags *and* the values they take.
-fn positional(args: &[String]) -> Option<&str> {
+pub(crate) fn positional(args: &[String]) -> Option<&str> {
     let mut index = 0;
     while index < args.len() {
         let arg = args[index].as_str();

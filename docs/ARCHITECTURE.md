@@ -242,7 +242,9 @@ We optimize **predictability over peak throughput**, with two exceptions that ar
 complexity because they are user-visible on every frame and every launch:
 
 - **Startup**: bytecode loads without recompilation; asset manifest is memory-mappable; no
-  scripting-language warmup.
+  scripting-language warmup. This is now a path rather than an intention: `vela_vm::Session::load`
+  takes a built bundle to the machine, and `vela run <bundle>` runs one with no compiler in the
+  path (`RUNTIME.md §8`, `BUILD_AND_ASSETS.md §8`).
 - **Frame time**: text layout and glyph atlas updates are cached and invalidated by change,
   not recomputed per frame. The UI tree is diffed on dirty flags, never fully relaid out.
 

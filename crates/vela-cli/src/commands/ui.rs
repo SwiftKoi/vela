@@ -43,6 +43,20 @@ impl Screens {
         }
     }
 
+    /// No screens at all.
+    ///
+    /// What a built bundle gets: screens are compiled from source, and a distribution bundle
+    /// ships none. The presenter's built-in dialogue box and menu are what draw instead, which
+    /// is a real game rather than a placeholder — a project that declared screens simply gets
+    /// the engine's own until screens are packed too.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            sets: Vec::new(),
+            paths: Vec::new(),
+        }
+    }
+
     /// The files this set was built from.
     #[must_use]
     pub fn paths(&self) -> &[PathBuf] {

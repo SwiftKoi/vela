@@ -219,18 +219,22 @@ Every push runs, in order (fastest failure first):
 6. `vela build --verify-reproducible` on the standard example (`BUILD_AND_ASSETS.md §7`)
 7. `vela check --format sarif` on a fixture with one deliberate error, validated as JSON
 8. `cargo xtask check-abi` (from M13)
-9. the wasm engine builds, runs, and is within its size budget (`tools/wasm-smoke.sh`)
+9. the wasm engine builds, runs the **web bundle**, and is within its size budget
+   (`tools/wasm-smoke.sh`)
 
 No gate is "advisory". A gate that can be ignored by habit is a gate that will be ignored.
 
 **Two jobs run beside the gates**, because they are not policies about the tree:
 
-- `platforms` — a `ubuntu` / `windows` / `macos` matrix that *builds and runs* the standard
-  example on each. This is the only honest way to answer "it works on all four targets":
-  cross-compiling from Linux proves the code has no platform-specific imports, not that the
-  binary links against the platform's libraries and starts. The platform adapters and the
-  bundle layout are exactly the parts that are deliberately *not* portable, so they are the
-  parts that have to be exercised per platform.
+- `platforms` — a `ubuntu` / `windows` / `macos` matrix that builds the standard example's
+  **target bundle** (`--target linux` / `win` / `mac`) and *runs it from `dist/`*, diffing the
+  command stream against a source run. Web is the fourth target and is covered by gate 9, which
+  plays the web bundle in wasm. This is the only honest way to answer "it works on all four
+  targets": cross-compiling from Linux proves the code has no platform-specific imports, not
+  that the binary links against the platform's libraries and starts. The platform adapters and
+  the bundle layout are exactly the parts that are deliberately *not* portable, so they are the
+  parts that have to be exercised per platform — and a bundle that only *builds* is a bundle
+  nothing has run.
 - `budgets` — `cargo run --release -p xtask -- budget`, which refuses under `debug_assertions`.
 
 **Not yet a gate: uploading the SARIF.** `github/codeql-action/upload-sarif` needs code

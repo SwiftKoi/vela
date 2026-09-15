@@ -46,12 +46,15 @@ wasm="target/${target}/release/vela_web.wasm"
 echo "generating the JavaScript glue"
 wasm-bindgen --target nodejs --out-dir "${work}/glue" "${wasm}" >/dev/null
 
-echo "building the project"
-cargo run -q -p vela-cli -- build "${project}" --out "${work}/dist" >/dev/null
-module="${work}/dist/scripts/main.velac"
+# The web *bundle*: `--target web` lays it out with its descriptor and `index.html`, and the
+# smoke run loads the module and the entry point from the manifest the build wrote — the same
+# files a page fetches (`BUILD_AND_ASSETS.md §5`).
+echo "building the project for the web target"
+cargo run -q -p vela-cli -- build "${project}" --out "${work}/dist" --target web >/dev/null
+bundle="${work}/dist/web"
 
-echo "playing it in wasm"
-node tools/wasm-smoke.cjs "${work}/glue" "${module}" >"${work}/wasm.txt"
+echo "playing the web bundle in wasm"
+node tools/wasm-smoke.cjs "${work}/glue" "${bundle}" >"${work}/wasm.txt"
 
 echo "playing it natively"
 cargo run -q -p vela-cli -- run "${project}" --headless >"${work}/native.txt"

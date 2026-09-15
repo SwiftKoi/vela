@@ -204,6 +204,31 @@ impl Bindings {
         }
     }
 
+    /// The bindings a named profile installs, if it is one.
+    ///
+    /// Targets carry a profile (`BUILD_AND_ASSETS.md §4`), and a bundle names its own, so this is
+    /// how a build's declared input defaults actually reach the window rather than being a field
+    /// nothing reads. `None` for an unknown name is deliberate: a bundle that asked for a profile
+    /// this build does not have should be told, not quietly given the default.
+    #[must_use]
+    pub fn profile(name: &str) -> Option<Self> {
+        match name {
+            "keyboard-mouse" => Some(Self::new()),
+            "keyboard" => {
+                let mut bindings = Self::new();
+                bindings.unbind(Key::Mouse(1));
+                Some(bindings)
+            }
+            "pointer" => {
+                let mut bindings = Self::empty();
+                bindings.bind(Key::Mouse(1), Action::Advance);
+                bindings.bind(Key::Escape, Action::Cancel);
+                Some(bindings)
+            }
+            _ => None,
+        }
+    }
+
     /// Binds a key, replacing any previous binding.
     pub fn bind(&mut self, key: Key, action: Action) {
         self.entries.retain(|(bound, _)| *bound != key);

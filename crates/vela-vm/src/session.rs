@@ -42,6 +42,9 @@ pub struct Session {
     /// it again. The VM has already handed it over; someone has to remember it.
     current: Option<Command>,
     finished: bool,
+    /// The label this session started at, when it started rather than restored. A presenter
+    /// built over a loaded session needs it; a restored one does not know and does not need to.
+    entry: Option<String>,
 }
 
 impl Session {
@@ -61,7 +64,26 @@ impl Session {
             log: Vec::new(),
             current: None,
             finished: false,
+            entry: Some(label.to_string()),
         })
+    }
+
+    /// Loads a story from a built bundle or a compiled module.
+    ///
+    /// This is the startup path `ARCHITECTURE.md §8` describes — *"bytecode loads without
+    /// recompilation"* — and the API `RUNTIME.md §8` shows. Given a bundle directory it reads the
+    /// entry point from the manifest and the module from `scripts/`; given a `.velac` it starts at
+    /// the module's first label. No source is read and no compiler is involved, which is what
+    /// makes a bundle something a player runs rather than an artifact nothing consumes.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the path cannot be read, a directory is not a bundle, the bundle names no entry,
+    /// the module does not decode, or the entry label is not in it.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load(path: impl AsRef<std::path::Path>) -> Result<Self, crate::LoadError> {
+        let (module, label) = crate::load::read(path.as_ref())?;
+        Self::start(&module, &label).map_err(crate::LoadError::Fault)
     }
 
     /// Resumes a story from a snapshot.
@@ -82,6 +104,7 @@ impl Session {
             log: Vec::new(),
             current: snapshot.current.clone(),
             finished: snapshot.vm.finished,
+            entry: None,
         })
     }
 
@@ -141,6 +164,22 @@ impl Session {
     #[must_use]
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// The module it is running.
+    ///
+    /// Exposed for a host that builds its own presenter over a loaded session — the windowed
+    /// player constructs a `Timeline` from the same module a bundle was loaded with, rather than
+    /// recompiling one.
+    #[must_use]
+    pub fn module(&self) -> &Module {
+        self.vm.module()
+    }
+
+    /// The label it started at, if it started rather than resumed from a snapshot.
+    #[must_use]
+    pub fn entry(&self) -> Option<&str> {
+        self.entry.as_deref()
     }
 
     /// Every answer given so far.

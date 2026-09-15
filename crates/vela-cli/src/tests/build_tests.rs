@@ -369,20 +369,82 @@ fn patch_without_a_subcommand_is_a_usage_error() {
 
 #[test]
 fn an_option_this_command_does_not_have_is_refused() {
-    // Silently ignoring one is how `vela build --target web` looks like it built for web. The
+    // Silently ignoring one is how `vela build --targt web` looks like it built for web. The
     // first evidence otherwise would be a player, so it is a usage error instead.
     let project = temp_project("build-target", "label start:\n    \"Hi.\"\n    return\n");
-
-    let (code, out) = cli(&["build", &project.to_string_lossy(), "--target", "web"]);
-    assert_eq!(code, 2, "{out}");
-    assert!(out.contains("--target"), "{out}");
-    assert!(out.contains("not built yet"), "{out}");
-    assert!(
-        !project.join("dist").exists(),
-        "a refused build wrote output"
-    );
 
     let (code, out) = cli(&["build", &project.to_string_lossy(), "--wat"]);
     assert_eq!(code, 2, "{out}");
     assert!(out.contains("--wat"), "{out}");
+    assert!(
+        !project.join("dist").exists(),
+        "a refused build wrote output"
+    );
+}
+
+#[test]
+fn an_unknown_target_is_a_usage_error() {
+    let project = temp_project(
+        "build-bad-target",
+        "label start:\n    \"Hi.\"\n    return\n",
+    );
+
+    let (code, out) = cli(&["build", &project.to_string_lossy(), "--target", "amiga"]);
+    assert_eq!(code, 2, "{out}");
+    assert!(out.contains("amiga"), "{out}");
+    assert!(
+        out.contains("win"),
+        "the message should list what there is:\n{out}"
+    );
+    assert!(
+        !project.join("dist").exists(),
+        "a refused build wrote output"
+    );
+}
+
+#[test]
+fn a_target_builds_one_bundle_with_a_descriptor_and_a_launcher() {
+    let project = temp_project("build-targets", "label start:\n    \"Hi.\"\n    return\n");
+    let dist = project.join("dist");
+
+    let (code, out) = cli(&["build", &project.to_string_lossy(), "--target", "linux,web"]);
+    assert_eq!(code, 0, "{out}");
+
+    // Each target is a self-contained bundle: the story is target-independent, so the same
+    // scripts and assets appear in both, and only the descriptor and launcher differ.
+    for (target, launcher) in [("linux", "launch.sh"), ("web", "index.html")] {
+        let dir = dist.join(target);
+        assert!(
+            dir.join("manifest.json").is_file(),
+            "{target} has no manifest"
+        );
+        assert!(dir.join("scripts/main.velac").is_file(), "{target}");
+        assert!(
+            dir.join("target.json").is_file(),
+            "{target} has no descriptor"
+        );
+        assert!(dir.join(launcher).is_file(), "{target} has no launcher");
+    }
+
+    // A target is not cosmetic: the descriptors say different things, and the launchers are
+    // written for different systems.
+    let linux = std::fs::read_to_string(dist.join("linux/target.json")).expect("linux descriptor");
+    let web = std::fs::read_to_string(dist.join("web/target.json")).expect("web descriptor");
+    assert!(linux.contains("\"backend\": \"vulkan\""), "{linux}");
+    assert!(web.contains("\"backend\": \"webgpu-webgl2\""), "{web}");
+    assert_ne!(linux, web, "two targets wrote the same descriptor");
+
+    // The web launcher is a page; the desktop one is a shell script that runs the engine on
+    // this very bundle.
+    let web_page = std::fs::read_to_string(dist.join("web/index.html")).expect("web page");
+    assert!(web_page.contains("Player"), "{web_page}");
+    let shell = std::fs::read_to_string(dist.join("linux/launch.sh")).expect("shell launcher");
+    assert!(shell.contains("run"), "{shell}");
+
+    // `--target` builds the targets, not a plain bundle at the root: the root is what a
+    // single-target build uses, and leaving one there would be a second thing to explain.
+    assert!(
+        !dist.join("manifest.json").exists(),
+        "a root bundle was written too"
+    );
 }

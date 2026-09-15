@@ -20,10 +20,31 @@ use crate::error::AssetError;
 pub const MANIFEST_VERSION: u32 = 1;
 
 /// Everything a build contains.
+///
+/// The manifest is both the asset index and the **bundle descriptor**: it is the one file a
+/// built bundle carries about itself, so the runtime reads where the story starts from here
+/// rather than from `vela.toml` (`BUILD_AND_ASSETS.md §2`, `RUNTIME.md §8`). The three project
+/// fields below are absent from a bare `import_tree` — an import has no idea what project it
+/// belongs to — and are filled in by `vela build`; because they are omitted while unset, a
+/// manifest an import writes is byte-identical to one it wrote before they existed.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Manifest {
     /// The schema version.
     pub manifest_version: u32,
+    /// The project's name, which a launcher and a window title use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Where the story starts, written `module.label`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<String>,
+    /// Every `image` declaration, by name, mapped to the artifact that holds its picture.
+    ///
+    /// The runtime cannot resolve `scene bg.room` to `art/room.png` on its own: that mapping is
+    /// a *project* fact, compiled from the source, and a bundle ships no source. Recording it
+    /// here is what lets a built bundle stage its backgrounds without a compiler
+    /// (`BUILD_AND_ASSETS.md §8`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub images: BTreeMap<String, String>,
     /// Every asset, ordered by id.
     pub assets: Vec<Asset>,
 }
@@ -75,8 +96,37 @@ impl Manifest {
     pub fn new() -> Self {
         Self {
             manifest_version: MANIFEST_VERSION,
+            name: None,
+            entry: None,
+            images: BTreeMap::new(),
             assets: Vec::new(),
         }
+    }
+
+    /// Records the project facts a built bundle carries about itself.
+    ///
+    /// Kept out of [`crate::import_tree`] on purpose: an import is a pure function of an assets
+    /// directory, and a project's name and entry point come from `vela.toml`, which the importer
+    /// never sees.
+    pub fn set_project(&mut self, name: Option<String>, entry: impl Into<String>) {
+        self.name = name;
+        self.entry = Some(entry.into());
+    }
+
+    /// The artifact holding an image, by the name a `scene` or `show` uses.
+    #[must_use]
+    pub fn image(&self, name: &str) -> Option<&str> {
+        self.images.get(name).map(String::as_str)
+    }
+
+    /// The first artifact an asset's source produced, which is what a `@"path"` becomes.
+    #[must_use]
+    pub fn artifact_for_source(&self, source: &str) -> Option<&str> {
+        self.assets
+            .iter()
+            .find(|asset| asset.source == source)
+            .and_then(|asset| asset.artifacts.first())
+            .map(|artifact| artifact.path.as_str())
     }
 
     /// The asset with this id, if it has one.

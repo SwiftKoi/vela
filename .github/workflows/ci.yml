@@ -80,9 +80,11 @@ jobs:
       # Gate 9 is `ARCHITECTURE.md §1`'s claim that the compiler and the VM contain no platform
       # or GPU code, made observable, plus the size budget `BUILD_AND_ASSETS.md §5` asks for.
       #
-      # The smoke run is the part that matters: it drives the wasm module the way a page does and
-      # diffs its command stream against `vela run --headless`. One engine, two platforms, one
-      # story — which is what makes every determinism claim survive the platform boundary.
+      # The smoke run is the part that matters: it loads the **web bundle** (`--target web`) the
+      # way a page does — entry point from the manifest — and diffs its command stream against
+      # `vela run --headless`. One engine, two platforms, one story — which is what makes every
+      # determinism claim survive the platform boundary, and what makes the fourth target's
+      # bundle a thing that runs rather than a directory of files.
       - name: 9. the engine runs in wasm, within its size budget
         run: |
           cargo install wasm-bindgen-cli --version 0.2.128 --locked
@@ -112,13 +114,24 @@ jobs:
   # libraries, that the platform adapter starts a window, or that the bundle layout is one a
   # player can run. GitHub's runners are the honest way to run rather than merely produce.
   #
+  # "Runs" means runs **from the bundle**, not from source: the build writes `dist/<target>/`
+  # and the next step plays it, diffing the command stream against a source run. That is what
+  # the exit criterion asks for, and it is the only way to see that a bundle is something a
+  # player runs rather than an artifact the build leaves behind (`BUILD_AND_ASSETS.md §1`, §8).
+  #
   # `fail-fast: false`, so a Windows failure does not hide whether macOS passed: the point of a
   # matrix is which cells are red, not that one is.
   platforms:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: win
+          - os: macos-latest
+            target: mac
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -128,15 +141,23 @@ jobs:
       - name: build
         run: cargo build --workspace
 
-      # "Runs" is a claim about the engine on this platform, so the engine is what runs: the
-      # standard example plays to its first suspension through the real VM.
-      - name: the story runs here
-        run: cargo run -q -p vela-cli -- run examples/standard --headless
-
-      - name: the project builds here, reproducibly
+      # One command, one source tree: this is the platform's bundle, built and verified here.
+      # `dist/` is gitignored, so the gate cannot leave generated output in the checkout.
+      - name: the bundle builds here, reproducibly
+        shell: bash
         run: >-
           cargo run -q -p vela-cli -- build examples/standard
-          --out ${{ runner.temp }}/vela-dist --verify-reproducible
+          --out dist --target ${{ matrix.target }} --verify-reproducible
+
+      # The story plays with no compiler in the path: the bundle's bytecode drives the VM, and
+      # its command stream is compared against the same story run from source, so "runs here"
+      # is an observation and not a claim that the process started.
+      - name: the bundle runs here
+        shell: bash
+        run: |
+          cargo run -q -p vela-cli -- run "dist/${{ matrix.target }}" --headless > bundle.txt
+          cargo run -q -p vela-cli -- run examples/standard --headless > source.txt
+          diff -u source.txt bundle.txt
 
   # A job of its own, and parallel to the gates, for two reasons:
   #

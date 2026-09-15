@@ -441,11 +441,19 @@ fn graph() -> RenderGraph {
 ///
 /// The `Arc` is not shared: `winit` owns the window and `vela-render` borrows the handle for
 /// the surface, which is the one place the two adapters have to agree on something.
-pub fn run(player: Player, title: &str, size: (u32, u32)) -> Result<(), Error> {
+///
+/// `bindings` are the target's input defaults (`BUILD_AND_ASSETS.md §4`): a bundle names a
+/// profile and the window installs it, rather than every run getting the built-in table.
+pub fn run(
+    player: Player,
+    title: &str,
+    size: (u32, u32),
+    bindings: vela_host::Bindings,
+) -> Result<(), Error> {
     let config = vela_host::Config {
         title: title.to_string(),
         size,
-        bindings: vela_host::Bindings::new(),
+        bindings,
     };
     let mut player = player;
     vela_host::run(config, &mut player)

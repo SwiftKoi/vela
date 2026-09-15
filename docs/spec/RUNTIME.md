@@ -381,6 +381,24 @@ session.assert_world(|w| w.get_int("trust") == 1);
 
 This is what makes stories testable in CI — the differentiating feature from `VISION.md §3.1`.
 
+> **Implemented so far (M9).** `vela_vm::Session::load` exists and does what the example asks:
+> given a built bundle directory it reads the entry point from the bundle's manifest and the
+> module from `scripts/`, and starts the story — no source is read and no compiler is involved,
+> which is `ARCHITECTURE.md §8`'s *"bytecode loads without recompilation"* made true. Given a
+> lone `.velac` it starts at the module's first label, so `Session::load("story.velac")` works
+> when there is no manifest to read.
+>
+> The loader is **native-only**: a browser has no bundle directory, and a page constructs
+> `vela_web::Player` from bytes it fetched (`BUILD_AND_ASSETS.md §5`). Gating it off `wasm32`
+> also keeps the JSON reader it needs for the manifest out of the size-gated wasm module.
+>
+> `vela run <bundle>` is the same loader behind the CLI, and `crates/vela-cli/src/tests/`
+> observes that it plays the same command stream as the story does from source — after the
+> source tree has been deleted, so nothing *could* recompile.
+>
+> The `mock_input` / `assert_world` half of this example is `vela-test`'s, and is not written
+> yet: the session API it drives is here, the assertion DSL around it is the next step.
+
 ## 9. Debugging hooks
 
 The VM exposes a step-level tracing interface consumed by the DAP server (`TOOLING.md §6`):
