@@ -183,6 +183,12 @@ pub struct Header {
 formats with `E7101` and a clear "rebuild required" message. Additive changes to command
 schemas or the type table do **not** bump it.
 
+**A `.velac` is a whole program, not a file.** `labels` holds every label of every source module
+under its qualified name — `main.start`, `chapters.forest.clearing` — because the modules are
+linked *before* codegen (`LANGUAGE.md §6.1`, `vela-mir::link`). Nothing at run time knows the story
+was ever split across files: `jump forest.clearing` is an ordinary `CallLabel` to an index in that
+one table, which is why the instruction set has no module operand and the VM has no notion of one.
+
 ### 3.2 Instruction set
 
 Every instruction is two bytes: opcode + operand kind. Operands are variable-width and

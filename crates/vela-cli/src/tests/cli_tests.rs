@@ -178,12 +178,15 @@ fn an_unknown_format_is_a_usage_error() {
 }
 
 #[test]
-fn emit_mir_prints_the_lowered_module() {
+fn emit_mir_prints_the_linked_program() {
     let project = temp_project("mir", "label start:\n    \"Hi.\"\n    return\n");
     let (code, out) = cli(&["check", "--emit", "mir", &project.to_string_lossy()]);
 
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("module main"), "{out}");
+    // The *program*, not a module: what is printed is what a run executes, and its labels are the
+    // qualified names linking gives them (`LANGUAGE.md §6`).
+    assert!(out.contains("module program"), "{out}");
+    assert!(out.contains("label main.start()"), "{out}");
     assert!(out.contains("cmd say("), "{out}");
     assert!(out.contains("yield say"), "{out}");
 
@@ -218,7 +221,7 @@ fn emit_disasm_prints_a_verified_listing() {
     let (code, out) = cli(&["check", "--emit", "disasm", &project.to_string_lossy()]);
 
     assert_eq!(code, 0, "{out}");
-    assert!(out.contains("label 0 `start`"), "{out}");
+    assert!(out.contains("label 0 `main.start`"), "{out}");
     assert!(out.contains("const.s"), "{out}");
     assert!(out.contains("cmd"), "{out}");
     assert!(out.contains("return"), "{out}");

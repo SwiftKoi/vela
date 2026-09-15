@@ -111,7 +111,10 @@ typed HIR ────────────────────► E3xxx,
 MIR (typed IR, the stable contract)
    │  vela-mir::opt (pass pipeline — extensible)
    ▼
-optimized MIR
+optimized MIR, one module per file
+   │  vela-mir::link — the whole program into one module (LANGUAGE.md §6.1)
+   ▼
+one MIR module
    │  vela-bytecode::codegen
    ▼
 bytecode module ──► verifier (E6xxx if a pass is buggy) ──► .velac bundle
@@ -244,7 +247,9 @@ complexity because they are user-visible on every frame and every launch:
 - **Startup**: bytecode loads without recompilation; asset manifest is memory-mappable; no
   scripting-language warmup. This is now a path rather than an intention: `vela_vm::Session::load`
   takes a built bundle to the machine, and `vela run <bundle>` runs one with no compiler in the
-  path (`RUNTIME.md §8`, `BUILD_AND_ASSETS.md §8`).
+  path (`RUNTIME.md §8`, `BUILD_AND_ASSETS.md §8`). Linking is **not** part of startup either: a
+  program's modules are linked at build time, so the image a bundle holds is already one module
+  and loading it is the same `O(size)` read it always was.
 - **Frame time**: text layout and glyph atlas updates are cached and invalidated by change,
   not recomputed per frame. The UI tree is diffed on dirty flags, never fully relaid out.
 

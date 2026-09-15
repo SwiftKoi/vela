@@ -301,6 +301,28 @@ qualified, and the LSP can rename across modules safely.
 Visibility: everything is private to its module unless marked `pub` on the declaration.
 Unused `use` is `W1002`.
 
+### 6.1 Linking
+
+A story is written as several modules and **runs as one**. `vela build` links them into a single
+program: every label becomes `module.label`, so the entry point written in `vela.toml`
+(`entry = "main.start"`) is also that label's name in the image, and `jump forest.clearing` is a
+call to the label `chapters.forest.clearing`. There is no module left at run time — which is what
+`vela-mir`'s resolved-by-lowering `LabelRef` was always for.
+
+A reference may be written with the alias or with the module's full path; linking resolves either
+to the module it names. Two modules that cannot be told apart are refused by the linker, naming
+both files, because neither module could have seen the other:
+
+- two modules declaring the same `default`: world state is global, so one name cannot be two slots;
+- two modules declaring one effect with different signatures: an effect is a capability the host
+  provides, named once for the whole engine.
+
+**What crosses a module boundary, and what does not.** *Labels* do — that is the story graph, and
+it is what a project is split along. *Values* do not: `forest.helper(2)` is `E2005`, because
+checking is per-module (§5: types do not cross either, for the same reason — no signature is in
+scope). A qualified name used for anything but `jump` and `call` is therefore **refused** rather
+than lowered into something that faults when a player reaches it.
+
 ## 7. Declarations
 
 ### 7.0 Reserved words
@@ -409,7 +431,7 @@ diagnostic has an obvious home.
 | --- | --- | --- |
 | `E0xxx` | Lexical | `E0001` BOM, `E0003` tab indent, `E0008` unterminated string |
 | `E1xxx` | Syntax | `E1001` unexpected token, `E1002` expected block |
-| `E2xxx` | Names | `E2001` undefined name, `E2002` missing `use`, `E2003` duplicate definition |
+| `E2xxx` | Names | `E2001` undefined name, `E2002` missing `use`, `E2003` duplicate definition, `E2005` a value in another module |
 | `E3xxx` | Types | `E3001` empty enum, `E3002` unwrap of `T?`, `E3006` int/float mixing |
 | `E4xxx` | Control flow | `E4001` non-exhaustive match, `E4002` missing return, `E4005` all menu choices unreachable |
 | `E5xxx` | Story graph | `E5001` undefined character, `E5003` undefined label |

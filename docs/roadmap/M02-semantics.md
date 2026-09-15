@@ -61,6 +61,13 @@ lowers to unknown, so cross-module *types* are not checked. Everything else is p
 which is what keeps checking inside the module's own query. Names and labels do cross
 modules; types do not yet.
 
+**Updated by M9's linking work.** "Names cross modules" holds for *labels*: they check, and they
+now link, so a `jump` into another file is an ordinary call with no module left at run time
+(`M03`, `LANGUAGE.md §6.1`). A qualified name for a **value** — `forest.helper(2)` — is refused
+with `E2005` at check time rather than lowered into a field read that faults when a player reaches
+it: the checker is per-module, so it has no signature to check the call against, and refusing beats
+guessing. Cross-module types remain the open half, and are what would let values follow.
+
 **Risks.** Inference and lowering were expected to be the danger; they were routine. The
 danger was in the *cache*, which the milestone's own exit criteria caught twice — worth
 noting for M3, where the same machinery carries more queries.

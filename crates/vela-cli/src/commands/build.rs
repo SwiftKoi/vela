@@ -194,7 +194,9 @@ fn report(
         let prefix = target.map_or_else(String::new, |name| format!("{name}: "));
         let _ = writeln!(
             out,
-            "built {prefix}{} script(s), {} asset(s), {} artifact(s) -> {}/",
+            // "module(s)", not "script(s)": a bundle holds one linked script however many modules
+            // went into it, so the number worth reporting is how many files were compiled.
+            "built {prefix}{} module(s), {} asset(s), {} artifact(s) -> {}/",
             counts.scripts,
             counts.assets,
             counts.artifacts,

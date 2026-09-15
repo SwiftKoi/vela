@@ -61,8 +61,9 @@ impl Command for Run {
         }
 
         let project = collect(&target)?;
+        // `entry` is `module.label`, and after linking that *is* the label's name: the whole
+        // program is one module whose labels are qualified.
         let (module, entry) = compile_project(&project, args, out)?;
-        let label = entry_label(&entry)?;
 
         // The screens the presenter may draw. Compiled here rather than in the compiler, for
         // the rank reason `commands::ui` records: the CLI is the lowest layer that can see both
@@ -76,7 +77,7 @@ impl Command for Run {
             let title = title_of(project.manifest.as_ref(), &entry);
             return play(
                 &module,
-                label,
+                &entry,
                 &title,
                 args,
                 out,
@@ -89,7 +90,7 @@ impl Command for Run {
         }
 
         let mut host = vela_vm::TakeFirst;
-        let execution = vela_vm::run(&module, label, &mut host)
+        let execution = vela_vm::run(&module, &entry, &mut host)
             .map_err(|fault| Error::internal(format!("{fault}")))?;
 
         if let Some(path) = flag_value(args, "--capture") {
@@ -103,14 +104,17 @@ impl Command for Run {
     }
 }
 
-/// Compiles the module a project's entry point names, or says why it will not run.
+/// Compiles a project into the one module a run executes.
 ///
-/// Separate from `run` because it is the whole front end in order — resolve the entry, check the
-/// project, compile, verify — and `run` is about *what to do with* the module it produces.
+/// The whole front end in order — resolve the entry, check the project, **link every module**,
+/// verify — and `run` is about *what to do with* the module it produces. Linking is why this is
+/// the program and not just its entry file: a story split across files is one program by the time
+/// anything runs it (`LANGUAGE.md §6`).
 ///
 /// # Errors
 ///
-/// Fails if there is no entry point, the project has errors, or the module does not verify.
+/// Fails if there is no entry point, the project has errors, the modules cannot be linked, the
+/// entry label is not in the linked program, or the result does not verify.
 fn compile_project(
     project: &Project,
     args: &[String],
@@ -127,14 +131,11 @@ fn compile_project(
         .ok_or_else(|| {
             Error::usage("no entry point: pass `--start module.label`, or set `entry` in vela.toml")
         })?;
-    let module_name = entry
-        .rsplit_once('.')
-        .map(|(module, _)| module)
-        .ok_or_else(|| {
-            Error::usage(format!(
-                "`{entry}` is not a valid entry point; expected `module.label`"
-            ))
-        })?;
+    if !entry.contains('.') {
+        return Err(Error::usage(format!(
+            "`{entry}` is not a valid entry point; expected `module.label`"
+        )));
+    }
 
     let mut session = load(project);
 
@@ -150,9 +151,18 @@ fn compile_project(
         ));
     }
 
-    let compiled = compile_entry(&mut session, module_name)?;
-    let module = vela_bytecode::compile(&compiled, true);
+    let linked = session
+        .linked()
+        .map_err(|error| Error::diagnostics(error.to_string()))?;
+    // Checked after linking rather than before: the entry names a label in the *linked* program,
+    // and a module that is never reached is not a run.
+    if !linked.labels.iter().any(|body| body.name.as_str() == entry) {
+        return Err(Error::usage(format!(
+            "there is no label `{entry}` in this project"
+        )));
+    }
 
+    let module = vela_bytecode::compile(&linked, true);
     let diagnostics = vela_bytecode::verify(&module);
     if !diagnostics.is_empty() {
         for diagnostic in &diagnostics {
@@ -163,14 +173,6 @@ fn compile_project(
         ));
     }
     Ok((module, entry))
-}
-
-/// The label half of an entry point, which is what the VM starts at.
-fn entry_label(entry: &str) -> Result<&str, Error> {
-    entry
-        .rsplit_once('.')
-        .map(|(_, label)| label)
-        .ok_or_else(|| Error::usage(format!("`{entry}` is not `module.label`")))
 }
 
 /// Whether a run should open a window rather than print its commands.
@@ -300,21 +302,6 @@ fn load(project: &crate::commands::check::Project) -> Session {
         }
     }
     session
-}
-
-/// The module that holds the entry point.
-fn compile_entry(session: &mut Session, module_name: &str) -> Result<vela_mir::Module, Error> {
-    let file = session
-        .file_ids()
-        .into_iter()
-        .find(|file| {
-            session
-                .module_of(*file)
-                .is_some_and(|name| name.as_str() == module_name)
-        })
-        .ok_or_else(|| Error::usage(format!("there is no module `{module_name}`")))?;
-
-    Ok(session.mir(file).module.clone())
 }
 
 /// The value given to a `--flag value` argument, if the flag is present.

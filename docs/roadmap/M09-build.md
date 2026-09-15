@@ -79,9 +79,25 @@ item 7.
   interface is parsed at run time either — a built game is the game that was tested, which it was
   not before: it had no screens at all, so Escape did nothing and the dialogue box was the
   presenter's rather than the project's.
+- **Multi-file stories run.** `vela_mir::link` merges a project's modules into one program whose
+  labels are qualified (`LANGUAGE.md §6.1`), so a `jump` from one file into another is an ordinary
+  call and a bundle runs a story split across files. Before this a cross-module `jump` checked
+  clean, built clean, and faulted at run time on a label index that was never in the module — the
+  one gap that made "a built project runs" untrue for anything bigger than one file.
+  `crates/vela-cli/src/tests/linking_tests.rs` runs a two-module story from source and from a
+  bundle and compares the command streams, and a *value* in another module is now refused at check
+  time (`E2005`) rather than lowered into a fault.
 
 Not yet, and in the order they are needed:
 
+- Cross-module **values and types**: `forest.helper(2)` is `E2005` because checking is per-module
+  and has no signature to check the call against — M02's open half. Until that lands, a project
+  splits along its story graph, not along its helper functions, and the refusal is the honest
+  answer rather than a guess.
+- **Link conflicts have no span.** A duplicate `default` or a disagreeing effect across two modules
+  is refused by `vela run` and `vela build`, naming both files, but not by `vela check` at a line:
+  MIR drops spans, and `vela-diag` has no span-less diagnostic — the same gap `W7001` waits on
+  (item 4 below).
 - The rest of item 1: audio, video, fonts, and the script-via-the-registry importer. A file
   nothing claims currently **fails** the build rather than being skipped. The spec's outputs for
   the first three are `ktx2` and `ogg`/`opus`, which need transcoders this build does not have;

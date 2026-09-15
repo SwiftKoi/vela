@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use vela_assets::{Built, ImporterRegistry, Manifest, import_tree};
 use vela_compile::Session;
@@ -70,16 +70,37 @@ pub fn write(
     destination: &Path,
     target: Option<&Target>,
 ) -> Result<Counts, Error> {
-    let (scripts, sole_entry) = write_scripts(session, destination)?;
-    let mut built = build_assets(project)?;
+    let linked = session
+        .linked()
+        .map_err(|error| Error::diagnostics(error.to_string()))?;
+    let modules = session
+        .file_ids()
+        .into_iter()
+        .filter(|file| session.module_of(*file).is_some())
+        .count();
 
+    // A single-file build has no `vela.toml` to name an entry point, so the linked program's first
+    // label is recorded instead — otherwise the bundle would describe itself but not say where the
+    // story starts. A directory target always has a manifest; `collect` insists on one.
     let entry = project
         .manifest
         .as_ref()
         .map(|manifest| manifest.project.entry.clone())
-        .or(sole_entry);
+        .or_else(|| {
+            linked
+                .labels
+                .first()
+                .map(|body| body.name.as_str().to_string())
+        })
+        .ok_or_else(|| {
+            Error::usage("the project has no labels, so there is nothing to start at".to_string())
+        })?;
+
+    write_program(&linked, &entry, destination)?;
+    let mut built = build_assets(project)?;
     let name = project_name(project);
 
+    let entry = Some(entry);
     if let Some(entry) = &entry {
         built
             .manifest
@@ -99,7 +120,7 @@ pub fn write(
     }
 
     Ok(Counts {
-        scripts,
+        scripts: modules,
         assets: built.manifest.assets.len(),
         artifacts: built.artifacts.len(),
     })
@@ -136,73 +157,48 @@ fn refuse_errors(
     )))
 }
 
-/// Compiles every module and writes it as `.velac`, returning how many and — for a build with no
-/// `vela.toml` — the entry point its one module implies.
+/// Writes the linked program as the bundle's one `.velac`, named for its entry module.
+///
+/// One file, because a linked program *is* one module: every label of every source file is in one
+/// table under a qualified name (`vela_mir::link`), which is also what makes the entry point's
+/// spelling — `module.label` — the label's name in the image. Naming the file after the entry
+/// module is what lets the loader find it from the manifest alone, with no second field saying
+/// where the script is.
 ///
 /// Debug information is left out: this is the bundle a player runs, and `RUNTIME.md §9` keeps
 /// trace hooks out of a release build rather than paying for them in every shipped game.
-fn write_scripts(
-    session: &mut Session,
-    destination: &Path,
-) -> Result<(usize, Option<String>), Error> {
-    // Collected first: `mir` needs the session mutably, and the filter reads it.
-    let files: Vec<FileId> = session
-        .file_ids()
-        .into_iter()
-        .filter(|file| session.module_of(*file).is_some())
-        .collect();
-
-    let mut sole = None;
-    for file in &files {
-        // The name the driver gave the file — its path under `src/` — so the bundle mirrors the
-        // project rather than inventing a naming scheme of its own.
-        let name = session.sources().file(*file).name().to_string();
-        let compiled = session.mir(*file);
-
-        let module = vela_bytecode::compile(&compiled.module, false);
-        let diagnostics = vela_bytecode::verify(&module);
-        if !diagnostics.is_empty() {
-            // Not the author's fault, and not something to ship: the verifier exists so that a
-            // module reaching a player cannot be malformed.
-            return Err(Error::internal(format!(
-                "`{name}` did not verify ({} problem(s))",
-                diagnostics.len()
-            )));
-        }
-
-        let path = destination
-            .join(SCRIPTS)
-            .join(&name)
-            .with_extension("velac");
-        write_file(&path, &vela_bytecode::encode(&module))?;
-
-        // A single-file build has no `vela.toml` to name an entry point, so the module's own
-        // first label is recorded instead — otherwise the bundle would describe itself but not
-        // say where the story starts.
-        sole = (files.len() == 1)
-            .then(|| first_label(&module).map(|label| (module_name(&name), label)))
-            .flatten();
+fn write_program(linked: &vela_mir::Module, entry: &str, destination: &Path) -> Result<(), Error> {
+    let module = vela_bytecode::compile(linked, false);
+    let diagnostics = vela_bytecode::verify(&module);
+    if !diagnostics.is_empty() {
+        // Not the author's fault, and not something to ship: the verifier exists so that a module
+        // reaching a player cannot be malformed.
+        return Err(Error::internal(format!(
+            "the linked program did not verify ({} problem(s))",
+            diagnostics.len()
+        )));
     }
 
-    let entry = sole.map(|(module, label)| format!("{module}.{label}"));
-    Ok((files.len(), entry))
+    let path = destination.join(SCRIPTS).join(script_path(entry));
+    write_file(&path, &vela_bytecode::encode(&module))
 }
 
-/// A module's name as the bundle spells it: its path under `src/`, extension dropped.
+/// Where a bundle keeps the program an entry point starts.
 ///
-/// `chapters/forest.vela` is `chapters/forest`, which is why an entry of `chapters/forest.start`
-/// resolves to `scripts/chapters/forest.velac`.
+/// `main.start` is `main.velac` and `chapters.forest.clearing` is `chapters/forest.velac` — the
+/// module's path under `src/`, which is the same rule `LANGUAGE.md §6` gives a module its name by,
+/// read backwards.
+fn script_path(entry: &str) -> PathBuf {
+    let module = entry.rsplit_once('.').map_or(entry, |(module, _)| module);
+    PathBuf::from(module.replace('.', "/")).with_extension("velac")
+}
+
+/// A module's name as a screen pack spells it: its path under `src/`, extension dropped.
+///
+/// `chapters/forest.vela` is `chapters/forest`, which mirrors the naming `LANGUAGE.md §6` gives a
+/// module and is why one pack per module is one pack per source file.
 fn module_name(name: &str) -> String {
     name.strip_suffix(".vela").unwrap_or(name).to_string()
-}
-
-/// The first label of a compiled module, which is where a lone module starts.
-fn first_label(module: &vela_bytecode::Module) -> Option<String> {
-    module
-        .labels
-        .first()
-        .and_then(|label| module.strings.get(label.name))
-        .map(str::to_string)
 }
 
 /// Imports the assets, ready to be written beside their manifest.

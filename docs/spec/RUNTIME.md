@@ -396,6 +396,12 @@ This is what makes stories testable in CI — the differentiating feature from `
 > observes that it plays the same command stream as the story does from source — after the
 > source tree has been deleted, so nothing *could* recompile.
 >
+> **What it starts at is the whole entry point.** A bundle holds a *linked* program, so
+> `main.start` is a label's name rather than a module and a label: the manifest's `entry` is
+> passed to the machine as written, and the image is found by reading that name as a path
+> (`main.start` → `scripts/main.velac`). A story split across files therefore runs from a bundle
+> with nothing to link at load: the linking happened at build time (`LANGUAGE.md §6.1`).
+>
 > The `mock_input` / `assert_world` half of this example is `vela-test`'s, and is not written
 > yet: the session API it drives is here, the assertion DSL around it is the next step.
 

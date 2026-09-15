@@ -25,12 +25,17 @@ if (!glue || !bundle) {
 const manifest = JSON.parse(
   fs.readFileSync(path.join(bundle, "manifest.json"), "utf8"),
 );
-const dot = manifest.entry.lastIndexOf(".");
-const modulePath = path.join(bundle, "scripts", `${manifest.entry.slice(0, dot)}.velac`);
-const label = manifest.entry.slice(dot + 1);
 
+// The program is one image, named for the module its entry point is in: `main.start` is
+// `scripts/main.velac`, and `chapters.forest.clearing` is `scripts/chapters/forest.velac`.
+const dot = manifest.entry.lastIndexOf(".");
+const module = manifest.entry.slice(0, dot).replaceAll(".", "/");
+const modulePath = path.join(bundle, "scripts", `${module}.velac`);
+
+// And the whole entry is the label: a linked program's labels are qualified, so `main.start` is a
+// label name rather than a module and a label.
 const { Player } = require(path.resolve(glue, "vela_web.js"));
-const player = new Player(fs.readFileSync(modulePath), label);
+const player = new Player(fs.readFileSync(modulePath), manifest.entry);
 
 // `step` presents the first command; every later one comes back from the answer, which is why
 // the loop answers before asking again rather than calling `step` twice.

@@ -20,7 +20,7 @@ fn build_writes_a_bundle_with_scripts_and_assets() {
     let (code, out) = cli(&["build", &project.to_string_lossy()]);
     assert_eq!(code, 0, "{out}");
     assert!(
-        out.contains("built 1 script(s), 1 asset(s), 1 artifact(s)"),
+        out.contains("built 1 module(s), 1 asset(s), 1 artifact(s)"),
         "{out}"
     );
 
@@ -35,15 +35,17 @@ fn build_writes_a_bundle_with_scripts_and_assets() {
         "the artifact was not written, or was not normalized"
     );
 
-    // And the script, as a container the runtime can load rather than a file named `.velac`.
+    // And the program, as a container the runtime can load rather than a file named `.velac`. Its
+    // label is *qualified*: after linking, `main.start` is the label's name, which is also what
+    // `vela.toml` calls the entry point.
     let script = std::fs::read(project.join("dist/scripts/main.velac")).expect("a compiled module");
     let module = vela_bytecode::decode(&script).expect("the bundle does not decode");
     assert!(
         module
             .labels
             .iter()
-            .any(|label| module.strings.get(label.name) == Some("start")),
-        "the compiled module has no `start` label"
+            .any(|label| module.strings.get(label.name) == Some("main.start")),
+        "the compiled program has no `main.start` label"
     );
 }
 
@@ -77,7 +79,7 @@ fn verify_reproducible_passes_and_says_so() {
 }
 
 #[test]
-fn build_compiles_every_module_under_src() {
+fn build_links_every_module_under_src_into_one_program() {
     let project = temp_project("build-modules", "label start:\n    \"Hi.\"\n    return\n");
     let nested = project.join("src/chapters");
     std::fs::create_dir_all(&nested).expect("create the module directory");
@@ -90,9 +92,25 @@ fn build_compiles_every_module_under_src() {
     let (code, out) = cli(&["build", &project.to_string_lossy()]);
     assert_eq!(code, 0, "{out}");
     assert!(
-        project.join("dist/scripts/chapters/forest.velac").is_file(),
-        "the bundle does not mirror the source tree:\n{out}"
+        out.contains("built 2 module(s)"),
+        "both modules should be compiled:\n{out}"
     );
+
+    // One script, whatever the module count: a linked program *is* one module, and its labels are
+    // both modules' labels under their owners' names.
+    assert!(
+        !project.join("dist/scripts/chapters").exists(),
+        "the bundle should hold one linked program, not a per-module tree:\n{out}"
+    );
+    let script = std::fs::read(project.join("dist/scripts/main.velac")).expect("a program");
+    let module = vela_bytecode::decode(&script).expect("the program does not decode");
+    let names: Vec<&str> = module
+        .labels
+        .iter()
+        .filter_map(|label| module.strings.get(label.name))
+        .collect();
+    assert!(names.contains(&"main.start"), "{names:?}");
+    assert!(names.contains(&"chapters.forest.clearing"), "{names:?}");
 }
 
 #[test]

@@ -11,6 +11,7 @@
 //! a query that is invalidated too eagerly is merely slow — so the bug is easy to miss and
 //! expensive to find.
 
+mod link;
 mod queries;
 mod state;
 

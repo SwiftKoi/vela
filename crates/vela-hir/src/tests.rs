@@ -240,6 +240,31 @@ fn a_name_that_means_nothing_is_reported_e2001() {
     );
 }
 
+/// A qualified name for a *value* is not a label reference, and the language has no such thing:
+/// checking is per-module, so there is no signature to check the call against. Refused here rather
+/// than lowered into a field read that faults in front of a player.
+#[test]
+fn a_value_in_another_module_is_reported_e2005() {
+    assert_eq!(
+        name_codes(
+            "use chapters.forest as forest\nlabel a:\n    var x = forest.helper(1)\n    return\n"
+        ),
+        vec!["E2005"]
+    );
+}
+
+/// A field access on a local is not a module reference, even if an alias shares the name.
+#[test]
+fn a_field_of_a_local_is_not_a_module_reference() {
+    assert!(
+        name_codes(
+            "use chapters.forest as forest\nlabel a:\n    var forest = 1\n    var x = \
+             forest.double\n    return\n"
+        )
+        .is_empty()
+    );
+}
+
 #[test]
 fn a_module_definition_resolves() {
     assert!(

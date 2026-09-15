@@ -23,6 +23,7 @@
 mod error;
 mod interp;
 mod ir;
+mod link;
 mod lower;
 mod opt;
 mod print;
@@ -36,6 +37,7 @@ pub use ir::{
     Operand, Place, Root, Slot, Stmt, StmtKind, StructDef, Symbol, Terminator, Value, VariantDef,
     VariantId, YieldSite,
 };
+pub use link::{LinkError, Unit, link};
 pub use lower::lower;
 pub use opt::{OptLevel, Pipeline, optimize, passes};
 pub use print::{print_body, print_module};

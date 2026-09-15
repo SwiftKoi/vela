@@ -20,11 +20,18 @@ The two halves are independent and cacheable. A change to a script does **not** 
 assets; a change to one asset does not recompile scripts. This split is what makes builds
 incremental at all.
 
-> **Implemented so far (M9).** `vela build` runs both halves: every module under `src/` compiles
-> to `dist/scripts/<path>.velac`, and every file under `assets/` imports to `dist/manifest.json`
-> with its artifacts beside it under `dist/assets/`. `--out <dir>` moves the destination, and a
-> project with no `assets/` builds an empty manifest rather than failing — the one-line script
-> has to stay buildable.
+> **Implemented so far (M9).** `vela build` runs both halves: every module under `src/` compiles,
+> the modules are **linked into one program** (`LANGUAGE.md §6.1`), and that program is written as
+> a single `dist/scripts/<entry-module>.velac`; every file under `assets/` imports to
+> `dist/manifest.json` with its artifacts beside it under `dist/assets/`. `--out <dir>` moves the
+> destination, and a project with no `assets/` builds an empty manifest rather than failing — the
+> one-line script has to stay buildable.
+>
+> **One script, however many files.** The story graph crosses module boundaries by construction — a
+> `jump` into another chapter is the reason to split a project at all — so the image the VM runs
+> has one label table with every label under its qualified name. What that costs: a patch that
+> touches any module replaces the whole script file, where a per-module layout would have replaced
+> one of them (§6.2, and the note there on what would restore the granularity).
 >
 > A build **refuses to ship a story that does not check**. The compiler will assemble a module
 > whose checking reported errors, because that is what lets a language server keep working over
@@ -282,8 +289,16 @@ vela build --release --patch-from ./dist/1.4.0 --patch-out ./dist/1.4.1-patch
 > assets produces a patch of a few hundred bytes, which is the changed script and nothing else.
 > It runs under `cargo test`, so it is gate 5 rather than a gate of its own.
 >
+> **The script is one file, so a text change now costs the whole program.** Linking (§1) produces
+> one image, and the bar is met on the fixture because assets dominate a 600 KB bundle — but a
+> large story loses patch granularity that a per-module layout had. Two ways back, and neither is
+> free: sub-file chunks over the image (below), or shipping per-module images and linking them at
+> load — which is a *runtime* module table, the format decision `LINKING` deliberately did not take
+> (`vela-mir::link`). Worth deciding with a real project rather than on a fixture.
+>
 > **Not yet: sub-file chunks.** A changed file ships whole, so a one-byte edit to a large
-> texture costs the texture. The bar is met at this granularity because a text change alters a
+> texture costs the texture, and so does a one-line edit to the program. The bar is met at this
+> granularity because a text change alters a
 > script and nothing else; diffing file *contents* is what the next level of this needs. The
 > format has room for it — an entry names a path and a digest, and a chunked entry would name
 > several — which is why the version is in the index.

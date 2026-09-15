@@ -77,6 +77,17 @@ they are; the parser already read the text to validate it.
   lowering order changed with it: declarations are processed before any body, because a use
   of a constant is replaced by its value and a body lowered first has no value to use.
 
+**Landed later: linking (M9).** Item 3's promise — "so `vela-vm` never needs to know about labels
+as a concept" — was only half kept. `JumpLabel`/`CallLabel` were first-class in MIR, but nothing
+ever turned a *cross-module* reference into a call: codegen looked the label up in the current
+module, found nothing, and emitted an invalid index. So a story split across files checked clean,
+built clean, and faulted at run time, with the fault text pointing at a module the VM had no
+notion of. `vela_mir::link` is the missing step — it merges a program's modules into one whose
+labels are qualified (`main.start`, `chapters.forest.clearing`) and whose pools, `default`s, and
+effects are one table, which is what makes `LANGUAGE.md §6.1`'s `jump forest.clearing` an ordinary
+`CallLabel`. Values still do not cross (`E2005`), so item 3's promise now holds exactly for labels,
+which is what it was about.
+
 **Risks.** The risk named here was that lowering story constructs into generic control flow
 would lose clarity. It did not: `JumpLabel` and `CallLabel` stayed first-class, and the story
 graph is recoverable from MIR by inspection — the printer shows it directly. The actual risk

@@ -160,14 +160,22 @@ fn read_bundle(root: &Path) -> Result<(Module, String), LoadError> {
         })?;
 
     let entry = descriptor.entry.ok_or(LoadError::NoEntry(manifest))?;
-    let (module, label) = entry
+    let (module, _) = entry
         .rsplit_once('.')
         .ok_or_else(|| LoadError::BadEntry(entry.clone()))?;
 
-    // The bundle mirrors the source tree, so `main.start` is `scripts/main.velac`. The label is
-    // checked against the module when the session starts, not guessed at here.
-    let path = root.join(SCRIPTS).join(module).with_extension("velac");
-    Ok((read_module(&path)?, label.to_string()))
+    // The program is one image, named for the module its entry point is in: `main.start` is
+    // `scripts/main.velac`, and `chapters.forest.clearing` is `scripts/chapters/forest.velac` —
+    // the module's dotted name read as a path, which is the rule the build named it by.
+    let path = root
+        .join(SCRIPTS)
+        .join(module.replace('.', "/"))
+        .with_extension("velac");
+
+    // The *whole* entry is the label to start at. A linked program's labels are qualified —
+    // `main.start` is a label name, not a module and a label — so splitting it here would look for
+    // `start` and find nothing.
+    Ok((read_module(&path)?, entry))
 }
 
 /// Decodes one `.velac` container.

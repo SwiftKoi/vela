@@ -58,6 +58,23 @@ pub fn not_imported(module_path: &str, span: Span) -> Diagnostic {
     .with_help(format!("add `use {module_path}`"))
 }
 
+/// `E2005` — a qualified name names a *value* in another module.
+///
+/// `jump forest.clearing` is a label reference and resolves; `forest.helper(2)` cannot, because
+/// the checker is per-module and has no signature to check the call against. Reported here rather
+/// than left to run: without it the call lowers to a field read on nothing and faults the first
+/// time a player reaches it, which is the worst place to learn.
+#[must_use]
+pub fn module_value(qualified: &str, module: &str, span: Span) -> Diagnostic {
+    diag(
+        "E2005",
+        format!("`{qualified}` is a value in `{module}`"),
+        span,
+        "only another module's labels can be referenced, not its values",
+    )
+    .with_help("`jump` or `call` one of its labels, or declare what you need in this module")
+}
+
 /// `E2001` — a name that means nothing here.
 #[must_use]
 pub fn undefined_name(name: &str, span: Span) -> Diagnostic {

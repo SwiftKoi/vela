@@ -27,6 +27,7 @@ E2001|error|undefined name
 E2002|error|a module is referenced without being imported
 E2003|error|a name is defined more than once
 E2004|error|a const or default is not initialised with a constant
+E2005|error|a value in another module is referenced
 E3001|error|an enum has no variants
 E3002|error|an optional is used where its payload is required
 E3003|error|a declaration needs an explicit type

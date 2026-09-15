@@ -7,6 +7,7 @@
 
 mod common;
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use vela_bytecode::Module;
@@ -18,6 +19,31 @@ fn scratch(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create the scratch directory");
     dir
+}
+
+/// The image a bundle holds: a module lowered and *linked*, so its labels are qualified.
+///
+/// Linking is what a build does before writing a `.velac`, and the qualification is why the loader
+/// starts at the whole entry point rather than at its last segment.
+fn image(name: &str, text: &str) -> Module {
+    let mut sources = vela_span::SourceMap::new();
+    let id = sources.add(name, text);
+    let parsed = vela_syntax::parse(id, text);
+    let (env, _) = vela_types::Env::build(&parsed.program);
+    let lowered = vela_mir::lower(&vela_hir::ModuleName::new(name), &parsed.program, &env);
+    assert!(
+        lowered.diagnostics.is_empty(),
+        "the fixture does not lower: {:?}",
+        lowered.diagnostics
+    );
+
+    let imports = BTreeMap::new();
+    let linked = vela_mir::link(&[vela_mir::Unit {
+        module: &lowered.module,
+        imports: &imports,
+    }])
+    .expect("the fixture links");
+    vela_bytecode::compile(&linked, true)
 }
 
 /// Writes `module` into `dir` as a bundle whose manifest names `entry`.
@@ -70,9 +96,9 @@ fn a_lone_module_starts_at_its_first_label() {
 #[test]
 fn a_bundle_starts_where_its_manifest_says() {
     let dir = scratch("bundle");
-    // `later` is the *second* label, so a loader that guessed "the first label" would play the
-    // wrong story and this test would catch it.
-    let module = common::compile(
+    // The entry names the *second* label in the image, so a loader that guessed "the first label",
+    // or that started at the entry's last segment, would play the wrong story.
+    let module = image(
         "main",
         "label start:\n    \"Start.\"\n    return\n\nlabel later:\n    \"Later.\"\n    return\n",
     );
@@ -116,7 +142,7 @@ fn a_bundle_whose_module_is_missing_is_reported() {
 #[test]
 fn an_entry_label_that_is_not_in_the_module_is_refused() {
     let dir = scratch("bad-label");
-    let module = common::compile("main", "label start:\n    \"Hi.\"\n    return\n");
+    let module = image("main", "label start:\n    \"Hi.\"\n    return\n");
     write_bundle(&dir, &module, "main.nowhere");
 
     let error = Session::load(&dir)
