@@ -24,6 +24,7 @@
 mod build;
 mod digest;
 mod error;
+mod image;
 mod importers;
 mod manifest;
 mod patch;
@@ -33,6 +34,7 @@ mod tests;
 pub use build::{Built, import_tree};
 pub use digest::Digest;
 pub use error::AssetError;
+pub use image::{Image, decode_png};
 pub use importers::{ImportRequest, Importer, ImporterRegistry, Output};
 pub use manifest::{Artifact, Asset, MANIFEST_VERSION, Manifest, Variant};
 pub use patch::{PATCH_VERSION, Patch, identity_of};

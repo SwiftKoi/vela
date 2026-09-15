@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use vela_compile::Session;
 
 use crate::command::{Command, Error};
-use crate::commands::check::{collect, module_path};
+use crate::commands::check::{Project, collect, module_path};
 use crate::commands::ui::Screens;
 
 /// The `vela run` command.
@@ -99,12 +99,15 @@ impl Command for Run {
         // the rank reason `commands::ui` records: the CLI is the lowest layer that can see both
         // a screen and the widget registry.
         let screens = Screens::load(&project);
+        let images = stage_images(&project, out);
 
         if !args.iter().any(|arg| arg == "--headless") && flag_value(args, "--capture").is_none() {
             let saves = saves_dir(&target);
             let schema = crate::commands::ui::schema(&project.files);
             let title = title_of(project.manifest.as_ref(), &entry);
-            return play(&module, label, &title, args, out, screens, saves, schema);
+            return play(
+                &module, label, &title, args, out, screens, saves, schema, images,
+            );
         }
 
         let mut host = vela_vm::TakeFirst;
@@ -112,7 +115,7 @@ impl Command for Run {
             .map_err(|fault| Error::internal(format!("{fault}")))?;
 
         if let Some(path) = flag_value(args, "--capture") {
-            return capture(&execution.commands, path, args, out, &screens);
+            return capture(&execution.commands, path, args, out, &screens, images);
         }
 
         for command in &execution.commands {
@@ -120,6 +123,53 @@ impl Command for Run {
         }
         Ok(())
     }
+}
+
+/// Every `image` declaration's picture, decoded, by the name a scene stages it under.
+///
+/// `scene bg.room` names an image; `image bg.room = @"art/room.png"` says what that name is a
+/// picture of. Resolving one to the other is what this does, and it is the CLI's job because
+/// it is the layer that can see both a project's sources and `vela-assets` — the renderer must
+/// not know a file format, and the compiler must not know a filesystem.
+///
+/// A picture that cannot be read is **reported and skipped**, not fatal: the story still plays,
+/// with the placeholder where the background would be, which is both more useful than refusing
+/// to start and more honest than an empty screen. `vela check` is what makes it an error.
+fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<(String, u32, u32, Vec<u8>)> {
+    let Some(root) = project.source_root.parent() else {
+        return Vec::new();
+    };
+    let assets = root.join("assets");
+    let mut images = Vec::new();
+
+    for path in &project.files {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let parsed = vela_syntax::parse(vela_span::FileId::from_raw(0), &text);
+        for item in &parsed.program.items {
+            let vela_syntax::Item::Image(declaration) = item else {
+                continue;
+            };
+            let name = declaration.name.join(".");
+            let vela_syntax::Expr::Path { value, .. } = &declaration.value else {
+                continue;
+            };
+
+            let file = assets.join(value);
+            match std::fs::read(&file)
+                .map_err(|error| error.to_string())
+                .and_then(|bytes| {
+                    vela_assets::decode_png(&bytes).map_err(|error| error.to_string())
+                }) {
+                Ok(image) => images.push((name, image.width, image.height, image.rgba)),
+                Err(error) => {
+                    let _ = writeln!(out, "image {name}: {error}");
+                }
+            }
+        }
+    }
+    images
 }
 
 /// What a window is titled.
@@ -155,6 +205,7 @@ fn play(
     screens: Screens,
     saves: std::path::PathBuf,
     schema: vela_replay::Schema,
+    images: Vec<(String, u32, u32, Vec<u8>)>,
 ) -> Result<(), Error> {
     let size = parse_size(args).unwrap_or((1280, 720));
     // Printed, not assumed. A windowed run is the one thing here that can appear on someone's
@@ -165,7 +216,7 @@ fn play(
         .map_err(|error| Error::internal(error.to_string()))?;
 
     let mut player =
-        crate::commands::play::Player::new(module, label, size, screens, saves, schema)?;
+        crate::commands::play::Player::new(module, label, size, screens, saves, schema, images)?;
     // The first command is presented before the window opens, so the first frame has
     // something to draw rather than appearing blank for a moment.
     player.begin(out);
@@ -187,6 +238,7 @@ fn capture(
     args: &[String],
     out: &mut dyn Write,
     screens: &Screens,
+    images: Vec<(String, u32, u32, Vec<u8>)>,
 ) -> Result<(), Error> {
     let size = parse_size(args).unwrap_or((1280, 720));
     // The face is compiled in. `BUILD_AND_ASSETS.md` makes fonts project assets with a
@@ -208,6 +260,9 @@ fn capture(
         .unwrap_or(commands.len().saturating_sub(1));
 
     let mut presenter = vela_render::Presenter::new(text, FACE_NAME, size);
+    for (name, width, height, rgba) in images {
+        presenter.stage_image(name, width, height, rgba);
+    }
     for command in commands.iter().take(chosen + 1) {
         presenter.apply(command);
     }
@@ -218,6 +273,11 @@ fn capture(
         ));
     };
     let screen = named_screen(args, screens)?;
+
+    // Images before the draw list, the atlas after it. Images are already pixels, so the
+    // presenter needs their texture ids *while* it builds; glyphs are rasterised *by* building,
+    // so their atlas cannot exist until it has.
+    presenter.upload_images(capture.renderer_mut());
 
     // The draw list first, the atlas second. Building is what *rasterises* glyphs, so an
     // upload before it sends an empty image and every glyph samples nothing — which renders

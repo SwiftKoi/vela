@@ -89,6 +89,43 @@ pub struct GlyphQuad {
     pub color: Color,
 }
 
+/// An image, textured from one of the uploaded images.
+///
+/// The third case beside a filled rectangle and a glyph, and for a visual novel the *first*
+/// one: a background is the content of a scene, not a decoration on it.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct ImageQuad {
+    /// Left edge, in pixels.
+    pub x: f32,
+    /// Top edge.
+    pub y: f32,
+    /// Width.
+    pub width: f32,
+    /// Height.
+    pub height: f32,
+    /// Image coordinates, as `[left, top, right, bottom]` normalised.
+    pub uv: [f32; 4],
+    /// Which uploaded image it samples.
+    pub image: u32,
+    /// Tint, multiplied into the texel — white for "draw it as it is".
+    pub color: Color,
+}
+
+/// Which texture a quad samples.
+///
+/// What the renderer batches by. Three sources rather than two is the whole reason this is an
+/// enum and not the `is_glyph` boolean it started as: runs of consecutive quads from *one*
+/// source share a bind group, and runs from different sources do not.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Source {
+    /// The one-texel white texture: a filled rectangle.
+    White,
+    /// The glyph atlas.
+    Atlas,
+    /// One of the uploaded images.
+    Image(u32),
+}
+
 /// One thing a frame draws, in the order it was submitted.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Quad {
@@ -96,6 +133,8 @@ pub enum Quad {
     Rect(RectQuad),
     /// A glyph, textured from the atlas.
     Glyph(GlyphQuad),
+    /// An image, textured from itself.
+    Image(ImageQuad),
 }
 
 impl Quad {
@@ -103,6 +142,16 @@ impl Quad {
     #[must_use]
     pub fn is_glyph(&self) -> bool {
         matches!(self, Self::Glyph(_))
+    }
+
+    /// What this quad samples, which is what a draw call is chosen by.
+    #[must_use]
+    pub fn source(&self) -> Source {
+        match self {
+            Self::Rect(_) => Source::White,
+            Self::Glyph(_) => Source::Atlas,
+            Self::Image(image) => Source::Image(image.image),
+        }
     }
 }
 
@@ -135,6 +184,11 @@ impl DrawList {
         self.quads.push(Quad::Glyph(glyph));
     }
 
+    /// Adds an image.
+    pub fn push_image(&mut self, image: ImageQuad) {
+        self.quads.push(Quad::Image(image));
+    }
+
     /// Every quad, in submission order.
     #[must_use]
     pub fn quads(&self) -> &[Quad] {
@@ -145,15 +199,23 @@ impl DrawList {
     pub fn rects(&self) -> impl Iterator<Item = &RectQuad> {
         self.quads.iter().filter_map(|quad| match quad {
             Quad::Rect(rect) => Some(rect),
-            Quad::Glyph(_) => None,
+            Quad::Glyph(_) | Quad::Image(_) => None,
         })
     }
 
     /// The glyphs, in submission order — a view, not a copy.
     pub fn glyphs(&self) -> impl Iterator<Item = &GlyphQuad> {
         self.quads.iter().filter_map(|quad| match quad {
-            Quad::Rect(_) => None,
             Quad::Glyph(glyph) => Some(glyph),
+            Quad::Rect(_) | Quad::Image(_) => None,
+        })
+    }
+
+    /// The images, in submission order — a view, not a copy.
+    pub fn images(&self) -> impl Iterator<Item = &ImageQuad> {
+        self.quads.iter().filter_map(|quad| match quad {
+            Quad::Image(image) => Some(image),
+            Quad::Rect(_) | Quad::Glyph(_) => None,
         })
     }
 
