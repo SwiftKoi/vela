@@ -1,3 +1,5 @@
+image bg.room = @"art/room.png"
+
 theme dusk:
     color bg = 0x10121a
     color fg = 0xe6e6f0
