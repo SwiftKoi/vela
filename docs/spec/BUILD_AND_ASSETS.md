@@ -333,10 +333,12 @@ release auditable.
 > and running it would want credentials, which §8 keeps out of the project tree.
 >
 > What a launcher starts is a bundle with no compiler in it: `vela run <bundle>` and
-> `vela_vm::Session::load` read the manifest's entry point and the module the build wrote. A
-> windowed bundle run uses the presenter's built-in dialogue and menu, because screens are
-> compiled from source and a bundle ships none — backgrounds do show, from the manifest's
-> `images` mapping. Packing compiled screens into a bundle is the next step.
+> `vela_vm::Session::load` read the manifest's entry point and the module the build wrote. The
+> interface is compiled in too — the build writes each module's screens as a **screen pack**
+> (`screens/<module>.velspk`, `SCREENS.md §13`) and the manifest records the `images` mapping —
+> so a windowed bundle run draws the project's own `dialogue` screen and opens its `pause` on
+> Escape, with no parse and no screen compiler at run time. A bundle with no screens is not an
+> error; the presenter's built-in box draws instead.
 
 ## 9. Diagnostics
 

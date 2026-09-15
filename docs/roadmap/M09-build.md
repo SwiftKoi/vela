@@ -72,8 +72,13 @@ item 7.
   bundle per target with its own `target.json` descriptor and launcher. What §4's four dimensions
   actually do today — variants **not implemented**, backend recorded, input profile *consumed*,
   packaging a declared hook — is written down in `BUILD_AND_ASSETS.md §4` rather than implied.
-- The launcher per target: `launch.sh` / `launch.cmd` / `index.html`. A windowed bundle run uses
-  the built-in presenter and the manifest's images; packed screens are the next step.
+- The launcher per target: `launch.sh` / `launch.cmd` / `index.html`.
+- The **screen pack** (`SCREENS.md §13`): `vela build` compiles each module's screens into
+  `screens/<module>.velspk` and the manifest records the `images` mapping, so a windowed bundle
+  run draws the project's own `dialogue` screen and opens its `pause` on Escape. Nothing about the
+  interface is parsed at run time either — a built game is the game that was tested, which it was
+  not before: it had no screens at all, so Escape did nothing and the dialogue box was the
+  presenter's rather than the project's.
 
 Not yet, and in the order they are needed:
 
@@ -97,9 +102,6 @@ Not yet, and in the order they are needed:
 - Item 6 (web specifics): the graph-derived prefetch plan, range-request streaming, `IndexedDB`
   saves, and the WebGL2 fallback. The browser **demo** (exit criterion 6) stays open for the
   reason its note gives: it needs the renderer on `wgpu`'s web backends and a canvas.
-- Packing compiled screens into a bundle: screens are compiled from source, so a windowed bundle
-  run uses the built-in presenter. Backgrounds show — the manifest records the `images` mapping —
-  but a project's own `dialogue` and `pause` screens are not in the bundle yet.
 - Sub-file chunks in a patch: a changed file ships whole.
 
 **Verification note.** Exit criterion 1 — *"builds and runs on all four targets from one

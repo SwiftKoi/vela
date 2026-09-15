@@ -5,17 +5,19 @@
 //! loaded with [`vela_vm::Session::load`], which reads the entry point from the manifest and the
 //! module from `scripts/`, and never parses a `.vela` file.
 //!
-//! # What a bundle cannot do yet
+//! # What a bundle carries, and what it does not
 //!
-//! Screens are compiled from source and a bundle ships none, so a windowed bundle run uses the
-//! presenter's built-in dialogue and menu rather than a project's `screen` blocks. Backgrounds
-//! *do* show, because the build records each `image` declaration's artifact in the manifest and
-//! this loads them.
+//! A built bundle is not just the story. The build **compiles** the project's interface — a
+//! screen pack per module, `screens/<module>.velspk` (`SCREENS.md §13`) — and records the
+//! **images** its `scene` and `show` statements name (by artifact, in the manifest). A windowed
+//! bundle run therefore draws the project's own `dialogue` screen and opens its `pause` on Escape,
+//! with nothing compiled at run time: without the pack a built game had no screens at all, which
+//! made it a different game from the one that was tested.
 //!
-//! A save from a bundle is written against an **empty schema**: `vela-replay` derives the schema
-//! from source and a bundle has none. Its own saves agree with each other and are refused against
-//! a source build; deriving the schema from the module's `default`s is the missing step. Packing
-//! compiled screens is the other. Both are stated here rather than discovered by a player.
+//! What a bundle still does not carry is the **save schema**: `vela-replay` derives it from
+//! source, so a bundle writes against an empty one. Its own saves agree with each other and are
+//! refused against a source build; deriving the schema from the module's `default`s is the missing
+//! step. That is stated rather than left for a player to find.
 
 use std::io::Write;
 use std::path::Path;
@@ -64,7 +66,8 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
     if !wants_a_window(args) {
         let commands = drive(session)?;
         if let Some(path) = run::flag_value(args, "--capture") {
-            return frame::capture(&commands, path, args, out, &Screens::empty(), images);
+            let screens = screens(dir)?;
+            return frame::capture(&commands, path, args, out, &screens, images);
         }
         for command in &commands {
             let _ = writeln!(out, "{command}");
@@ -78,18 +81,28 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
     // a shape the source would not recognize. Deriving the schema from the module's `default`s
     // is the missing step, and stating it here is the difference between a gap and a bug.
     let schema = vela_replay::Schema::default();
+    // The project's own screens, compiled by the build: this is what makes Escape open `pause`
+    // and a `dialogue` screen draw, exactly as it does under `vela run`.
     play(
         session.module(),
         &entry,
         &title,
         args,
         out,
-        Screens::empty(),
+        screens(dir)?,
         saves_dir(dir),
         schema,
         images,
         bindings,
     )
+}
+
+/// A bundle's compiled screens.
+///
+/// A pack this build cannot read is fatal rather than skipped: a screen that quietly fails to
+/// load is a dialogue box with no text, which is worse than not starting.
+fn screens(dir: &Path) -> Result<Screens, Error> {
+    Screens::load_bundle(dir).map_err(|error| Error::diagnostics(error.to_string()))
 }
 
 /// Reads a bundle's manifest.

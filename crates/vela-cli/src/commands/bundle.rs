@@ -22,7 +22,7 @@ use vela_diag::Severity;
 use vela_span::FileId;
 
 use crate::command::Error;
-use crate::commands::check::{Project, load, project_screen_diagnostics};
+use crate::commands::check::{Project, load, module_path, project_screen_diagnostics};
 use crate::commands::target::Target;
 
 /// The directory a project's assets live in, beside `src/`.
@@ -30,6 +30,9 @@ const ASSETS: &str = "assets";
 
 /// The directory compiled modules go in, inside the bundle.
 const SCRIPTS: &str = "scripts";
+
+/// The directory a bundle's screen declarations go in.
+const SCREENS: &str = "screens";
 
 /// What one bundle contains.
 #[derive(Clone, Copy, Debug, Default)]
@@ -84,6 +87,7 @@ pub fn write(
     }
     built.manifest.images = image_map(project, &built.manifest);
     write_tree(destination, &built)?;
+    write_screens(project, destination)?;
 
     if let Some(target) = target {
         let Some(entry) = &entry else {
@@ -250,6 +254,41 @@ fn image_map(project: &Project, manifest: &Manifest) -> BTreeMap<String, String>
         }
     }
     images
+}
+
+/// Compiles each source module's screens into `screens/<module>.velspk` (`SCREENS.md §13`).
+///
+/// A bundle that drops these is a bundle that loses the game's interface: a `dialogue` screen
+/// never draws, and Escape has no `pause` to open, so the built version behaves differently from
+/// `vela run` on the very things a player touches. This is where that stops being true — and it
+/// stops being true *at build time*: the declarations are parsed and turned into a
+/// [`vela_ui::ScreenPack`] here, so running the bundle loads a pack instead of parsing a screen.
+/// Nothing about the interface is compiled at run time, which is what `BUILD_AND_ASSETS.md §1`
+/// asks of a built artifact.
+///
+/// One pack per module, because a [`vela_ui::ScreenSet`] is one file's worth — styles resolve
+/// where they are declared.
+fn write_screens(project: &Project, destination: &Path) -> Result<usize, Error> {
+    let mut written = 0;
+    for path in &project.files {
+        let Ok(text) = fs::read_to_string(path) else {
+            continue;
+        };
+        let parsed = vela_syntax::parse(FileId::from_raw(0), &text);
+        let module = module_name(&module_path(&project.source_root, path));
+
+        let pack = vela_ui::ScreenPack::compile(module.clone(), &parsed.program.items);
+        if pack.is_empty() {
+            // A module with no screens, styles, or theme compiles to a pack of nothing; writing
+            // one would be a file that says the module has an interface when it has none.
+            continue;
+        }
+        let out = destination.join(SCREENS).join(format!("{module}.velspk"));
+        pack.write(&out)
+            .map_err(|error| Error::internal(error.to_string()))?;
+        written += 1;
+    }
+    Ok(written)
 }
 
 /// The name a launcher and a window title use: the project's, else the directory's.

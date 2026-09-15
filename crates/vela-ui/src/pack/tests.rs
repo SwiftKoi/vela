@@ -1,0 +1,235 @@
+//! Tests for the pack codec itself, over and above the behaviour tests in `tests/pack.rs`.
+//!
+//! Two things only a codec test can check: that *every* expression variant's tag and fields agree
+//! between the writer and the reader — a screen rarely contains all of them — and that a corrupt
+//! container is refused rather than half-read.
+
+use vela_span::{FileId, Span};
+use vela_syntax::{BinOp, Expr, StrPart, UnOp};
+
+use super::model::ScreenPack;
+use super::read::decode_expr;
+use super::write::encode_expr;
+use crate::error::PackError;
+
+/// A span for a hand-built expression; the coordinates mean nothing to the codec.
+fn span() -> Span {
+    Span::new(FileId::from_raw(0), 3, 9)
+}
+
+/// A leaf to hang compound expressions off.
+fn leaf() -> Expr {
+    Expr::Int {
+        span: span(),
+        value: 1,
+    }
+}
+
+/// One of every expression variant that is not an operator application.
+fn expressions() -> Vec<Expr> {
+    vec![
+        Expr::Int {
+            span: span(),
+            value: -3,
+        },
+        Expr::Float {
+            span: span(),
+            value: 1.5,
+        },
+        Expr::Path {
+            span: span(),
+            value: "art/room.png".to_string(),
+        },
+        Expr::Bool {
+            span: span(),
+            value: true,
+        },
+        Expr::None { span: span() },
+        Expr::Name {
+            span: span(),
+            name: "line".to_string(),
+        },
+        Expr::Str {
+            span: span(),
+            parts: vec![
+                StrPart::Literal {
+                    span: span(),
+                    text: "score ".to_string(),
+                },
+                StrPart::Interpolation {
+                    span: span(),
+                    expr: Box::new(leaf()),
+                },
+            ],
+        },
+        Expr::List {
+            span: span(),
+            items: vec![leaf(), leaf()],
+        },
+        Expr::Map {
+            span: span(),
+            entries: vec![(leaf(), leaf())],
+        },
+        Expr::Field {
+            span: span(),
+            base: Box::new(leaf()),
+            name: "score".to_string(),
+        },
+        Expr::Call {
+            span: span(),
+            callee: Box::new(leaf()),
+            args: vec![leaf()],
+        },
+        Expr::Index {
+            span: span(),
+            base: Box::new(leaf()),
+            index: Box::new(leaf()),
+        },
+        Expr::Paren {
+            span: span(),
+            inner: Box::new(leaf()),
+        },
+        Expr::If {
+            span: span(),
+            cond: Box::new(leaf()),
+            then_: Box::new(leaf()),
+            else_: Box::new(leaf()),
+        },
+        Expr::Lambda {
+            span: span(),
+            params: Vec::new(),
+            body: Box::new(leaf()),
+        },
+        Expr::Error { span: span() },
+    ]
+}
+
+/// Every operator application, so no tag can drift without a test noticing.
+fn operators() -> Vec<Expr> {
+    let bin_ops = [
+        BinOp::Add,
+        BinOp::Sub,
+        BinOp::Mul,
+        BinOp::Div,
+        BinOp::Rem,
+        BinOp::Eq,
+        BinOp::Ne,
+        BinOp::Lt,
+        BinOp::Le,
+        BinOp::Gt,
+        BinOp::Ge,
+        BinOp::And,
+        BinOp::Or,
+        BinOp::Is,
+        BinOp::IsNot,
+        BinOp::In,
+        BinOp::NotIn,
+        BinOp::Coalesce,
+    ];
+
+    let mut exprs: Vec<Expr> = bin_ops
+        .into_iter()
+        .map(|op| Expr::Binary {
+            span: span(),
+            op,
+            lhs: Box::new(leaf()),
+            rhs: Box::new(leaf()),
+        })
+        .collect();
+    for op in [UnOp::Neg, UnOp::Not] {
+        exprs.push(Expr::Unary {
+            span: span(),
+            op,
+            operand: Box::new(leaf()),
+        });
+    }
+    exprs
+}
+
+#[test]
+fn every_expression_variant_round_trips() {
+    for expr in expressions().into_iter().chain(operators()) {
+        let bytes = encode_expr(&expr);
+        let back = decode_expr(&bytes).expect("an expression decodes");
+        assert_eq!(
+            encode_expr(&back),
+            bytes,
+            "an expression did not survive the round trip, so a tag or a field disagrees"
+        );
+    }
+}
+
+/// A screen with a theme, a style, and a condition, so the round trip covers more than a leaf.
+fn sample() -> ScreenPack {
+    let source = "\
+theme dusk:
+    color bg = 0x10121a
+
+style body from text:
+    color = theme.fg
+
+screen dialogue(name: str?, line: str):
+    layer ui
+    box at bottom, stretch_x:
+        pad 24
+        if name is not none:
+            text name
+        text line style = body
+";
+    let parsed = vela_syntax::parse(FileId::from_raw(0), source);
+    ScreenPack::compile("main", &parsed.program.items)
+}
+
+#[test]
+fn a_pack_round_trips_byte_for_byte() {
+    let bytes = sample().to_bytes();
+    let back = ScreenPack::from_bytes(&bytes).expect("a pack decodes");
+    assert_eq!(back.to_bytes(), bytes, "re-encoding a pack changed it");
+    assert!(
+        back.into_set().has("dialogue"),
+        "the screen did not survive"
+    );
+}
+
+#[test]
+fn a_truncated_container_is_refused() {
+    let bytes = sample().to_bytes();
+    for cut in [0, 1, 4, 9, 10, bytes.len() - 1] {
+        assert!(
+            ScreenPack::from_bytes(&bytes[..cut]).is_err(),
+            "a pack cut to {cut} bytes was accepted"
+        );
+    }
+}
+
+#[test]
+fn a_pack_that_is_not_one_is_refused() {
+    let bytes = sample().to_bytes();
+    let mut wrong = bytes.clone();
+    wrong[0] = b'X';
+
+    let error = ScreenPack::from_bytes(&wrong).expect_err("bad magic is refused");
+    assert!(error.to_string().contains("magic"), "{error}");
+}
+
+#[test]
+fn a_broken_checksum_is_refused() {
+    let bytes = sample().to_bytes();
+    let mut damaged = bytes.clone();
+    // A byte inside the sections rather than the header, so the magic and version still read.
+    let index = damaged.len() / 2;
+    damaged[index] ^= 0xFF;
+
+    let error = ScreenPack::from_bytes(&damaged).expect_err("a damaged pack is refused");
+    assert!(error.to_string().contains("checksum"), "{error}");
+}
+
+#[test]
+fn a_newer_version_is_refused() {
+    let bytes = sample().to_bytes();
+    let mut newer = bytes.clone();
+    newer[4..6].copy_from_slice(&(crate::pack::PACK_VERSION + 1).to_le_bytes());
+
+    let error = ScreenPack::from_bytes(&newer).expect_err("a newer pack is refused");
+    assert!(matches!(error, PackError::Version(_)), "{error:?}");
+}
