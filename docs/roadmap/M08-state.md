@@ -41,8 +41,9 @@ line inserted before it is refused.
 Two honest deviations from this page's wording:
 
 - The snapshot benchmark builds the *spec's* scenario — a world with 10k `default` values —
-  rather than measuring `examples/standard`, which declares no defaults at all and so could not
-  exhibit the cost being budgeted.
+  rather than measuring `examples/standard`, which declares two (`trust`, `nights`) and so could
+  not exhibit the cost being budgeted. (It declared none at all when this was written; the example
+  gained defaults in M9, along with three modules.)
 - The demo's migration half is shown twice, neither time by loading the *fixture* save into
   `examples/standard`: a save belongs to the project whose schema and bodies it was written
   against, and the fixture's does not match `standard`'s. `examples/standard` loads a

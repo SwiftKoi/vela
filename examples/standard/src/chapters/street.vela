@@ -1,0 +1,40 @@
+# A chapter module: scenes and choices, no state of its own.
+#
+# `use main` is what makes the hub's labels reachable — a qualified name resolves through the
+# alias, and linking turns `main.back_from_street` into one label in the linked program. A
+# *value* in another module is `E2005`, so what a chapter needs from the hub it asks for by
+# jumping to a label that owns it.
+
+use main
+
+character stranger:
+    name = "A stranger"
+
+struct Direction:
+    name: str
+    turns: int
+
+fn turns_word(turns: int) -> str:
+    if turns == 1:
+        return "turn"
+    return "turns"
+
+label arrive:
+    scene bg.room with fade
+    show bg.room at center
+    stranger "You are out in it now."
+    var directions = [Direction("north", 4), Direction("south", 1)]
+    for direction in directions:
+        "The {direction.name} road is {direction.turns} {turns_word(direction.turns)} away."
+    call main.tally
+    menu "Which way?":
+        "Back inside":
+            hide bg.room
+            with dissolve
+            wait click
+            "The street was empty."
+            jump main.back_from_street
+        "Further on":
+            pause 0.5
+            "The road went on."
+            jump main.back_from_street

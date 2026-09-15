@@ -87,6 +87,12 @@ item 7.
   `crates/vela-cli/src/tests/linking_tests.rs` runs a two-module story from source and from a
   bundle and compares the command streams, and a *value* in another module is now refused at check
   time (`E2005`) rather than lowered into a fault.
+- **`examples/standard` is now the broadest thing that works**, so the gates that run it (6 and 9)
+  are covering the whole engine rather than one file: three modules with cross-module `jump` and
+  `call`, defaults, a `fn`, a `struct`, an `enum` with `match`, loops, a menu, an effect, four
+  screens, and a `README.md` stating what it deliberately does not do. Expanding it found five
+  engine faults in one sitting — see M04's and M05's own notes — which is the argument for the
+  example being broad: the corpus is MIR-shaped and the examples are what a story actually does.
 
 Not yet, and in the order they are needed:
 

@@ -1,4 +1,18 @@
+# The entry module: the interface, the world state, and the endings.
+#
+# A story is split across files the way a book is split across chapters, and each file is a module
+# (`LANGUAGE.md §6`). This one owns the state, because a `default` belongs to the module that
+# declares it — the chapters hand control back here to change it, and `jump` back out.
+
+use chapters.hearth
+use chapters.street
+
 image bg.room = @"art/room.png"
+
+character ren:
+    name = "Ren"
+
+effect rand.int(low: int, high: int) -> int
 
 theme dusk:
     color bg = 0x10121a
@@ -9,13 +23,16 @@ theme dusk:
 style body:
     color = theme.fg
 
+style aside from body:
+    color = theme.accent
+
 screen dialogue(name: str?, line: str):
     layer ui
     box at bottom, stretch_x, background = theme.bg:
         pad 24
         column gap 8:
             if name is not none:
-                text name
+                text name style = aside
             text line style = body
 
 screen pause:
@@ -35,6 +52,9 @@ screen pause:
             button background = theme.accent:
                 text "Settings"
                 action open_screen(settings)
+            button background = theme.accent:
+                text "Credits"
+                action open_screen(credits)
             button label "Leave the story" background = theme.accent:
                 text "Quit"
                 action quit()
@@ -46,23 +66,66 @@ screen settings:
         column gap 12:
             text "Volume"
             bar value = 5 label "Volume"
+            row gap 8:
+                button background = theme.accent:
+                    text "Back"
+                    action close_screen()
+
+screen credits:
+    layer ui
+    box stretch_x, stretch_y, background = theme.bg:
+        pad 24
+        column gap 12:
+            text "Standard" style = aside
+            text "Four modules, linked into one program."
+            spacer
             button background = theme.accent:
                 text "Back"
                 action close_screen()
 
-label start:
-    scene bg.room
-    "The rain had stopped."
-    menu:
-        "Go outside":
-            jump outside
-        "Stay in":
-            jump inside
+default trust: int = 0
+default nights: int = 0
 
-label outside:
-    "The street was empty."
+const MAX_TRUST: int = 1
+
+enum Ending:
+    warm
+    cold
+
+label start:
+    scene bg.room with dissolve
+    ren "It rained all evening."
+    "There was the street, and there was the fire."
+    "The street first."
+    jump chapters.street.arrive
+
+# A routine the chapters call and come back from. Its callers are in other modules, which is the
+# point of linking: `call main.tally` is one label in the linked program.
+label tally:
+    if rand.int(1, 6) > 3:
+        "Somewhere, thunder."
+    else:
+        "The rain kept on."
     return
 
-label inside:
-    "The fire was still going."
+# The street chapter comes back here, because `trust` belongs to this module.
+label back_from_street:
+    trust = trust + 1
+    "You came back in and shut the door."
+    jump chapters.hearth.settle
+
+label back_from_hearth:
+    jump ending
+
+label ending:
+    nights += 1
+    var ending: Ending = Ending.cold
+    if trust >= MAX_TRUST:
+        ending = Ending.warm
+    match ending:
+        when Ending.warm:
+            ren "The room felt warmer."
+        when Ending.cold:
+            ren "The room stayed cold."
+    "That was the first of {nights} nights."
     return
