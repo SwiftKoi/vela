@@ -378,6 +378,13 @@ That last rule is the only place the leading position is ambiguous, and it is on
 lookahead in one function — the same mechanism the grammar uses for narration versus a
 character speaking.
 
+**A speaker names a character, not a value.** `eileen "Hi."` resolves `eileen` among the module's
+`character` declarations, which is a namespace of its own: a `var eileen` in the same body neither
+shadows it nor is shadowed by it, and the checker says "no character named `eileen`" rather than
+"undefined name". Ren'Py needed a whole `character.` store to escape the collision between a
+character and a variable of the same name; the answer here is that the position is not a value
+position at all, so there is nothing to collide with.
+
 ### 7.1 Character
 ```vela
 character eileen:
