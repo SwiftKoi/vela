@@ -53,7 +53,7 @@ fn a_static_screen_depends_on_nothing() {
 fn an_interpolation_is_a_dependency() {
     let parsed = parse(
         FileId::from_raw(0),
-        "screen s:\n    box:\n        text \"Trust: {trust}\"\n",
+        "screen s:\n    box:\n        text \"Trust: [trust]\"\n",
     );
     let body = body_of(&parsed);
     let deps = deps_of(body);
@@ -79,7 +79,7 @@ fn a_condition_and_its_body_are_both_read() {
 fn a_dependency_inside_a_conditional_still_counts() {
     let parsed = parse(
         FileId::from_raw(0),
-        "screen s:\n    box:\n        if flag:\n            text \"{unused}\"\n",
+        "screen s:\n    box:\n        if flag:\n            text \"[unused]\"\n",
     );
     let body = body_of(&parsed);
     assert!(deps_of(body).contains("unused"));
@@ -90,7 +90,7 @@ fn a_dependency_inside_a_conditional_still_counts() {
 fn a_call_reads_its_callee_and_its_arguments() {
     let parsed = parse(
         FileId::from_raw(0),
-        "screen s:\n    box:\n        text \"{format(trust)} {count}\"\n",
+        "screen s:\n    box:\n        text \"[format(trust)] [count]\"\n",
     );
     let body = body_of(&parsed);
     let deps = deps_of(body);
@@ -150,7 +150,7 @@ fn a_static_screen_never_relays_out() {
 fn a_bound_screen_relays_out_only_for_its_own_field() {
     let parsed = parse(
         FileId::from_raw(0),
-        "screen s:\n    box:\n        text \"{trust}\"\n",
+        "screen s:\n    box:\n        text \"[trust]\"\n",
     );
     let body = body_of(&parsed);
     let node = Node::new(Kind::Box, vec![Node::measured(Size::new(10.0, 10.0))]);
@@ -199,7 +199,7 @@ fn invalidating_forces_a_relayout() {
 fn a_hit_is_reported_as_one() {
     let parsed = parse(
         FileId::from_raw(0),
-        "screen s:\n    box:\n        text \"{trust}\"\n",
+        "screen s:\n    box:\n        text \"[trust]\"\n",
     );
     let body = body_of(&parsed);
     let node = Node::new(Kind::Box, vec![Node::measured(Size::new(10.0, 10.0))]);

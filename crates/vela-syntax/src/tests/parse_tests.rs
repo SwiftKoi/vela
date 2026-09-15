@@ -1,7 +1,7 @@
 use vela_span::FileId;
 
 use crate::parse::{self, ParseResult};
-use crate::tree::{BinOp, Expr, Item, Stmt, StrPart};
+use crate::tree::{BinOp, Expr, Item, Stmt};
 
 pub(super) fn parse_src(src: &str) -> ParseResult {
     parse::parse(FileId::from_raw(0), src)
@@ -16,7 +16,7 @@ fn codes(src: &str) -> Vec<String> {
 }
 
 /// The label a single-label file declares.
-fn only_label(src: &str) -> Vec<Stmt> {
+pub(super) fn only_label(src: &str) -> Vec<Stmt> {
     let result = parse_src(src);
     assert!(
         result.diagnostics.is_empty(),
@@ -133,55 +133,6 @@ fn list_and_map_literals_parse() {
         panic!("expected a var statement");
     };
     assert!(matches!(&map.value, Expr::Map { entries, .. } if entries.len() == 1));
-}
-
-#[test]
-fn a_string_splits_into_literal_and_interpolated_parts() {
-    let body = only_label("label a:\n    var s = \"a {score} b\"\n");
-    let Stmt::Var(var) = &body[0] else {
-        panic!("expected a var statement");
-    };
-    let Expr::Str { parts, .. } = &var.value else {
-        panic!("expected a string, got {:?}", var.value);
-    };
-    assert_eq!(parts.len(), 3);
-    assert!(matches!(&parts[0], StrPart::Literal { text, .. } if text == "a "));
-    assert!(matches!(&parts[1], StrPart::Interpolation { .. }));
-    assert!(matches!(&parts[2], StrPart::Literal { text, .. } if text == " b"));
-}
-
-#[test]
-fn an_interpolated_expression_keeps_absolute_spans() {
-    let src = "label a:\n    var s = \"a {score} b\"\n";
-    let body = only_label(src);
-    let Stmt::Var(var) = &body[0] else {
-        panic!("expected a var statement");
-    };
-    let Expr::Str { parts, .. } = &var.value else {
-        panic!("expected a string");
-    };
-    let StrPart::Interpolation { expr, .. } = &parts[1] else {
-        panic!("expected an interpolation");
-    };
-
-    // The inner expression must point at `score` in the real file, not in the
-    // extracted fragment, or every diagnostic inside `{...}` would point at nonsense.
-    let span = expr.span();
-    let text = &src[span.start() as usize..span.end() as usize];
-    assert_eq!(text, "score");
-}
-
-#[test]
-fn an_escaped_brace_is_literal_text() {
-    let body = only_label("label a:\n    var s = \"a \\{ b\"\n");
-    let Stmt::Var(var) = &body[0] else {
-        panic!("expected a var statement");
-    };
-    let Expr::Str { parts, .. } = &var.value else {
-        panic!("expected a string");
-    };
-    assert_eq!(parts.len(), 1);
-    assert!(matches!(&parts[0], StrPart::Literal { text, .. } if text == "a { b"));
 }
 
 #[test]

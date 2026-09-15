@@ -115,9 +115,10 @@ Rules:
   long stays too long. That is the whole rule: a wrap has to re-parse to the same expression, and a
   split at a binary operator with a `\` is the only one the language can express.
 - Strings are *decoded* by the parser, so the printer must re-escape: `\\`, `\"`, `\n`, `\t`, `\r`,
-  and `\{` — without the last one a literal brace would return as an interpolation. An escape that
-  did nothing is dropped (`\q` is `q`, `\}` is `}`), which is what "normalize redundant escapes"
-  means in practice. Text is never reflowed.
+  and both sigils doubled — `[[` and `{{` (`LANGUAGE.md §1`). Without the doubling a literal `[`
+  would return as an interpolation and a literal `{` as a text tag. An escape that did nothing is
+  dropped (`\q` is `q`, `\}`, `\[`, `\{`), which is what "normalize redundant escapes" means in
+  practice. Text is never reflowed.
 - Hex integer literals keep their radix, because colours are written that way (`LANGUAGE.md §1`);
   `_` separators are dropped as decoration.
 - A `# fmt: off` region is reproduced verbatim, and an unterminated `off` runs to the end of the

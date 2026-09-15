@@ -235,6 +235,16 @@ pub struct SaveHeader {
 >
 > That field is save version 3. A version step is usually a *world* rewrite; this one rewrites
 > nothing, because what changed was the shape of the file rather than the state in it (§6.2).
+>
+> **Still open, and it is a syntax decision: an anchor that survives an *edit*.** The anchor above
+> survives a *rebuild* — a recompile, an optimization level, a different layout — but it is a
+> position in a file, and a position moves when the file does: insert a line above a `call` and
+> every save suspended inside that call is refused as stale. Ren'Py's answer is worth copying: a
+> `from` clause on the call names the return site, and its build *inserts* the clauses it finds
+> missing. That is also what a translation key wants (a message id that outlives the words around
+> it) and what a warped-to statement wants, so one mechanism would serve saves, translation, and
+> `M11`'s warp. What is settled here is only that the anchor must become *nameable*; the syntax
+> lands with the first of those three, and before a patch is shipped rather than after.
 
 ## 6. Save migrations
 

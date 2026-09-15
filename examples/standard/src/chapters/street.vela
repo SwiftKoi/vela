@@ -25,7 +25,7 @@ label arrive:
     stranger "You are out in it now."
     var directions = [Direction("north", 4), Direction("south", 1)]
     for direction in directions:
-        "The {direction.name} road is {direction.turns} {turns_word(direction.turns)} away."
+        "The [direction.name] road is [direction.turns] [turns_word(direction.turns)] away."
     call main.tally
     menu "Which way?":
         "Back inside":

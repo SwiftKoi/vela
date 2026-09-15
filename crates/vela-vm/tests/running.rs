@@ -301,7 +301,7 @@ fn a_loop_that_presents_a_command_runs() {
          \x20   var i = 0\n\
          \x20   while i < 2:\n\
          \x20       i += 1\n\
-         \x20       \"i is {i}.\"\n\
+         \x20       \"i is [i].\"\n\
          \x20   return\n",
     );
 
@@ -318,7 +318,7 @@ fn a_loop_that_presents_a_command_runs() {
 fn a_default_reads_as_its_declaration() {
     let module = compile(
         "defaults",
-        "default trust: int = 2\n\nlabel start:\n    \"trust is {trust}.\"\n    return\n",
+        "default trust: int = 2\n\nlabel start:\n    \"trust is [trust].\"\n    return\n",
     );
 
     let execution = run(&module, "start", &mut TakeFirst).expect("the default faulted");
@@ -347,8 +347,8 @@ fn a_function_reads_its_arguments() {
          \x20       return \"one\"\n\
          \x20   return \"many\"\n\n\
          label start:\n\
-         \x20   \"n=1 is {word(1)}.\"\n\
-         \x20   \"n=2 is {word(2)}.\"\n\
+         \x20   \"n=1 is [word(1)].\"\n\
+         \x20   \"n=2 is [word(2)].\"\n\
          \x20   return\n",
     );
 

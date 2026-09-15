@@ -127,5 +127,5 @@ label ending:
             ren "The room felt warmer."
         when Ending.cold:
             ren "The room stayed cold."
-    "That was the first of {nights} nights."
+    "That was the first of [nights] nights."
     return

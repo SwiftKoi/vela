@@ -161,9 +161,14 @@ fn float(value: f64) -> String {
 /// A string literal, with its escapes put back.
 ///
 /// The tree holds *resolved* text, so the printer is the only party that can restore the escapes —
-/// and it must: an unescaped `{` would come back as an interpolation, and a literal newline would
-/// end the string. What is *not* restored is an escape that did nothing: `\q` and `\}` are `q` and
-/// `}`, and the canonical form has the redundant backslash removed (`TOOLING.md §3`).
+/// and it must: an unescaped `[` would come back as an interpolation, an unescaped `{` as a text
+/// tag, and a literal newline would end the string. What is *not* restored is an escape that did
+/// nothing: `\q` and `\}` are `q` and `}`, and the canonical form has the redundant backslash
+/// removed (`TOOLING.md §3`). A doubled sigil *is* restored, because dropping it would change what
+/// the string means.
+///
+/// `]` and `}` need no escape: only the opening character of a pair means anything outside an
+/// interpolation.
 fn string(parts: &[StrPart]) -> String {
     let mut out = String::from("\"");
 
@@ -171,9 +176,9 @@ fn string(parts: &[StrPart]) -> String {
         match part {
             StrPart::Literal { text, .. } => out.push_str(&escaped(text)),
             StrPart::Interpolation { expr, .. } => {
-                out.push('{');
+                out.push('[');
                 out.push_str(&text(expr));
-                out.push('}');
+                out.push(']');
             }
         }
     }
@@ -193,9 +198,10 @@ fn escaped(text: &str) -> String {
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
             '\r' => out.push_str("\\r"),
-            // `{` opens an interpolation, so a literal one has to be escaped. `}` closes one
-            // that was not opened, and needs no escape.
-            '{' => out.push_str("\\{"),
+            // The two sigils, doubled — the same spelling Ren'Py uses, and the one the diagnostic
+            // tells a reader to write.
+            '[' => out.push_str("[["),
+            '{' => out.push_str("{{"),
             _ => out.push(character),
         }
     }

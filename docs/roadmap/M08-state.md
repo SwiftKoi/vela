@@ -61,3 +61,12 @@ leaves the old backdrop until the next one. Snapshot intervals do not yet auto-t
 project over budget. The digest stays deliberately non-cryptographic. A save written before the
 anchor existed (the corpus's version-1 and version-2 files) still resumes from its index, which
 catches a body that is too short and nothing subtler.
+
+**Still open, and it is a language decision rather than a state one: an anchor that survives an
+*edit*.** A frame is anchored to a statement's source range, which survives a rebuild and is
+refused rather than resumed wrongly when the body no longer holds it (`RUNTIME.md §5`). But a
+range is a position in a file, so inserting a line above a `call` makes every save suspended
+inside that call stale. Ren'Py names the return site with a `from` clause and has its *build*
+add the clauses a script is missing — and the same "identity for a statement that outlives the
+characters around it" is what a translation message id wants and what M11's warp wants. Decide it
+before the first patch ships, and give it one mechanism rather than three.

@@ -325,7 +325,7 @@ fn a_lambda_parameter_resolves_inside_the_body() {
 #[test]
 fn a_name_inside_an_interpolation_is_resolved() {
     assert_eq!(
-        name_codes("label a:\n    var s = \"score: {nope}\"\n    return\n"),
+        name_codes("label a:\n    var s = \"score: [nope]\"\n    return\n"),
         vec!["E2001"]
     );
 }

@@ -14,7 +14,7 @@ label settle:
     else:
         "The room was cold."
     for night in [1, 2]:
-        "Night {night} passed."
+        "Night [night] passed."
     call main.tally
     pause 1.5
     jump main.back_from_hearth

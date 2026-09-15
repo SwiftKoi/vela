@@ -7,7 +7,7 @@ label start:
     var both = n > LIMIT and n != 0
     var either = both or negated < 0
     var picked = LIMIT if both else n % 2
-    var text = "n is {n} and sum is {sum}"
+    var text = "n is [n] and sum is [sum]"
     var maybe: int? = none
     var fallback = maybe ?? LIMIT
     return

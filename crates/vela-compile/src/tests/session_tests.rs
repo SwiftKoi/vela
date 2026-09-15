@@ -409,7 +409,7 @@ fn a_well_typed_project_reports_nothing() {
     let mut session = Session::new();
     session.set_file(
         "main.vela",
-        "use lib\n\ndefault score: int = 0\n\nlabel start:\n    var x = score + 1\n    \"score: {x}\"\n    jump lib.end\n",
+        "use lib\n\ndefault score: int = 0\n\nlabel start:\n    var x = score + 1\n    \"score: [x]\"\n    jump lib.end\n",
     );
     session.set_file("lib.vela", "label end:\n    return\n");
 

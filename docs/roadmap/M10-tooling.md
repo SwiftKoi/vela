@@ -16,6 +16,21 @@ the rules" into text that is checked on every file in the repository. It is in `
 Still open from item 1: `--diff`, the `W4011` lint for `# fmt: off`, and running `--check` over this
 repository's own fixtures — the last needs the parse goldens re-blessed, because they pin spans.
 
+**Input from the Ren'Py reference.** Ren'Py's `developer_tools` and `cli` pages are the closest
+thing to a spec for this milestone, and four of its tools are worth copying rather than inventing:
+
+- `renpy lint` — a check list to steal wholesale for `vela analyze`: labels that are never reached,
+  a say for an undeclared character, images declared and never used, assets referenced and missing,
+  and *a `call` with no `from` clause* (which is how Ren'Py's own build finds the saves that are
+  about to break; see `RUNTIME.md §5`).
+- `renpy translate` — extraction of translatable strings into a catalogue. Two decisions come with
+  it: dialogue is translatable *by default* (no marker in the script), and the message id has to be
+  edit-stable, which is the same problem as the save anchor.
+- `renpy --warp <label>` — start the story at a label and skip the rest. Cheap, and it is what makes
+  a long fixture tolerable to work on by hand.
+- `testcase` blocks (`run`, `click`, `type`, `assert`) — a shape worth matching in `vela-test` so it
+  reads as familiar to anyone who has written one, even though the runner is ours.
+
 **Work items.**
 1. Formatter with the rules in `TOOLING.md §3`; `--check` and `--diff`.
 2. LSP server over the query database; the capability list in `TOOLING.md §4`.

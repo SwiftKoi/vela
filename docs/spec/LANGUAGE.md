@@ -51,9 +51,20 @@ analyzable.*
   Hexadecimal exists because colours are naturally written that way, and the obvious
   spelling `#rrggbb` would collide with the comment marker.
 - **Float literals**: `1.0`, `1e3`, `1.5e-2`. A trailing `.` is `E0007`.
-- **String literals**: `"..."` with escapes `\" \\ \n \t` and `\{` (literal brace).
-  `{expr}` inside a string is **interpolation** (§5.5), evaluated in the surrounding scope.
+- **String literals**: `"..."` with escapes `\" \\ \n \t`.
+  `[expr]` inside a string is **interpolation** (§5.5), evaluated in the surrounding scope.
   Unterminated string is `E0008`.
+- **Two sigils, two jobs.** `[` interpolates a value; `{` is **reserved for text tags**, which are
+  not implemented (`E0010`). Doubling is the escape: `[[` is a literal `[` and `{{` a literal `{`.
+  A backslash before either (`\[`, `\{`) is also literal — an escape that does nothing is
+  normalized away by the formatter, which always writes the doubling.
+
+  The split is deliberate and it is Ren'Py's, for the same reason: both things live *inside*
+  dialogue, and one sigil cannot be both. `"{b}Hi{/b}"` has to mean bold while `"Score: [score]"`
+  means the number, and with one sigil the first reads as "interpolate `b`". That is also why a
+  brace is an **error** rather than a literal today: the two readings differ in meaning, and
+  accepting the wrong one now would silently change what already-written dialogue says on the day
+  tags arrive.
 - **Path literals**: `@"assets/forest.png"` — a compile-time-checked asset reference (§7.5).
 
 ## 3. Grammar
@@ -276,7 +287,7 @@ Function parameters and return types are always explicit (`E3003`). Inference ne
 across branches without a declared type (`E3004`) — this keeps error messages local.
 
 ### 5.5 String interpolation
-`"Score: {score}"` desugars to a concatenation of `str(score)`. The interpolated expression
+`"Score: [score]"` desugars to a concatenation of `str(score)`. The interpolated expression
 must be `str`-convertible; a value with a struct type requires an explicit conversion
 (`E3005`) so output formatting is never implicit. Float interpolation uses the pinned
 formatter (`RUNTIME.md §4`) — this is a determinism requirement, not a style choice.

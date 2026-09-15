@@ -2,5 +2,5 @@ const BASE: int = 60
 
 label start:
     var seconds = BASE * 2 + 5
-    var text = "wait {seconds}"
+    var text = "wait [seconds]"
     return

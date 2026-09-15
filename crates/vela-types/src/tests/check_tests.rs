@@ -24,7 +24,7 @@ fn codes(source: &str) -> Vec<String> {
 #[test]
 fn a_well_typed_module_reports_nothing() {
     let source = "default score: int = 0\n\n\
-                  label start:\n    var x: int = 1\n    var y = x + 2\n    \"score: {y}\"\n    return\n";
+                  label start:\n    var x: int = 1\n    var y = x + 2\n    \"score: [y]\"\n    return\n";
     assert!(codes(source).is_empty(), "{:?}", codes(source));
 }
 
@@ -81,13 +81,13 @@ fn branches_that_agree_are_fine() {
 #[test]
 fn a_struct_in_an_interpolation_is_reported_e3005() {
     let source = "struct Route:\n    name: str\n\n\
-                  label a:\n    var r = Route\n    var s = \"route {r}\"\n    return\n";
+                  label a:\n    var r = Route\n    var s = \"route [r]\"\n    return\n";
     assert_eq!(codes(source), vec!["E3005"]);
 }
 
 #[test]
 fn a_scalar_in_an_interpolation_is_fine() {
-    let source = "label a:\n    var n = 1\n    var s = \"n is {n}\"\n    return\n";
+    let source = "label a:\n    var n = 1\n    var s = \"n is [n]\"\n    return\n";
     assert!(codes(source).is_empty(), "{:?}", codes(source));
 }
 
