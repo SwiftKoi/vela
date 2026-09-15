@@ -2,7 +2,7 @@
 
 use vela_diag::Diagnostic;
 use vela_span::Span;
-use vela_syntax::{Expr, Item, Program, Stmt};
+use vela_syntax::{Expr, Item, Program};
 
 use crate::env::{Env, Scope};
 use crate::error;
@@ -31,11 +31,12 @@ pub fn check(tree: &Program, env: &Env) -> Vec<Diagnostic> {
                     let ty = lower(&param.ty, env);
                     checker.scope.insert(param.name.clone(), ty);
                 }
-                checker.body(&decl.body);
+                // Whether every path through the body exits comes back from the walk itself,
+                // which is the only place the scope needed to type a `match`'s scrutinee exists.
+                let exits = checker.body(&decl.body);
 
-                // A function that promises a value has to produce one on every path,
-                // which is a structural question rather than a typing one.
-                if decl.ret.is_some() && !returns_on_all_paths(&decl.body) {
+                // A function that promises a value has to produce one on every path.
+                if decl.ret.is_some() && !exits {
                     let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| lower(ty, env));
                     checker.report(error::missing_return(&decl.name, decl.span, &ret));
                 }
@@ -64,36 +65,6 @@ pub fn type_of(env: &Env, scope: &Scope, expr: &Expr) -> Ty {
         diagnostics: Vec::new(),
     };
     checker.expr(expr)
-}
-
-/// Whether every path through these statements ends in a `return`.
-///
-/// Structural rather than a data-flow analysis, and deliberately so: it answers "can this
-/// finish without returning?", which is exactly the question `E4002` asks. A branch counts
-/// only when *every* way out of it returns, which is why an `if` with no `else` never does.
-fn returns_on_all_paths(statements: &[Stmt]) -> bool {
-    let Some(last) = statements.last() else {
-        return false;
-    };
-
-    match last {
-        Stmt::Return(_) => true,
-        Stmt::If(stmt) => {
-            stmt.else_body
-                .as_ref()
-                .is_some_and(|body| returns_on_all_paths(body))
-                && stmt
-                    .elifs
-                    .iter()
-                    .all(|clause| returns_on_all_paths(&clause.body))
-                && returns_on_all_paths(&stmt.then_body)
-        }
-        Stmt::Match(stmt) => {
-            stmt.arms.iter().any(|arm| arm.pattern.is_none())
-                && stmt.arms.iter().all(|arm| returns_on_all_paths(&arm.body))
-        }
-        _ => false,
-    }
 }
 
 /// The state of one module's check.

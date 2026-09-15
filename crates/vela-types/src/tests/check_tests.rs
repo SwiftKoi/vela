@@ -219,6 +219,44 @@ fn a_function_that_returns_on_every_path_is_fine() {
     assert!(codes("fn f(n: int) -> int:\n    return n\n").is_empty());
 }
 
+/// The false positive this rule exists for: every variant returns, so every path returns — even
+/// though no arm is an `else`.
+#[test]
+fn a_function_returning_from_every_arm_of_a_match_is_fine() {
+    let source = "enum Ending:\n    good\n    bad\n\n\
+                  fn rank(e: Ending) -> int:\n    match e:\n        when Ending.good:\n            \
+                  return 1\n        when Ending.bad:\n            return 2\n";
+    assert!(codes(source).is_empty(), "{:?}", codes(source));
+}
+
+#[test]
+fn a_guarded_arm_without_an_else_can_fall_through() {
+    // The guard may be false, and nothing catches that case, so the function can finish
+    // without returning.
+    let source = "enum Ending:\n    good\n    bad\n\n\
+                  fn rank(e: Ending, c: bool) -> int:\n    match e:\n        when Ending.good if c:\n            \
+                  return 1\n        when Ending.bad:\n            return 2\n";
+    assert_eq!(codes(source), vec!["E4002"]);
+}
+
+#[test]
+fn a_guarded_arm_with_an_else_that_returns_is_fine() {
+    let source = "enum Ending:\n    good\n    bad\n\n\
+                  fn rank(e: Ending, c: bool) -> int:\n    match e:\n        when Ending.good if c:\n            \
+                  return 1\n        else:\n            return 2\n";
+    assert!(codes(source).is_empty(), "{:?}", codes(source));
+}
+
+/// A missing arm is `E4001`'s to report. Repeating it as "this function does not return" would be
+/// a second diagnostic for one mistake, and the fix is the same either way.
+#[test]
+fn a_match_missing_an_arm_is_reported_once() {
+    let source = "enum Ending:\n    good\n    bad\n\n\
+                  fn rank(e: Ending) -> int:\n    match e:\n        when Ending.good:\n            \
+                  return 1\n";
+    assert_eq!(codes(source), vec!["E4001"]);
+}
+
 #[test]
 fn an_if_without_an_else_does_not_return_on_every_path() {
     let source = "fn f(c: bool) -> int:\n    if c:\n        return 1\n";
