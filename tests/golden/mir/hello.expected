@@ -1,0 +1,12 @@
+module hello
+
+label start():
+    b0:
+        _0 = []
+        _1 = {}
+        cmd say(none, _0, "Hello, world.", _1, none)
+        yield say -> b1
+    b1:
+        return
+    b2 (unreachable):
+        return

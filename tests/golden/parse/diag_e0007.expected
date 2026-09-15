@@ -1,0 +1,5 @@
+error[E0007]: float literal ends with a decimal point
+ --> diag_e0007.vela:2:14
+  |
+2 |     var x = 1.
+  |              ^ write a digit after the point, or remove it

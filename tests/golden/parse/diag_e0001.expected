@@ -1,0 +1,10 @@
+error[E0001]: byte order mark is not permitted
+ --> diag_e0001.vela:1:1
+  |
+1 | ﻿label a:
+  | ^ remove this; Vela source is UTF-8 without a BOM
+error[E1002]: expected an indented block after `label`
+ --> diag_e0001.vela:2:1
+  |
+2 | 
+  | ^ add an indented block here

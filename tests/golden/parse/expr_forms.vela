@@ -1,0 +1,12 @@
+label a:
+    var a = 1 + 2 * 3
+    var b = (1 + 2) * 3
+    var c = [1, 2, 3]
+    var d = {"k": 1}
+    var e = f(1).g[2]
+    var h = 1 if x else 2
+    var i = not x and y or z
+    var j = a is not none
+    var k = a not in xs
+    var l = a ?? b
+    var m = fn(v: int) -> v + 1

@@ -1,0 +1,15 @@
+module pass_cmd_fuse
+
+label start():
+    b0:
+        _0 = []
+        _1 = {}
+        cmd say(none, _0, "First.", _1, none)
+        yield say -> b1
+    b1:
+        _2 = []
+        _3 = {}
+        cmd say(none, _2, "Second.", _3, none)
+        yield say -> b2
+    b2:
+        return

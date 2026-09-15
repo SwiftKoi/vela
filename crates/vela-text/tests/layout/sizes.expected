@@ -1,0 +1,52 @@
+size 13.5
+wrap 200
+metrics ascent=12.221 descent=2.861 leading=0.442
+size 184.610x31.047 lines=2
+line 0 width=184.610 baseline=12.221 range=0..33 glyphs=33
+  39 at 0.000 adv 9.749
+  76 at 9.749 adv 2.999
+  68 at 12.749 adv 7.508
+  79 at 20.257 adv 2.999
+  82 at 23.256 adv 7.508
+  74 at 30.764 adv 7.508
+  88 at 38.272 adv 7.508
+  72 at 45.780 adv 7.508
+  3 at 53.288 adv 3.751
+  68 at 57.039 adv 7.508
+  87 at 64.547 adv 3.751
+  3 at 68.298 adv 3.751
+  68 at 72.048 adv 7.508
+  3 at 79.556 adv 3.751
+  86 at 83.307 adv 6.750
+  76 at 90.057 adv 2.999
+  93 at 93.056 adv 6.750
+  72 at 99.806 adv 7.508
+  3 at 107.314 adv 3.751
+  87 at 111.065 adv 3.751
+  75 at 114.816 adv 7.508
+  68 at 122.324 adv 7.508
+  87 at 129.832 adv 3.751
+  3 at 133.583 adv 3.751
+  76 at 137.333 adv 2.999
+  86 at 140.333 adv 6.750
+  3 at 147.083 adv 3.751
+  81 at 150.833 adv 7.508
+  82 at 158.342 adv 7.508
+  87 at 165.850 adv 3.751
+  3 at 169.600 adv 3.751
+  68 at 173.351 adv 7.508
+  3 at 180.859 adv 3.751
+line 1 width=87.803 baseline=27.745 range=33..46 glyphs=13
+  90 at 0.000 adv 9.749
+  75 at 9.749 adv 7.508
+  82 at 17.257 adv 7.508
+  79 at 24.765 adv 2.999
+  72 at 27.765 adv 7.508
+  3 at 35.273 adv 3.751
+  81 at 39.023 adv 7.508
+  88 at 46.531 adv 7.508
+  80 at 54.040 adv 11.246
+  69 at 65.285 adv 7.508
+  72 at 72.793 adv 7.508
+  85 at 80.301 adv 3.751
+  17 at 84.052 adv 3.751

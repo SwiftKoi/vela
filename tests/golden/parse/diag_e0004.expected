@@ -1,0 +1,15 @@
+error[E0004]: inconsistent indentation width in this block
+ --> diag_e0004.vela:4:1
+  |
+4 |         "y"
+  | ^^^^^^^^ this block indents by 4 columns; this line indents by 8
+error[E1002]: expected an indented block after `label`
+ --> diag_e0004.vela:4:9
+  |
+4 |         "y"
+  |         ^^^ add an indented block here
+error[E1001]: expected a top-level declaration, found a string
+ --> diag_e0004.vela:4:9
+  |
+4 |         "y"
+  |         ^^^ expected a top-level declaration

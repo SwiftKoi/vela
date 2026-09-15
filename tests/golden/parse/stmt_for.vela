@@ -1,0 +1,3 @@
+label a:
+    for item in items:
+        "each"

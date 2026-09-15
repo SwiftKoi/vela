@@ -1,0 +1,50 @@
+# Measured budgets for the two things `ARCHITECTURE.md §8` optimizes, plus the one number
+# `RUNTIME.md §7.2` fixes, in milliseconds.
+#
+# Checked by `cargo xtask budget --release`, which is **not** part of `cargo xtask all`: a
+# measurement is not a policy check, and putting it in the gate would make the gate slow and
+# intermittent. It refuses to run in a debug build — a timed clone with no optimizer measures
+# the absence of an optimizer.
+#
+# ## How the startup and frame numbers were chosen
+#
+# Measured on the development machine in release mode: startup 0.26 ms, frame 0.84 ms. The
+# budgets are roughly an order of magnitude above that, which is the only ratio that makes a
+# budget useful in both directions:
+#
+#   * **Above machine variance.** Shared CI runners are several times slower than an idle
+#     laptop, and a budget that fails there teaches people to rerun rather than to look. A
+#     check nobody believes is worse than no check.
+#   * **Below an algorithmic regression.** Re-laying out every frame instead of hitting the
+#     cache, or re-parsing every module at startup, costs more than 10× — which is exactly the
+#     class of mistake these exist to catch.
+#
+# So: sized for a 10× regression, blind to a 2× machine. If one of these ever needs raising,
+# raise it *with a reason* — the number is the only record of what was acceptable and when.
+#
+# ## How the snapshot number was chosen
+#
+# It was not. `RUNTIME.md §7.2` states the budget — *"snapshot must not exceed 1 ms for a
+# project with 10k `default` values"* — so this is a contract rather than an observation, and
+# the same 10k is the size of the world the benchmark builds.
+
+startup_ms = 10.0
+frame_ms = 8.0
+frames = 30
+snapshot_ms = 1.0
+snapshot_defaults = 10000
+snapshot_reps = 100
+
+# ## The wasm module a browser downloads, in bytes
+#
+# `BUILD_AND_ASSETS.md §5`: the web engine core is size-gated so the web target stays a viable
+# instant demo. Unlike the millisecond budgets above, this one is a **ceiling that moves down**.
+# Lowering it when the module shrinks is the point of having it; raising it needs a reason
+# recorded in a pull request, not a commit — otherwise the ratchet only ever turns one way and
+# nobody notices until the demo is 5 MB.
+#
+# Measured at 287,231 bytes when gates landed, so this is ~4% of headroom: enough that a
+# dependency's patch release does not fail the build, small enough that a new dependency does.
+
+wasm_bytes = 300000
+

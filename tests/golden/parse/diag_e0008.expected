@@ -1,0 +1,5 @@
+error[E0008]: unterminated string literal
+ --> diag_e0008.vela:2:5
+  |
+2 |     "unterminated
+  |     ^^^^^^^^^^^^^ this string is missing its closing `"`

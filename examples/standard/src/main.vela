@@ -1,0 +1,66 @@
+theme dusk:
+    color bg = 0x10121a
+    color fg = 0xe6e6f0
+    color accent = 0x6ea8fe
+    space sm = 4
+
+style body:
+    color = theme.fg
+
+screen dialogue(name: str?, line: str):
+    layer ui
+    box at bottom, stretch_x, background = theme.bg:
+        pad 24
+        column gap 8:
+            if name is not none:
+                text name
+            text line style = body
+
+screen pause:
+    layer ui
+    box stretch_x, stretch_y, background = theme.bg:
+        pad 24
+        column gap 12:
+            button background = theme.accent:
+                text "Resume"
+                action close_screen()
+            button background = theme.accent:
+                text "Save"
+                action quick_save()
+            button background = theme.accent:
+                text "Load"
+                action quick_load()
+            button background = theme.accent:
+                text "Settings"
+                action open_screen(settings)
+            button label "Leave the story" background = theme.accent:
+                text "Quit"
+                action quit()
+
+screen settings:
+    layer ui
+    box stretch_x, stretch_y, background = theme.bg:
+        pad 24
+        column gap 12:
+            text "Volume"
+            bar value = 5 label "Volume"
+            button background = theme.accent:
+                text "Back"
+                action close_screen()
+
+label start:
+    scene bg.room
+    "The rain had stopped."
+    menu:
+        "Go outside":
+            jump outside
+        "Stay in":
+            jump inside
+
+label outside:
+    "The street was empty."
+    return
+
+label inside:
+    "The fire was still going."
+    return

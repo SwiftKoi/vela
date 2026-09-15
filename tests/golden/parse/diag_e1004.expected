@@ -1,0 +1,15 @@
+error[E1004]: expected a name after ``label``
+ --> diag_e1004.vela:1:6
+  |
+1 | label
+  |      ^ expected a name here
+error[E1001]: expected `:`, found the end of a line
+ --> diag_e1004.vela:1:6
+  |
+1 | label
+  |      ^ expected `:`
+error[E1001]: expected a top-level declaration, found the end of a line
+ --> diag_e1004.vela:1:6
+  |
+1 | label
+  |      ^ expected a top-level declaration

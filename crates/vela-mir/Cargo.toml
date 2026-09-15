@@ -1,0 +1,21 @@
+[package]
+name = "vela-mir"
+description = "The typed mid-level IR - the stable compilation contract - and its optimization passes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 5
+
+[dependencies]
+vela-span.workspace = true
+vela-syntax.workspace = true
+vela-world.workspace = true
+vela-hir.workspace = true
+vela-types.workspace = true
+vela-diag.workspace = true
+
+[lints]
+workspace = true

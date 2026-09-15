@@ -1,0 +1,13 @@
+module pass_const_fold
+
+const BASE: int = 60
+
+label start():
+    b0:
+        _1 = 120
+        seconds = _1 + 5
+        _3 = seconds
+        _4 = str(_3)
+        _5 = "wait " + _4
+        text = _5
+        return

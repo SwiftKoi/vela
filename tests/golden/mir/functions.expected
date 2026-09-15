@@ -1,0 +1,52 @@
+module functions
+
+fn clamp(n: int, low: int, high: int) -> int:
+    b0:
+        _3 = n
+        _4 = low
+        _5 = _3 < _4
+        br _5 -> b2, b3
+    b1:
+        _7 = n
+        _8 = high
+        _9 = _7 > _8
+        br _9 -> b6, b7
+    b2:
+        _6 = low
+        return _6
+    b3:
+        goto b1
+    b4 (unreachable):
+        goto b1
+    b5:
+        _11 = n
+        return _11
+    b6:
+        _10 = high
+        return _10
+    b7:
+        goto b5
+    b8 (unreachable):
+        goto b5
+    b9 (unreachable):
+        return
+
+fn doubled(n: int) -> int:
+    b0:
+        _1 = n
+        _2 = _1 * 2
+        _3 = clamp(_2, 0, 10)
+        return _3
+    b1 (unreachable):
+        return
+
+label start():
+    b0:
+        _1 = doubled(7)
+        limited = _1
+        _3 = limited
+        _4 = str(_3)
+        described = _4
+        return
+    b1 (unreachable):
+        return

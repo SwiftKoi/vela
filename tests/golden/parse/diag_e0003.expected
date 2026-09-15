@@ -1,0 +1,5 @@
+error[E0003]: tab used for indentation
+ --> diag_e0003.vela:2:1
+  |
+2 |     "x"
+  | ^^^^ indentation must be spaces, so that a block's width is unambiguous

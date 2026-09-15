@@ -1,0 +1,6 @@
+fn ceiling() -> int:
+    return 10
+
+label start:
+    var value = ceiling()
+    return

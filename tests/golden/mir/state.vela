@@ -1,0 +1,10 @@
+const START: int = 1
+const LIMIT: int = START + 2
+
+default trust: int = 0
+default who: str = "you"
+
+label start:
+    trust += LIMIT
+    who = "me"
+    return

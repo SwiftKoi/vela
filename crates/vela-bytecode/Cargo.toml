@@ -1,0 +1,27 @@
+[package]
+name = "vela-bytecode"
+description = "The instruction set, assembler/disassembler, verifier, and the `.velac` codec."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 6
+
+[dependencies]
+vela-span.workspace = true
+vela-mir.workspace = true
+vela-types.workspace = true
+vela-world.workspace = true
+vela-syntax.workspace = true
+vela-diag.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+vela-syntax.workspace = true
+vela-types.workspace = true
+vela-hir.workspace = true
+vela-mir.workspace = true

@@ -1,0 +1,5 @@
+error[E0005]: dedent does not match any enclosing indentation level
+ --> diag_e0005.vela:4:1
+  |
+4 |       "z"
+  | ^^^^^^ this line starts at column 6, which is not an open block

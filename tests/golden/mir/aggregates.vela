@@ -1,0 +1,16 @@
+struct Route:
+    name: str
+    length: int
+
+enum Ending:
+    good
+    bad(reason: str)
+
+label start:
+    var names = ["north", "south"]
+    var lookup = {"north": 3, "south": 5}
+    var route = Route("north", 3)
+    var ending: Ending = Ending.bad("lost")
+    route.length = 7
+    names[0] = "east"
+    return

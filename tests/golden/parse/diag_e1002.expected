@@ -1,0 +1,10 @@
+error[E1002]: expected an indented block after `label`
+ --> diag_e1002.vela:2:1
+  |
+2 | return
+  | ^^^^^^ add an indented block here
+error[E1001]: expected a top-level declaration, found `return`
+ --> diag_e1002.vela:2:1
+  |
+2 | return
+  | ^^^^^^ expected a top-level declaration

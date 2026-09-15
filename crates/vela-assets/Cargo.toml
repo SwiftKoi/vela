@@ -1,0 +1,23 @@
+[package]
+name = "vela-assets"
+description = "Asset import, transformation, and the content-addressed manifest."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 2
+
+[dependencies]
+png = "0.18.1"
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+# The manifest's digest is an artifact's *identity* (`BUILD_AND_ASSETS.md §2`), so unlike the
+# schema fingerprint in `vela-replay` it has to be collision-resistant: two artifacts that
+# share a digest are treated as one, and a patch trusts a digest it downloaded.
+sha2 = "0.10"
+
+[lints]
+workspace = true

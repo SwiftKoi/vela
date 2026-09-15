@@ -1,0 +1,6 @@
+const LIMIT: int = 1
+
+label start:
+    if LIMIT > 0:
+        return
+    return

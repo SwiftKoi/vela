@@ -1,0 +1,25 @@
+[package]
+name = "vela-web"
+description = "The browser entry point: the engine's VM, exposed to JavaScript."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 10
+adapter = true
+
+[lib]
+# A `cdylib` because that is what a wasm module is. On a native target the crate compiles to
+# nothing at all — see `src/lib.rs` — so `cargo build --workspace` still works everywhere.
+crate-type = ["cdylib"]
+
+[dependencies]
+vela-bytecode.workspace = true
+vela-vm.workspace = true
+vela-world.workspace = true
+wasm-bindgen = "0.2"
+
+[lints]
+workspace = true

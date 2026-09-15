@@ -1,0 +1,6 @@
+label a:
+    match warmth:
+        when Ending.good:
+            return
+        else:
+            return

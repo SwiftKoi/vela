@@ -1,0 +1,5 @@
+# The entry label named by `entry` in vela.toml.
+
+label start:
+    "Hello, world."
+    return

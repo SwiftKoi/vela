@@ -1,0 +1,76 @@
+module story
+
+label start():
+    b0:
+        _0 = []
+        _1 = []
+        cmd scene("forest", _0, _1, "dissolve")
+        yield scene -> b1
+    b1:
+        _2 = []
+        _3 = ["center"]
+        cmd show("eileen", _2, _3, none)
+        yield show -> b2
+    b2:
+        _4 = []
+        _5 = {}
+        cmd say("eileen", _4, "Hello.", _5, none)
+        yield say -> b3
+    b3:
+        _6 = []
+        _7 = {}
+        cmd say(none, _6, "Narration.", _7, none)
+        yield say -> b4
+    b4:
+        _8 = ["Walk", "Wait"]
+        _9 = [true, true]
+        cmd menu("What now?", _8, _9)
+        yield menu -> b5 into _10
+    b5:
+        dispatch _10 as  [0=b7, 1=b8] else b6
+    b6:
+        return
+    b7:
+        jump walking
+    b8:
+        call waiting -> b10
+    b9 (unreachable):
+        goto b6
+    b10:
+        goto b11
+    b11:
+        goto b6
+    b12 (unreachable):
+        return
+
+label walking():
+    b0:
+        _0 = []
+        _1 = []
+        cmd hide("eileen", _0, _1, none)
+        yield hide -> b1
+    b1:
+        cmd with("fade")
+        yield with -> b2
+    b2:
+        cmd wait_click()
+        yield wait_click -> b3
+    b3:
+        return
+    b4 (unreachable):
+        return
+
+label waiting():
+    b0:
+        cmd play("music", "audio/theme.ogg", true, 2.0)
+        yield play -> b1
+    b1:
+        cmd pause(1.5)
+        yield pause -> b2
+    b2:
+        cmd stop("music", none, false, none)
+        yield stop -> b3
+    b3:
+        return
+    b4 (unreachable):
+        return

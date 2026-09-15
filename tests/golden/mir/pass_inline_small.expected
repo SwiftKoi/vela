@@ -1,0 +1,11 @@
+module pass_inline_small
+
+fn ceiling() -> int:
+    b0:
+        return 10
+
+label start():
+    b0:
+        _1 = 10
+        value = _1
+        return

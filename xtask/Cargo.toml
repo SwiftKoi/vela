@@ -1,0 +1,24 @@
+[package]
+name = "xtask"
+description = "Architecture and policy checks for the vela workspace."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true
+vela-bytecode = { version = "0.1.0", path = "../crates/vela-bytecode" }
+vela-compile = { version = "0.1.0", path = "../crates/vela-compile" }
+vela-diag = { version = "0.1.0", path = "../crates/vela-diag" }
+vela-mir = { version = "0.1.0", path = "../crates/vela-mir" }
+vela-render = { version = "0.1.0", path = "../crates/vela-render" }
+vela-span = { version = "0.1.0", path = "../crates/vela-span" }
+vela-text = { version = "0.1.0", path = "../crates/vela-text" }
+vela-vm = { version = "0.1.0", path = "../crates/vela-vm" }
+vela-world = { version = "0.1.0", path = "../crates/vela-world" }
+
+[lints]
+workspace = true

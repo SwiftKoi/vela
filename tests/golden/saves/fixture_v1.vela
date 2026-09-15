@@ -1,0 +1,6 @@
+default trust: int = 0
+
+label start:
+    trust = 3
+    "Saved for the corpus."
+    return

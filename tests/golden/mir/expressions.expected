@@ -1,0 +1,68 @@
+module expressions
+
+const LIMIT: int = 3
+
+label start():
+    b0:
+        n = 3 + 1
+        _2 = n
+        _3 = _2 * 2
+        sum = _3 - 1
+        _5 = sum
+        negated = -_5
+        _8 = n
+        _9 = _8 > 3
+        _7 = _9
+        br _7 -> b1, b2
+    b1:
+        _10 = n
+        _11 = _10 != 0
+        _7 = _11
+        goto b2
+    b2:
+        both = _7
+        _14 = both
+        _13 = _14
+        br _13 -> b4, b3
+    b3:
+        _15 = negated
+        _16 = _15 < 0
+        _13 = _16
+        goto b4
+    b4:
+        either = _13
+        _19 = both
+        br _19 -> b5, b6
+    b5:
+        _18 = 3
+        goto b7
+    b6:
+        _20 = n
+        _21 = _20 % 2
+        _18 = _21
+        goto b7
+    b7:
+        picked = _18
+        _23 = n
+        _24 = str(_23)
+        _25 = "n is " + _24
+        _26 = _25 + " and sum is "
+        _27 = sum
+        _28 = str(_27)
+        _29 = _26 + _28
+        text = _29
+        maybe = none
+        _33 = maybe
+        _34 = _33 is none
+        br _34 -> b9, b8
+    b8:
+        _32 = _33!
+        goto b10
+    b9:
+        _32 = 3
+        goto b10
+    b10:
+        fallback = _32
+        return
+    b11 (unreachable):
+        return

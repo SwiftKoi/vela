@@ -1,0 +1,10 @@
+error[E0002]: carriage return without a line feed
+ --> diag_e0002.vela:2:8
+  |
+2 |     "x"label b:
+  |        ^ line endings must be `\n` or `\r\n`
+error[E1002]: expected an indented block after `label`
+ --> diag_e0002.vela:3:1
+  |
+3 | 
+  | ^ add an indented block here

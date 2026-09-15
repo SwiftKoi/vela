@@ -1,0 +1,31 @@
+module matching
+
+enum Round:
+    warm
+    cold
+    scored(int)
+
+label start():
+    b0:
+        _1 = Round.scored(2)
+        round = _1
+        total = 0
+        _3 = round
+        dispatch _3 as Round [0=b3, 1=b4, 2=b5] else b2
+    b1:
+        return
+    b2:
+        unreachable
+    b3:
+        total = 1
+        goto b1
+    b4:
+        total = 0
+        goto b1
+    b5:
+        points = _3.0
+        _5 = points
+        total = _5
+        goto b1
+    b6 (unreachable):
+        return

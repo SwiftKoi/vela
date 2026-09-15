@@ -1,0 +1,3 @@
+label a:
+    var s = "score: {score} and {other + 1}"
+    var t = "a \{ brace"

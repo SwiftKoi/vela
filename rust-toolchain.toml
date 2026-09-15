@@ -1,0 +1,7 @@
+# Channel, not an exact version, for now: pinning to a precise release happens when
+# reproducible release builds land (M9), where it is actually load-bearing. See
+# docs/engineering/REPO_LAYOUT.md §7.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

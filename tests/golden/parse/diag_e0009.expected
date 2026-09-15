@@ -1,0 +1,5 @@
+error[E0009]: unexpected character
+ --> diag_e0009.vela:2:5
+  |
+2 |     $x
+  |     ^ this character is not part of the language

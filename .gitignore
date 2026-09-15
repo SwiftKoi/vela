@@ -1,0 +1,23 @@
+/target
+# Built bundles, not fixtures. A `.velac` under `tests/golden/` is a golden: it is
+# committed precisely so that the loader can be tested against a container it did not
+# just write, and so that a format change has something to fail against.
+**/*.velac
+!tests/golden/**/*.velac
+
+# `tools/drive.sh` writes here when `--out` is not given. A capture is an artifact, not a
+# source file: one was committed by a `git add -A` before this rule existed.
+/frame.png
+
+# A build's output. `vela build` writes here by default, and one being committed by hand is
+# the same mistake `/frame.png` was — a generated file that reads like a source file.
+**/dist/
+
+# A player's saves, written beside the project they belong to. Player data, not source — and
+# one dropped into an example by trying it out is exactly the file a `git add -A` commits.
+#
+# `tests/golden/saves/` is the deliberate exception: that one *is* a fixture, and the tests
+# read it. Negating it here works because its parent is not itself excluded — which is why the
+# pattern is anchored at the directory rather than at the files inside it.
+**/saves/
+!tests/golden/saves/

@@ -1,0 +1,26 @@
+character eileen:
+    name = "Eileen"
+
+label start:
+    scene forest with dissolve
+    show eileen at center
+    eileen "Hello."
+    "Narration."
+    menu "What now?":
+        "Walk":
+            jump walking
+        "Wait":
+            call waiting
+    return
+
+label walking:
+    hide eileen
+    with fade
+    wait click
+    return
+
+label waiting:
+    play music @"audio/theme.ogg" loop fade 2.0
+    pause 1.5
+    stop music
+    return

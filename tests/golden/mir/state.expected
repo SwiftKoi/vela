@@ -1,0 +1,15 @@
+module state
+
+const START: int = 1
+const LIMIT: int = 3
+default trust: int = 0
+default who: str = "you"
+
+label start():
+    b0:
+        _0 = default#0
+        default#0 = _0 + 3
+        default#1 = "me"
+        return
+    b1 (unreachable):
+        return

@@ -1,0 +1,19 @@
+[package]
+name = "vela-types"
+description = "Types, inference, and the checking rules."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 4
+
+[dependencies]
+vela-span.workspace = true
+vela-syntax.workspace = true
+vela-hir.workspace = true
+vela-diag.workspace = true
+
+[lints]
+workspace = true

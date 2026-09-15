@@ -1,0 +1,53 @@
+{
+  "manifest_version": 1,
+  "assets": [
+    {
+      "id": "art.hero",
+      "source": "art/hero.json",
+      "digest": "sha256:abd262ded25e8acd3335b0f5ca08151b0ff380da19c0a13e89c7e5edc41bcd4a",
+      "artifacts": [
+        {
+          "path": "art/hero.json",
+          "digest": "sha256:9c5f3abb0456e0455d719914bc310a428162f6ea27047fbefe0194da8cf773aa",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "id": "canonical",
+      "source": "canonical.json",
+      "digest": "sha256:a1d46c3cdb4e5795c8d637f80daeb578ebb1a9a65dc1ed5f11f51794c3c89f3a",
+      "artifacts": [
+        {
+          "path": "canonical.json",
+          "digest": "sha256:d3626ac30a87e6f7a6428233b3c68299976865fa5508e4267c5415c76af7a772",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "id": "cast",
+      "source": "cast.csv",
+      "digest": "sha256:ab911e1dcd16f4df4686d452612c055f401d5368c20184445b22061e6f7b9737",
+      "artifacts": [
+        {
+          "path": "cast.json",
+          "digest": "sha256:9f36f288bbab23ca84920ef55bcaa6af987c6fd731846b470941b02a6b32fd7f",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "id": "theme",
+      "source": "theme.toml",
+      "digest": "sha256:c191e96c5949e290497ba595ddce5499ed7a9f05097dddf9861b3934e220894b",
+      "artifacts": [
+        {
+          "path": "theme.json",
+          "digest": "sha256:baf94e98f94228d2e7bd63a05e56e6aa00b46a9c6723c4894f3ad634b5a0c323",
+          "kind": "data"
+        }
+      ]
+    }
+  ]
+}

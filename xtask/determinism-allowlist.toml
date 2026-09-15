@@ -1,0 +1,7 @@
+# Crates exempt from check-determinism, each with a required justification.
+#
+# Exemptions are reported on every run so they stay visible and get paid down. Keep
+# this list as short as it can possibly be; see docs/engineering/REPO_LAYOUT.md §4.2.
+
+[allow]
+vela-host = "owns the platform clock; every other crate takes time as an injected value (RUNTIME.md §4.2)"

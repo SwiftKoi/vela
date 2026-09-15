@@ -1,0 +1,13 @@
+[package]
+name = "vela-span"
+description = "Byte offsets, spans, file ids, and the source map that resolves offsets to line/column positions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 0
+
+[lints]
+workspace = true

@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+
+# Every crate opts in with `[lints] workspace = true`.
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[workspace.dependencies]
+# Internal crates. Ranks are declared in each crate's [package.metadata.vela];
+# see docs/ARCHITECTURE.md §1 for the two rules that govern these edges.
+vela-span = { path = "crates/vela-span" }
+vela-syntax = { path = "crates/vela-syntax" }
+vela-diag = { path = "crates/vela-diag" }
+vela-world = { path = "crates/vela-world" }
+vela-text = { path = "crates/vela-text" }
+vela-audio = { path = "crates/vela-audio" }
+vela-host = { path = "crates/vela-host" }
+vela-hir = { path = "crates/vela-hir" }
+vela-render = { path = "crates/vela-render" }
+vela-assets = { path = "crates/vela-assets" }
+vela-types = { path = "crates/vela-types" }
+vela-mir = { path = "crates/vela-mir" }
+vela-bytecode = { path = "crates/vela-bytecode" }
+vela-compile = { path = "crates/vela-compile" }
+vela-vm = { path = "crates/vela-vm" }
+vela-replay = { path = "crates/vela-replay" }
+vela-ui = { path = "crates/vela-ui" }
+vela-lsp = { path = "crates/vela-lsp" }
+vela-migrate = { path = "crates/vela-migrate" }
+vela-test = { path = "crates/vela-test" }
+vela-plugin = { path = "crates/vela-plugin" }
+vela-cli = { path = "crates/vela-cli" }
+vela-web = { path = "crates/vela-web" }
+
+# External. Deliberately minimal; see the dependency budget in
+# docs/engineering/REPO_LAYOUT.md §3.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+unicode-width = "0.2"

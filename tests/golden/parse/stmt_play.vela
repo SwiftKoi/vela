@@ -1,0 +1,2 @@
+label a:
+    play music @"audio/theme.ogg" loop fade 1.0

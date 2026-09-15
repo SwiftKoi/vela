@@ -1,0 +1,4 @@
+label start:
+    "Reached."
+    return
+    "Never reached."

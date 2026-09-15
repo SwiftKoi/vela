@@ -1,0 +1,37 @@
+use chapters.forest as forest
+
+const MAX = 10
+default trust: int = 0
+
+struct Route:
+    name: str
+    unlocked: bool = false
+
+enum Ending:
+    good
+    bad(reason: str)
+
+character eileen:
+    name = "Eileen"
+    color = 0xf2a2b0
+
+image bg.forest = @"art/forest.png"
+
+transform slide_in:
+    from x = -1.0
+    to x = 0.0
+
+screen menu_box(prompt: str):
+    text prompt
+
+style body:
+    color = 0xe6e6f0
+
+theme dusk:
+    color = 0x10121a
+
+fn pick(n: int) -> str:
+    return "x"
+
+label start:
+    "Hello, world."

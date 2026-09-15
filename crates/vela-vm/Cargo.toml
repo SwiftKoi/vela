@@ -1,0 +1,27 @@
+[package]
+name = "vela-vm"
+description = "The bytecode interpreter: a deterministic state machine that yields presentation commands."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 7
+
+[dependencies]
+serde.workspace = true
+vela-span.workspace = true
+vela-bytecode.workspace = true
+vela-world.workspace = true
+vela-diag.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+vela-syntax.workspace = true
+vela-types.workspace = true
+vela-hir.workspace = true
+vela-mir.workspace = true
+vela-span.workspace = true

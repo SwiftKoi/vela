@@ -1,0 +1,25 @@
+module aggregates
+
+struct Route:
+    name: str
+    length: int
+
+enum Ending:
+    good
+    bad(str)
+
+label start():
+    b0:
+        _1 = ["north", "south"]
+        names = _1
+        _3 = {"north": 3, "south": 5}
+        lookup = _3
+        _5 = Route { name: "north", length: 3 }
+        route = _5
+        _7 = Ending.bad("lost")
+        ending = _7
+        route.length = 7
+        names[c6] = "east"
+        return
+    b1 (unreachable):
+        return

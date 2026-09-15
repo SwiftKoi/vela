@@ -1,0 +1,5 @@
+error[E0006]: numeric literal is malformed or out of range
+ --> diag_e0006.vela:2:13
+  |
+2 |     var x = 9223372036854775808
+  |             ^^^^^^^^^^^^^^^^^^^ this literal is not a valid number of its kind

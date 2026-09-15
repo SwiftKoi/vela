@@ -1,0 +1,7 @@
+default affection: int = 0
+default affection_cap: int = 10
+
+label start:
+    affection = 1
+    "Saved for the corpus."
+    return

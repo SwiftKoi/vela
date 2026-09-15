@@ -1,0 +1,23 @@
+size 24
+wrap none
+metrics ascent=21.727 descent=5.086 leading=0.785
+size 216.105x27.598 lines=1
+line 0 width=216.105 baseline=21.727 range=0..18 glyphs=18
+  36 at 0.000 adv 14.227
+  57 at 14.227 adv 14.227
+  36 at 28.453 adv 14.227
+  55 at 42.680 adv 12.879
+  36 at 55.559 adv 16.008
+  53 at 71.566 adv 17.332
+  3 at 88.898 adv 6.234
+  55 at 95.133 adv 12.000
+  82 at 107.133 adv 13.348
+  17 at 120.480 adv 6.668
+  3 at 127.148 adv 6.234
+  60 at 133.383 adv 13.805
+  82 at 147.188 adv 13.348
+  17 at 160.535 adv 6.668
+  3 at 167.203 adv 6.668
+  58 at 173.871 adv 22.219
+  72 at 196.090 adv 13.348
+  17 at 209.438 adv 6.668

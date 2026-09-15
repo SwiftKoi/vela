@@ -1,0 +1,5 @@
+error[E1005]: expected a type
+ --> diag_e1005.vela:2:12
+  |
+2 |     var x: = 1
+  |            ^ found an operator

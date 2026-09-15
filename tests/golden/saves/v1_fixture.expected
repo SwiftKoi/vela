@@ -1,0 +1,22 @@
+{
+  "defaults": {
+    "affection": {
+      "Int": 6
+    },
+    "affection_cap": {
+      "Int": 10
+    }
+  },
+  "rng": {
+    "state": 6840143426475650817
+  },
+  "clock": 0,
+  "scene": {
+    "images": []
+  },
+  "audio": {
+    "channels": {}
+  },
+  "call_stack": [],
+  "log_cursor": 0
+}

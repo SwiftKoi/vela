@@ -1,0 +1,151 @@
+//! Stepping a story under someone else's control.
+//!
+//! [`crate::run`] drives a story to completion, which is what a test or a headless run wants.
+//! A *player* wants the opposite: run until the story asks for something, wait for a person,
+//! answer, continue. The difference matters because the answer decides what happens next — a
+//! menu chosen by a player is not a recording, and a run that auto-acknowledges and then
+//! replays cannot represent one.
+//!
+//! The suspension model is already exactly this shape (`ARCHITECTURE.md §7`): the VM builds a
+//! command and stops; the host presents it and answers. This type is the loop around that,
+//! with the two halves handed to the caller instead of buried.
+
+use serde::{Deserialize, Serialize};
+use vela_bytecode::Module;
+use vela_world::{Command, Input, World};
+
+use crate::fault::Fault;
+use crate::machine::{Step, Vm};
+use crate::state::VmState;
+
+/// A snapshot of a running story: the world and the machine that is running it.
+///
+/// The world alone is not enough to resume. The machine holds where execution *is* — the
+/// call stack and the operand stack — and the command that was on screen when the snapshot
+/// was taken, which the host presents again on load so it can be answered.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Snapshot {
+    /// The state the story has left behind.
+    pub world: World,
+    /// The machine.
+    pub vm: VmState,
+    /// The command awaiting an answer when the snapshot was taken.
+    pub current: Option<Command>,
+}
+
+/// A story, part-way through.
+pub struct Session {
+    vm: Vm,
+    world: World,
+    log: Vec<Input>,
+    /// The command the story is waiting on, so a snapshot can carry it and a load can present
+    /// it again. The VM has already handed it over; someone has to remember it.
+    current: Option<Command>,
+    finished: bool,
+}
+
+impl Session {
+    /// Starts a story at `label`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the label does not exist, which is a caller's mistake rather than a fault —
+    /// the compiler resolves labels, so reaching here with a bad one means the caller invented
+    /// it.
+    pub fn start(module: &Module, label: &str) -> Result<Self, Fault> {
+        let mut vm = Vm::new(module.clone());
+        vm.start(label)?;
+        Ok(Self {
+            vm,
+            world: World::new(),
+            log: Vec::new(),
+            current: None,
+            finished: false,
+        })
+    }
+
+    /// Resumes a story from a snapshot.
+    ///
+    /// The input log starts empty: `RUNTIME.md §7.3` — *"rollback history is not persisted"* —
+    /// so a load is independent of how long the previous session ran. The command the snapshot
+    /// was waiting on is restored, and is answered by the caller, not by `advance`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if a frame names a body this module does not have.
+    pub fn restore(module: &Module, snapshot: &Snapshot) -> Result<Self, Fault> {
+        let mut vm = Vm::new(module.clone());
+        vm.restore_state(&snapshot.vm)?;
+        Ok(Self {
+            vm,
+            world: snapshot.world.clone(),
+            log: Vec::new(),
+            current: snapshot.current.clone(),
+            finished: snapshot.vm.finished,
+        })
+    }
+
+    /// Runs until the story suspends, ends, or faults.
+    pub fn advance(&mut self) -> Step {
+        if self.finished {
+            return Step::Halt;
+        }
+        let step = self.vm.run(&mut self.world);
+        self.record(&step);
+        step
+    }
+
+    /// Answers the pending suspension and runs to the next one.
+    ///
+    /// The answer is recorded, so a session can be replayed later — the same log that makes a
+    /// headless run reproducible makes a played one reproducible.
+    pub fn answer(&mut self, input: Input) -> Step {
+        let value = input.resolve();
+        self.log.push(input);
+        let step = self.vm.resume(&mut self.world, value);
+        self.record(&step);
+        step
+    }
+
+    /// Notices what a step left behind.
+    fn record(&mut self, step: &Step) {
+        self.finished = matches!(step, Step::Halt);
+        if let Step::Yield(command) = step {
+            self.current = Some((**command).clone());
+        }
+    }
+
+    /// The command the story is waiting on, if it is waiting.
+    #[must_use]
+    pub fn current(&self) -> Option<&Command> {
+        self.current.as_ref()
+    }
+
+    /// A snapshot of the world and the machine, for a save or a rollback point.
+    #[must_use]
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            world: self.world.clone(),
+            vm: self.vm.state(),
+            current: self.current.clone(),
+        }
+    }
+
+    /// Whether the story has ended.
+    #[must_use]
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+
+    /// The state the story has left behind.
+    #[must_use]
+    pub fn world(&self) -> &World {
+        &self.world
+    }
+
+    /// Every answer given so far.
+    #[must_use]
+    pub fn log(&self) -> &[Input] {
+        &self.log
+    }
+}

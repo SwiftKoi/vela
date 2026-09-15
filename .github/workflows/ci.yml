@@ -1,0 +1,161 @@
+name: CI
+
+# CI runs in exactly three cases (docs/adr/0001-branching-and-ci.md):
+#   1. a push to `main`            — post-merge verification
+#   2. a pull request targeting `main` — the merge gate
+#   3. manual dispatch             — test a branch without opening a pull request
+#
+# Pushing to a feature branch with no pull request does not start CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Superseded pull-request runs are cancelled, so pushing five times to one PR costs one
+# run rather than five. A `main` run is never cancelled: a broken merge must not be able
+# to hide behind a quick follow-up push.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Gate order is fastest-failure-first and mirrors docs/engineering/REPO_LAYOUT.md §6.
+# A gate that can be ignored by habit is a gate that will be ignored, so nothing here is
+# marked `continue-on-error`.
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: 1. formatting
+        run: cargo fmt --check
+
+      - name: 2. architecture guards
+        run: cargo xtask check-layers check-file-size check-facade check-exemptions
+
+      - name: 3. clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: 4. policy checks
+        run: cargo xtask check-diag-codes check-registries check-determinism
+
+      - name: 5. tests
+        run: cargo test --workspace
+
+      # Gate 6 is `BUILD_AND_ASSETS.md §7`: the same source built twice must be the same bytes,
+      # because that is what makes a delta patch meaningful and a release auditable. It builds
+      # into a temporary directory rather than the example's own, so the gate cannot leave a
+      # generated tree behind in the checkout.
+      - name: 6. the build is reproducible
+        run: |
+          cargo run -q -p vela-cli -- build examples/standard \
+            --out "$RUNNER_TEMP/vela-dist" --verify-reproducible
+
+      # A machine-readable format is only useful if it parses. The fixture has one
+      # deliberate error, because a run with no results would validate vacuously.
+      - name: 7. sarif output is well formed
+        run: |
+          mkdir -p /tmp/vela-sarif/src
+          printf 'schema = 1\n\n[project]\nname = "t"\nversion = "0.1.0"\nentry = "main.start"\n' > /tmp/vela-sarif/vela.toml
+          printf 'label start:\n    jump nope\n    return\n' > /tmp/vela-sarif/src/main.vela
+          cargo run -q -p vela-cli -- check --format sarif /tmp/vela-sarif > /tmp/vela.sarif || true
+          python3 - <<'PYCHECK'
+          import json
+          doc = json.load(open("/tmp/vela.sarif"))
+          assert doc["version"] == "2.1.0", doc["version"]
+          assert doc["runs"][0]["results"], "expected at least one result"
+          assert doc["runs"][0]["tool"]["driver"]["rules"], "expected at least one rule"
+          print("sarif ok:", len(doc["runs"][0]["results"]), "results")
+          PYCHECK
+
+      # Gate 8 (`check-abi`) lands at M13 with the plugin ABI.
+      #
+      # Gate 9 is `ARCHITECTURE.md §1`'s claim that the compiler and the VM contain no platform
+      # or GPU code, made observable, plus the size budget `BUILD_AND_ASSETS.md §5` asks for.
+      #
+      # The smoke run is the part that matters: it drives the wasm module the way a page does and
+      # diffs its command stream against `vela run --headless`. One engine, two platforms, one
+      # story — which is what makes every determinism claim survive the platform boundary.
+      - name: 9. the engine runs in wasm, within its size budget
+        run: |
+          cargo install wasm-bindgen-cli --version 0.2.128 --locked
+          tools/wasm-smoke.sh
+          python3 - <<'PYBUDGET'
+          import pathlib
+          import tomllib
+
+          budgets = tomllib.load(open("xtask/budgets.toml", "rb"))
+          size = pathlib.Path(
+              "target/wasm32-unknown-unknown/release/vela_web.wasm"
+          ).stat().st_size
+          print(f"wasm budget: {size} bytes (ceiling {budgets['wasm_bytes']})")
+          assert size <= budgets["wasm_bytes"], (
+              f"the wasm module grew to {size} bytes, over its "
+              f"{budgets['wasm_bytes']}-byte ceiling. This budget is meant to be *lowered*; "
+              "find what got bigger before raising it, and if the increase is genuinely "
+              "necessary, raise it with the reason in the pull request."
+          )
+          PYBUDGET
+
+  # Native builds on the platforms the game ships to.
+  #
+  # This is the only place the M9 criterion — "builds and runs on all four targets" — can be
+  # answered for Windows and macOS. Cross-compiling from Linux proves the code has no
+  # platform-specific *imports*; it does not prove the binary links against the platform's
+  # libraries, that the platform adapter starts a window, or that the bundle layout is one a
+  # player can run. GitHub's runners are the honest way to run rather than merely produce.
+  #
+  # `fail-fast: false`, so a Windows failure does not hide whether macOS passed: the point of a
+  # matrix is which cells are red, not that one is.
+  platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: build
+        run: cargo build --workspace
+
+      # "Runs" is a claim about the engine on this platform, so the engine is what runs: the
+      # standard example plays to its first suspension through the real VM.
+      - name: the story runs here
+        run: cargo run -q -p vela-cli -- run examples/standard --headless
+
+      - name: the project builds here, reproducibly
+        run: >-
+          cargo run -q -p vela-cli -- build examples/standard
+          --out ${{ runner.temp }}/vela-dist --verify-reproducible
+
+  # A job of its own, and parallel to the gates, for two reasons:
+  #
+  #   * It needs a **release** build. `cargo xtask budget` refuses under `debug_assertions`,
+  #     because a debug measurement is the absence of an optimizer rather than the engine.
+  #     Putting it in the gate job would build 400 crates twice, serially.
+  #   * It is a *measurement*, not a policy. `ARCHITECTURE.md §8` optimizes startup and frame
+  #     time and calls everything else fast enough; `RUNTIME.md §7.2` fixes the cost of a
+  #     snapshot. This holds all three to a line.
+  #
+  # No display and no GPU: the frame measurement stops at the draw list, so it exercises text
+  # layout and glyph placement without needing a device. That is deliberate — a budget that
+  # only runs on a machine with a GPU is a budget that does not run.
+  budgets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: startup, frame, and snapshot budgets
+        run: cargo run --release -p xtask -- budget

@@ -1,0 +1,70 @@
+# Diagnostic code registry.
+#
+# Format: <code>|<severity>|<title>
+#   code      `E` error, `W` warning, `L` lint, followed by four digits
+#   severity  error | warning | lint, and it must agree with the code's letter
+#
+# Codes are permanent: never reused, never renumbered. Ranges are reserved by phase,
+# so a new diagnostic has an obvious home. See docs/spec/LANGUAGE.md §8.
+#
+# The file must stay sorted by code, and every code must be referenced by a test.
+
+E0001|error|byte order mark is not permitted
+E0002|error|carriage return without a line feed
+E0003|error|tab used for indentation
+E0004|error|inconsistent indentation width in a block
+E0005|error|dedent does not match an enclosing indentation level
+E0006|error|numeric literal is malformed or out of range
+E0007|error|float literal ends with a decimal point
+E0008|error|unterminated string literal
+E0009|error|unexpected character
+E1001|error|unexpected token
+E1002|error|expected an indented block
+E1003|error|expected an expression
+E1004|error|expected a name
+E1005|error|expected a type
+E2001|error|undefined name
+E2002|error|a module is referenced without being imported
+E2003|error|a name is defined more than once
+E2004|error|a const or default is not initialised with a constant
+E3001|error|an enum has no variants
+E3002|error|an optional is used where its payload is required
+E3003|error|a declaration needs an explicit type
+E3004|error|branches of a conditional disagree on a type
+E3005|error|a value cannot be interpolated into a string
+E3006|error|int and float are combined without a conversion
+E3007|error|a value does not fit where it is used
+E3008|error|a call passes the wrong number of arguments
+E4001|error|a match does not cover every case
+E4002|error|a function can finish without returning a value
+E5001|error|a speaker is not a declared character
+E5003|error|undefined label
+E5004|error|a widget is given the wrong number of children
+E5005|error|no such widget
+E5006|error|a widget does not accept this prop
+E5007|error|no such style
+E5008|error|a style cannot inherit from itself
+E6001|error|the stack depth differs across paths into a block
+E6002|error|an instruction's operands do not match its declared stack effect
+E6003|error|a jump target is not an instruction boundary
+E6004|error|a local is read before it is written
+E6005|error|a block does not end in a terminator
+E6006|error|a dispatch table does not cover its enum
+E6007|error|a command or effect was given the wrong number of arguments
+E6008|error|code is unreachable and was not removed
+E7001|error|asset referenced by @path does not exist
+E7101|error|the bytecode format is not supported
+E7102|error|a command variant is not known to this runtime
+E7103|error|the bytecode container is corrupt
+E7201|error|no migration bridges a save's version gap
+E7202|error|a save is from a newer version of the engine
+E7203|error|a save is corrupt or truncated
+E7204|error|a save's schema does not match the build
+E7301|error|cannot demote an error diagnostic to a warning
+W4002|warning|unreachable label
+W4003|warning|a label can end without transferring control
+W4005|warning|a match arm can never be reached
+W4006|warning|a condition is already known
+W4008|warning|a raw colour is written where a theme token belongs
+W4009|warning|a foreground and background have too little contrast
+W4010|warning|an interactive widget has no label

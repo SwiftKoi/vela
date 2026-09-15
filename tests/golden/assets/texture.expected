@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "assets": [
+    {
+      "id": "art.forest",
+      "source": "art/forest.png",
+      "digest": "sha256:2f91eab71ef59299a4d8ed53448b7ba3452809a0290f9e4fde8307eacc7ae4fa",
+      "artifacts": [
+        {
+          "path": "art/forest.png",
+          "digest": "sha256:2677ea290fde899468767ef5094064027ae90daeb81c05cba2ee54ff15202657",
+          "kind": "texture"
+        }
+      ]
+    }
+  ]
+}

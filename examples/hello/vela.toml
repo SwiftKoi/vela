@@ -1,0 +1,9 @@
+schema = 1
+
+[project]
+name = "hello"
+version = "0.1.0"
+entry = "main.start"
+
+[build]
+targets = ["web", "win", "mac", "linux"]

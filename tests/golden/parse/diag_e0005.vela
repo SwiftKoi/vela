@@ -1,0 +1,4 @@
+label a:
+    if x:
+        "y"
+      "z"

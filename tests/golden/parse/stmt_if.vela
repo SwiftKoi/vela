@@ -1,0 +1,7 @@
+label a:
+    if x:
+        "one"
+    elif y:
+        "two"
+    else:
+        "three"

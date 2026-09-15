@@ -1,0 +1,6 @@
+schema = 1
+
+[project]
+name = "standard"
+version = "0.1.0"
+entry = "main.start"

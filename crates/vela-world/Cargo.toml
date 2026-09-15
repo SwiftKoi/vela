@@ -1,0 +1,17 @@
+[package]
+name = "vela-world"
+description = "Runtime state: typed values, entities, the deterministic RNG, and the serialization schema."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+rank = 1
+
+[dependencies]
+vela-span.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

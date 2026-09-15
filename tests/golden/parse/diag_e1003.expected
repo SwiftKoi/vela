@@ -1,0 +1,5 @@
+error[E1003]: expected an expression
+ --> diag_e1003.vela:2:13
+  |
+2 |     var x = 
+  |             ^ found the end of a line

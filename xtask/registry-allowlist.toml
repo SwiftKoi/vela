@@ -1,0 +1,27 @@
+# Files permitted to contain a large dispatch `match` outside a registry module.
+#
+# Each entry needs a justification comment above it, and the list is kept short by
+# design: a growing allowlist means the registry pattern is being worked around.
+# See docs/engineering/CONVENTIONS.md §1.2.
+
+files = [
+    # A closed mapping from a binding-profile name to a key, and its inverse. Neither grows
+    # with the number of *kinds* in the engine: the vocabulary is the fixed action set plus
+    # the keys a profile may name. A registry here would replace a match the compiler checks
+    # for exhaustiveness with a table that defaults silently, which is the worse trade — the
+    # check's own comment names it.
+    "crates/vela-host/src/action.rs",
+
+    # Translating a windowing library's key vocabulary into ours. The arms are an adapter's
+    # whole job, they mirror an external enum that is not ours to change, and the fall-through
+    # arm is deliberate: most keys have no action, and a registry so that an unmapped key
+    # could be looked up instead of ignored would be a layer added to say the same nothing.
+    "crates/vela-host/src/window.rs",
+
+    # A walk over `Expr`'s variants, collecting the names a screen reads. It is not dispatch:
+    # no behaviour is selected by the arm, every arm recurses, and the match is exhaustive
+    # *because* the compiler enforces it — which is the property a registry would give up.
+    # A new expression variant should be a compile error here, not a binding that silently
+    # stops being tracked.
+    "crates/vela-ui/src/deps.rs",
+]

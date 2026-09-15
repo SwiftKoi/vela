@@ -1,0 +1,5 @@
+error[E1001]: expected a top-level declaration, found an operator
+ --> diag_e1001.vela:1:1
+  |
+1 | !!!
+  | ^ expected a top-level declaration

@@ -1,0 +1,14 @@
+module pass_branch_simplify
+
+const LIMIT: int = 1
+
+label start():
+    b0:
+        _0 = 1 > 0
+        br _0 -> b2, b3
+    b1:
+        return
+    b2:
+        return
+    b3:
+        goto b1

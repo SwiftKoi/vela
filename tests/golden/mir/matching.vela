@@ -1,0 +1,16 @@
+enum Round:
+    warm
+    cold
+    scored(points: int)
+
+label start:
+    var round: Round = Round.scored(2)
+    var total = 0
+    match round:
+        when Round.warm:
+            total = 1
+        when Round.cold:
+            total = 0
+        when Round.scored(points):
+            total = points
+    return
