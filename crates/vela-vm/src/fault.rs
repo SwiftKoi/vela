@@ -30,8 +30,6 @@ pub enum Fault {
     BadLabel(u32),
     /// A name was looked up that the module does not have.
     NoLabel(String),
-    /// A label lives in another module, and modules are not linked yet (`E7104`).
-    ForeignLabel(String),
     /// A jump landed outside the code.
     BadTarget(u32),
     /// A constant was not in the pool.
@@ -80,9 +78,6 @@ impl fmt::Display for Fault {
             Self::BadFunction(index) => write!(f, "there is no function #{index}"),
             Self::BadLabel(index) => write!(f, "there is no label #{index}"),
             Self::NoLabel(name) => write!(f, "there is no label or function `{name}`"),
-            Self::ForeignLabel(name) => {
-                write!(f, "`{name}` is in another module, which is not linked yet")
-            }
             Self::BadTarget(offset) => write!(f, "the jump target {offset} is not an instruction"),
             Self::BadConstant(index) => write!(f, "there is no constant #{index}"),
             Self::BadString(index) => write!(f, "there is no string #{index}"),

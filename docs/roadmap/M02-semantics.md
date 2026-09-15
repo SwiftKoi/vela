@@ -56,10 +56,27 @@ story graph is analyzed.
 - **The JSON and SARIF shapes did not match `TOOLING.md §2.2`** where it was specific: a
   suggestion belongs in its own entry, not folded into a span.
 
+**Fixed later: `E4002` lied about `match`.** The rule said a function "does not always return" when
+its body ended in a `match` with no `else` arm — even when the arms named every variant, which is
+the exhaustive case `E4001` exists to distinguish from a missing arm. Two answers to "is this match
+complete" that disagree is how a checker reports a function *and* accepts the very construct it is
+complaining about, so the question now has one answer (`vela-types/src/check/coverage.rs`) and the
+return analysis asks it. The analysis also moved into the type-checking walk: deciding whether a
+`match` exits needs the type of its scrutinee, and the scope that makes that type computable only
+exists while walking. A missing arm is reported once, by `E4001` — the function not returning is the
+same mistake seen from further away.
+
 **Known limitation, stated rather than hidden.** A qualified type name from another module
 lowers to unknown, so cross-module *types* are not checked. Everything else is per-module,
 which is what keeps checking inside the module's own query. Names and labels do cross
 modules; types do not yet.
+
+**Updated by M9's linking work.** "Names cross modules" holds for *labels*: they check, and they
+now link, so a `jump` into another file is an ordinary call with no module left at run time
+(`M03`, `LANGUAGE.md §6.1`). A qualified name for a **value** — `forest.helper(2)` — is refused
+with `E2005` at check time rather than lowered into a field read that faults when a player reaches
+it: the checker is per-module, so it has no signature to check the call against, and refusing beats
+guessing. Cross-module types remain the open half, and are what would let values follow.
 
 **Risks.** Inference and lowering were expected to be the danger; they were routine. The
 danger was in the *cache*, which the milestone's own exit criteria caught twice — worth

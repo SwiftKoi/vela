@@ -69,3 +69,27 @@ not have.
 **Process.** `ROADMAP.md` says the rejection corpus is written **first**, against a failing
 test. I wrote the verifier first and the corpus nearly last — the exact inversion the plan
 warns against, and two of the ten corpus tests failed on first run. The plan was right.
+
+**Found later, by the first example that used them (M9).** Three faults on paths the corpus never
+took, each of them a *representation* disagreement rather than a missing feature — and the corpus
+could not have caught them as written, because it is MIR-shaped and these are all about which
+instruction gets emitted:
+
+- **`concat` had three answers to one question.** The instruction table declared it
+  count-carrying, the emitter wrote no count, and the machine assumed two. The verifier believed
+  the table, counted a value left on the stack, and reported `E6001` for **any loop whose body
+  presented a command** — a menu, a `say`, a `pause`. It is a two-string instruction, and now says
+  so in the table, the emitter, and the machine.
+- **`ty_of` did not read the constant pool**, so every literal was `Ty::Unknown` — and the operator
+  emitter *picks its instruction* from that type. `"i is " + text` compiled to `add.i`; `1.5 + x`
+  compiled to integer addition. It reads the pool now, which is also why the golden container moved
+  (below).
+- **A constant variant emitted its operands swapped.** `Ending.cold` used as a *value* wrote
+  `(variant, 0)` where `EnumNew` reads `(enum, variant)` everywhere else, dropping the enum: it
+  built whichever enum sat at index `cold`'s position. A payload-carrying variant takes the other
+  path and was always right, which is why `matching.vela` never saw it.
+
+`tests/golden/velac/hello-v1.velac` moved by one byte for the second of those, and the diff is
+worth stating: `say`'s command schema now records its real argument types (`Str`, `None`) where it
+recorded `Unknown`. That is the fix showing up in the golden, not format drift — blessed in the
+same commit, and the only golden that changed.

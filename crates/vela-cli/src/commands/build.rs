@@ -1,35 +1,28 @@
-//! `vela build` — a project into a distribution bundle.
+//! `vela build` — a project into a distribution bundle, for one target or several.
 //!
-//! `BUILD_AND_ASSETS.md §1`. Both halves of the pipeline, in one command: the scripts compile
-//! to `.velac`, the assets import to a manifest, and the two land in one directory as the thing
-//! a target driver will later package.
+//! `BUILD_AND_ASSETS.md §1` and §4. One command, one source tree: the scripts compile to
+//! `.velac`, the assets import to a manifest, and the two land in a directory as the thing a
+//! player runs. With `--target` the command writes one such bundle per target, each with its
+//! descriptor and launcher (`commands::target`), and the *story stays the same in all of them* —
+//! the VM, the World, and the bytecode are target-independent by construction.
 //!
-//! A build **refuses to ship a story that does not check**. The compiler will assemble a module
-//! whose checking reported errors — that is what lets a language server keep working over a
-//! broken file — so the decision to refuse belongs here, at the one command whose job is to
-//! produce something a player runs.
+//! The contents of a bundle are written by [`crate::commands::bundle`]; this file is the command
+//! around it: arguments, the patch that goes beside the build, and the reproducibility check.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use vela_assets::{Built, ImporterRegistry, Manifest, import_tree};
 use vela_compile::Session;
-use vela_diag::{Severity, render};
-use vela_span::FileId;
 
 use crate::command::{Command, Error};
-use crate::commands::check::{Project, collect, load, project_screen_diagnostics};
+use crate::commands::bundle::{self, Counts};
+use crate::commands::check::{Project, collect};
+use crate::commands::target::{self, Target};
 
 /// Where a build goes when `--out` is not given.
 const DEFAULT_OUT: &str = "dist";
-
-/// The directory a project's assets live in, beside `src/`.
-const ASSETS: &str = "assets";
-
-/// The directory compiled modules go in, inside the bundle.
-const SCRIPTS: &str = "scripts";
 
 /// The `vela build` command.
 pub struct Build {
@@ -51,40 +44,23 @@ impl Build {
     }
 }
 
-/// What one build produced.
-struct Counts {
-    /// How many modules compiled.
-    scripts: usize,
-    /// How many sources were imported.
-    assets: usize,
-    /// How many artifacts those sources became.
-    artifacts: usize,
-}
-
-/// The options `vela build` has.
+/// The options `vela build` has, and the ones that take a value.
 const FLAGS: &[&str] = &[
     "--out",
+    "--target",
     "--verify-reproducible",
     "--patch-from",
     "--patch-out",
 ];
 
-/// Refuses an option this command does not have.
+/// Refuses an option this command does not have, or a malformed `--target`.
 ///
-/// Ignoring one is the worst of the available behaviours: `vela build --target web` would look
-/// like it had built for web, and the first evidence otherwise would be a player. `--target` gets
-/// its own message because `BUILD_AND_ASSETS.md §4` names it, so it is the one somebody will
-/// reasonably reach for.
+/// Ignoring an option is the worst of the available behaviours: `vela build --targt web` would
+/// look like it had built for web, and the first evidence otherwise would be a player.
 fn check_flags(args: &[String]) -> Result<(), Error> {
     for arg in args.iter().filter(|arg| arg.starts_with('-')) {
         if FLAGS.contains(&arg.as_str()) {
             continue;
-        }
-        if arg == "--target" {
-            return Err(Error::usage(
-                "`--target` is specified (`BUILD_AND_ASSETS.md §4`) but not built yet: \
-                 `vela build` produces one layout today",
-            ));
         }
         return Err(Error::usage(format!(
             "`{arg}` is not an option of `vela build`; the ones there are: {}",
@@ -92,6 +68,37 @@ fn check_flags(args: &[String]) -> Result<(), Error> {
         )));
     }
     Ok(())
+}
+
+/// Parses the `--target` list: `win,mac,linux,web`.
+fn parse_targets(args: &[String]) -> Result<Vec<&'static Target>, Error> {
+    let Some(value) = flag_value(args, "--target") else {
+        return Ok(Vec::new());
+    };
+
+    let mut chosen: Vec<&'static Target> = Vec::new();
+    for name in value
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+    {
+        let Some(target) = target::find(name) else {
+            return Err(Error::usage(format!(
+                "`{name}` is not a target; the ones there are: {}",
+                target::names().join(", ")
+            )));
+        };
+        if !chosen.iter().any(|held| held.name() == target.name()) {
+            chosen.push(target);
+        }
+    }
+
+    if chosen.is_empty() {
+        return Err(Error::usage(
+            "`--target` needs at least one target, as `--target win,mac,linux,web`".to_string(),
+        ));
+    }
+    Ok(chosen)
 }
 
 impl Command for Build {
@@ -106,10 +113,13 @@ impl Command for Build {
     fn run(&self, args: &[String], out: &mut dyn Write) -> Result<(), Error> {
         check_flags(args)?;
 
-        let target = positional(args, &["--out"])
+        let targets = parse_targets(args)?;
+        let project_path = positional(args, &["--out", "--target"])
             .map_or_else(|| self.base.clone(), |path| self.base.join(path));
-        let destination = flag_value(args, "--out")
-            .map_or_else(|| target.join(DEFAULT_OUT), |path| self.base.join(path));
+        let destination = flag_value(args, "--out").map_or_else(
+            || project_path.join(DEFAULT_OUT),
+            |path| self.base.join(path),
+        );
         let verify = args.iter().any(|arg| arg == "--verify-reproducible");
         let patch_from = flag_value(args, "--patch-from").map(|path| self.base.join(path));
         let patch_out = flag_value(args, "--patch-out").map(|path| self.base.join(path));
@@ -122,33 +132,76 @@ impl Command for Build {
 
         // A project, not a stray directory: `collect` is what insists on `vela.toml`, and its
         // message says so rather than this command inventing a second way to say it.
-        let project = collect(&target)?;
-        let counts = bundle(&project, &destination, out)?;
-
-        // Printed relative to where the command was run, so the common case reads as the path
-        // the user would type rather than as an absolute one with a `./` in the middle of it.
-        let shown = destination.strip_prefix(&self.base).unwrap_or(&destination);
-        let _ = writeln!(
-            out,
-            "built {} script(s), {} asset(s), {} artifact(s) -> {}/",
-            counts.scripts,
-            counts.assets,
-            counts.artifacts,
-            shown.display()
-        );
+        let project = collect(&project_path)?;
+        let mut session = bundle::prepare(&project, out)?;
+        let rows = build_all(&project, &mut session, &destination, &targets)?;
+        report(&rows, &destination, &self.base, out);
 
         if let (Some(previous), Some(where_to)) = (&patch_from, &patch_out) {
             write_patch(previous, &destination, where_to, out)?;
         }
 
         if verify {
-            verify_reproducible(&project, &destination)?;
+            verify_reproducible(&project, &destination, &targets)?;
             let _ = writeln!(
                 out,
                 "reproducible: two independent builds are byte-identical"
             );
         }
         Ok(())
+    }
+}
+
+/// Builds the bundle at `destination`, or one per target under it.
+///
+/// The story is target-independent, so the same session compiles it once and writes it into each
+/// target directory; only the descriptor and the launcher differ (`commands::target`).
+fn build_all(
+    project: &Project,
+    session: &mut Session,
+    destination: &Path,
+    targets: &[&Target],
+) -> Result<Vec<(Option<&'static str>, Counts)>, Error> {
+    if targets.is_empty() {
+        return Ok(vec![(
+            None,
+            bundle::write(project, session, destination, None)?,
+        )]);
+    }
+
+    let mut rows = Vec::with_capacity(targets.len());
+    for target in targets {
+        let dir = destination.join(target.name());
+        let counts = bundle::write(project, session, &dir, Some(target))?;
+        rows.push((Some(target.name()), counts));
+    }
+    Ok(rows)
+}
+
+/// Says what was built, relative to where the command was run.
+///
+/// Printed relative to the working directory so the common case reads as the path the user would
+/// type rather than as an absolute one with a `./` in the middle of it.
+fn report(
+    rows: &[(Option<&'static str>, Counts)],
+    destination: &Path,
+    base: &Path,
+    out: &mut dyn Write,
+) {
+    for (target, counts) in rows {
+        let shown = target.map_or_else(|| destination.to_path_buf(), |name| destination.join(name));
+        let shown = shown.strip_prefix(base).unwrap_or(&shown);
+        let prefix = target.map_or_else(String::new, |name| format!("{name}: "));
+        let _ = writeln!(
+            out,
+            // "module(s)", not "script(s)": a bundle holds one linked script however many modules
+            // went into it, so the number worth reporting is how many files were compiled.
+            "built {prefix}{} module(s), {} asset(s), {} artifact(s) -> {}/",
+            counts.scripts,
+            counts.assets,
+            counts.artifacts,
+            shown.display()
+        );
     }
 }
 
@@ -196,148 +249,29 @@ fn size_of(root: &Path) -> Result<u64, Error> {
     Ok(total)
 }
 
-/// Builds a project into `destination`, returning what it wrote.
-///
-/// Everything a build does goes through here, including the check — so `--verify-reproducible`
-/// verifying "a build" verifies the thing the user gets, rather than a second code path that
-/// happens to agree today.
-fn bundle(project: &Project, destination: &Path, out: &mut dyn Write) -> Result<Counts, Error> {
-    let mut session = load(project)?;
-    refuse_errors(&mut session, project, out)?;
-
-    let scripts = write_scripts(&mut session, destination)?;
-    let (assets, artifacts) = write_assets(project, destination)?;
-    Ok(Counts {
-        scripts,
-        assets,
-        artifacts,
-    })
-}
-
-/// Stops the build when the story does not check.
-///
-/// Errors only: a warning is something the author has decided to live with, and a build that
-/// refused on those is a build people learn to bypass. `vela check --deny-warnings` is where
-/// that decision belongs.
-fn refuse_errors(
-    session: &mut Session,
-    project: &Project,
-    out: &mut dyn Write,
-) -> Result<(), Error> {
-    let mut diagnostics = session.diagnostics();
-    diagnostics.extend(project_screen_diagnostics(project));
-
-    let errors = diagnostics
-        .iter()
-        .filter(|diagnostic| diagnostic.severity() == Severity::Error)
-        .count();
-    if errors == 0 {
-        return Ok(());
-    }
-
-    for diagnostic in &diagnostics {
-        if diagnostic.severity() == Severity::Error {
-            let _ = out.write_all(render(diagnostic, session.sources()).as_bytes());
-        }
-    }
-    Err(Error::diagnostics(format!(
-        "{errors} error(s); refusing to build"
-    )))
-}
-
-/// Compiles every module and writes it as `.velac`, returning how many.
-///
-/// Debug information is left out: this is the bundle a player runs, and `RUNTIME.md §9` keeps
-/// trace hooks out of a release build rather than paying for them in every shipped game.
-fn write_scripts(session: &mut Session, destination: &Path) -> Result<usize, Error> {
-    // Collected first: `mir` needs the session mutably, and the filter reads it.
-    let files: Vec<FileId> = session
-        .file_ids()
-        .into_iter()
-        .filter(|file| session.module_of(*file).is_some())
-        .collect();
-
-    for file in &files {
-        // The name the driver gave the file — its path under `src/` — so the bundle mirrors the
-        // project rather than inventing a naming scheme of its own.
-        let name = session.sources().file(*file).name().to_string();
-        let compiled = session.mir(*file);
-
-        let module = vela_bytecode::compile(&compiled.module, false);
-        let diagnostics = vela_bytecode::verify(&module);
-        if !diagnostics.is_empty() {
-            // Not the author's fault, and not something to ship: the verifier exists so that a
-            // module reaching a player cannot be malformed.
-            return Err(Error::internal(format!(
-                "`{name}` did not verify ({} problem(s))",
-                diagnostics.len()
-            )));
-        }
-
-        let path = destination.join(SCRIPTS).join(name).with_extension("velac");
-        write_file(&path, &vela_bytecode::encode(&module))?;
-    }
-
-    Ok(files.len())
-}
-
-/// Imports the assets and writes them beside their manifest.
-///
-/// A project with no `assets/` is a project with no assets, not an error: the one-line script
-/// `VISION.md §1` protects must stay buildable.
-fn write_assets(project: &Project, destination: &Path) -> Result<(usize, usize), Error> {
-    let root = project
-        .source_root
-        .parent()
-        .map(|root| root.join(ASSETS))
-        .unwrap_or_default();
-
-    let built = if root.is_dir() {
-        import_tree(&root, &ImporterRegistry::builtin())
-            .map_err(|error| Error::diagnostics(error.to_string()))?
-    } else {
-        Built {
-            manifest: Manifest::new(),
-            artifacts: Vec::new(),
-        }
-    };
-
-    write(destination, &built)?;
-    Ok((built.manifest.assets.len(), built.artifacts.len()))
-}
-
-/// Writes the manifest and every artifact under `destination`.
-///
-/// Existing files are overwritten but not pruned, which is deliberate for now: a stale artifact
-/// is invisible to everything that reads the manifest, and `--verify-reproducible` builds into
-/// two fresh directories rather than trusting a reused one. Pruning belongs with the patch work,
-/// which is the first thing that would care.
-fn write(destination: &Path, built: &Built) -> Result<(), Error> {
-    for (path, bytes) in &built.artifacts {
-        write_file(&destination.join(ASSETS).join(path), bytes)?;
-    }
-
-    let manifest = built
-        .manifest
-        .to_json()
-        .map_err(|error| Error::internal(error.to_string()))?;
-    write_file(&destination.join("manifest.json"), manifest.as_bytes())
-}
-
-/// Builds the project a second time, into a directory of its own, and compares.
+/// Builds again, into a directory of its own, and compares.
 ///
 /// A second *build*, not a second copy: a fresh session and a fresh import, because a check that
 /// re-used a cached value would be comparing a build with itself. The trees are compared file by
 /// file rather than by one digest of the whole, so a failure names what differed — "the bundles
 /// differ" is not something anyone can act on.
-fn verify_reproducible(project: &Project, destination: &Path) -> Result<(), Error> {
+fn verify_reproducible(
+    project: &Project,
+    destination: &Path,
+    targets: &[&Target],
+) -> Result<(), Error> {
     let scratch = scratch_directory();
     let _ = fs::remove_dir_all(&scratch);
 
-    let mut sink = std::io::sink();
-    let outcome = bundle(project, &scratch, &mut sink);
+    let outcome = (|| {
+        let mut sink = std::io::sink();
+        let mut session = bundle::prepare(project, &mut sink)?;
+        build_all(project, &mut session, &scratch, targets)?;
+        Ok::<(), Error>(())
+    })();
+
     let differences = match outcome {
-        Ok(_) => compare(destination, &scratch),
+        Ok(()) => compare(destination, &scratch),
         Err(error) => {
             let _ = fs::remove_dir_all(&scratch);
             return Err(error);
@@ -405,16 +339,6 @@ fn files_under(root: &Path) -> BTreeSet<String> {
         }
     }
     found
-}
-
-/// Writes a file, creating its parents.
-fn write_file(path: &Path, bytes: &[u8]) -> Result<(), Error> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| Error::internal(format!("cannot create {}: {e}", parent.display())))?;
-    }
-    fs::write(path, bytes)
-        .map_err(|e| Error::internal(format!("cannot write {}: {e}", path.display())))
 }
 
 /// The value given to a `--flag value` argument, if the flag is present.

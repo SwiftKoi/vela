@@ -183,6 +183,12 @@ pub struct Header {
 formats with `E7101` and a clear "rebuild required" message. Additive changes to command
 schemas or the type table do **not** bump it.
 
+**A `.velac` is a whole program, not a file.** `labels` holds every label of every source module
+under its qualified name — `main.start`, `chapters.forest.clearing` — because the modules are
+linked *before* codegen (`LANGUAGE.md §6.1`, `vela-mir::link`). Nothing at run time knows the story
+was ever split across files: `jump forest.clearing` is an ordinary `CallLabel` to an index in that
+one table, which is why the instruction set has no module operand and the VM has no notion of one.
+
 ### 3.2 Instruction set
 
 Every instruction is two bytes: opcode + operand kind. Operands are variable-width and
@@ -201,7 +207,7 @@ the interpreter and verifier both read it, so they cannot disagree.
 | Control | `Jump off`, `JumpIfFalse off`, `JumpIfTrue off`, `Return n`, `CallFn fn_id`, `CallLabel label_id` | varies |
 | Match | `Dispatch n` (pops a tag, jumps via jump table) | `[tag] → []` |
 | Optionals | `IsNone`, `UnwrapOr` | `[T?] → [bool]` / `[T?,T] → [T]` |
-| Strings | `Concat n`, `ToStr`, `ToInt`, `ToFloat` | varies |
+| Strings | `Concat`, `ToStr`, `ToInt`, `ToFloat` | `Concat` `[str,str] → [str]`; the rest `[T] → [T]` |
 | Commands | `Cmd variant_id n` | `[args…] → [cmd]` |
 | Effects | `CallEffect effect_id n` | `[args…] → [T]` |
 | Suspend | `Yield` | `[cmd] → [result]` |
@@ -221,6 +227,24 @@ Two distinct ways bytecode talks to the outside world, and the distinction is lo
 - **Effect** (`CallEffect`): a *capability* call that returns a value — `input.choose`,
   `fs.read`, `rand`, `now`, `audio.position`. Effects declare required capabilities
   (`ARCHITECTURE.md §6.3`) and their results are recorded in the input log.
+
+**A line of dialogue is one command, not a timeline of them.** `Say` carries its whole text, and
+the mid-line controls a VN script puts inside that text — a pause for a click, a pause for a
+duration, "carry on without waiting", "show the rest at once" — are *interpreted by the presenter*
+rather than emitted as separate `Wait`/`Pause` commands. Two reasons. The VM's model stays what it
+is: a line of dialogue blocks until the player advances, whatever the text does on the way there.
+And the command stream stays readable to everything downstream — a test asserting `say "The door
+opened."` should not have to know that a `{w}` was in the middle of it.
+
+The cost is that the presenter owns a little state the VM does not: the line currently on screen,
+because "carry on without waiting" leaves it up while the story continues, and an `extend` appends
+to it. That line is **saveable presentation state**, alongside the staged scene — the same class of
+thing as the M8 gap where a rollback re-applies a command without rebuilding what was staged
+(`M08-state.md`).
+
+The text tags themselves are not implemented, and `{` is an error until they are
+(`LANGUAGE.md §1`): what is settled here is the *shape of the command*, which is what the freeze
+needed and what the rest of the pipeline already assumes.
 
 **Adding a command or effect is a schema registration, not an instruction.** This narrows the
 "adding an instruction" exception in `CONVENTIONS.md §4.6` to genuinely new *arithmetic or

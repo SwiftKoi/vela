@@ -6,6 +6,21 @@
 
 **Crates.** All.
 
+**Recorded, not yet scheduled — no milestone owns these, and they are player-visible.**
+
+- **Preferences.** Text speed, auto-forward delay, skip-unseen, per-channel volume, fullscreen: every
+  VN has them, players expect them in a `settings` screen, and they are *not* part of a save — they
+  belong to the player, not the playthrough. Read `preferences.html` before designing the screen
+  contract; the list of preferences is a schema, and `vela doc` should be able to emit it.
+- **Persistent data.** Unlocks, a gallery, "seen" marks, ending counters: state that survives New
+  Game and rollback, which is a different lifetime from both `default` and a save. Ren'Py's
+  `persistent` page is the model.
+- **Dialogue history.** The backlog a player scrolls with the rollback wheel. It needs a bounded
+  text log of the lines actually shown — engine state, not a screen — and it is adjacent to the
+  "saveable presentation state" `RUNTIME.md §5` is missing.
+- **An `after_load` hook** is written up in `M12-migration.md`, since a content fix is a
+  migration-shaped thing even when it is not a schema change.
+
 **Work items.**
 1. Performance pass against the budgets: startup, per-command, snapshot, frame time, wasm size.
 2. Reproducibility and cross-platform determinism matrices finalised (three architectures).

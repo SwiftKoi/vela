@@ -103,10 +103,10 @@ fn a_container_is_not_linted() {
 }
 
 /// An interpolation is not a label. A screen reader needs something it can announce before the
-/// story has run, and `{name}` is not that.
+/// story has run, and `[name]` is not that.
 #[test]
 fn an_interpolated_text_is_not_a_label() {
-    let body = body_of("screen s:\n    button:\n        text \"{name}\"\n");
+    let body = body_of("screen s:\n    button:\n        text \"[name]\"\n");
     let nodes = tree(&body, &WidgetRegistry::builtin());
     assert_eq!(nodes[0].label, None);
     assert_eq!(

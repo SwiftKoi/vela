@@ -1,0 +1,7 @@
+error[E0010]: text tags are reserved and not implemented
+ --> diag_e0010.vela:2:8
+  |
+2 |     "a {b} b"
+  |        ^^^ this begins a text tag
+  |
+  = help: write `{{` for a literal brace, `[expr]` to interpolate a value

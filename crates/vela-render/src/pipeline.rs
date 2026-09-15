@@ -88,6 +88,7 @@ pub fn create(
                     0 => Float32x2,
                     1 => Float32x2,
                     2 => Float32x4,
+                    3 => Float32,
                 ],
             }],
         },

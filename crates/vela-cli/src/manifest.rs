@@ -20,6 +20,13 @@ pub struct Manifest {
 /// The `[project]` table.
 #[derive(Debug, Deserialize)]
 pub struct Project {
+    /// The project's name, for a window title and for a bundle.
+    ///
+    /// Optional, because a project that does not name itself is still a project — but a
+    /// declared one is what a player should see, rather than the label path the game happens
+    /// to start at.
+    #[serde(default)]
+    pub name: Option<String>,
     /// The label the game starts at, written `module.label`.
     ///
     /// This is what makes reachability answerable: without a starting point there is no

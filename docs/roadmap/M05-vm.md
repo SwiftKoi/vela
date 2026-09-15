@@ -87,3 +87,22 @@ That is the same shape as the `render_demo` example from M1, which prints a hand
 `E5003` complete with a `did you mean` suggestion the real analyzer does not produce. Both
 are things that look like evidence and are not. A test that cannot fail for the reason you
 think is worse than no test, because it is *reassuring*.
+
+**Found later, by the first example that used them (M9).** The corpus exercised the machine
+through shapes the *examples* never did — `examples/standard` had no defaults and every chapter
+was one file — and two bugs lived in that gap. Both were silent: the story ran and printed
+something plausible.
+
+- **A function's parameters were not its frame.** `enter` set the frame's base to `stack.len()`,
+  the *top* of the stack, while the caller had already pushed one value per parameter — so every
+  parameter read found nothing. `local()` answering `none` for a slot that was not there is what
+  made it silent: `n == 1` was false for every `n`, and the function quietly took the wrong
+  branch. The base is now the bottom of the arguments, and a missing slot is `Fault::BadLocal` —
+  a wrong base has to fail loudly, and `none` is exactly the value that made it look like a story
+  bug. (`crates/vela-vm/tests/running.rs`.)
+- **A `default` was neither seeded nor read back.** `default trust: int = 0` meant `none` until
+  something wrote it, so the first line that touched it was `add.i` given `none`. A fresh run now
+  seeds the world from the declarations (`RUNTIME.md §2`), and `LoadDefault` answers with the
+  *declaration* for a name the world does not hold — which is the honest answer for a save written
+  before that `default` existed, and for a world a caller built by hand. Restore deliberately does
+  not seed: a loaded world holds what the save held.

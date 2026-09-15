@@ -3,7 +3,7 @@
 //! Split from `renderer.rs` because it is a different question: that file builds the thing
 //! that draws, this one decides what it samples.
 
-use crate::renderer::{ATLAS_FORMAT, Renderer};
+use crate::renderer::{ATLAS_FORMAT, IMAGE_FORMAT, Renderer};
 use vela_text::GlyphAtlas;
 
 impl Renderer {
@@ -77,6 +77,84 @@ impl Renderer {
     #[must_use]
     pub fn has_atlas(&self) -> bool {
         self.atlas.is_some()
+    }
+
+    /// Uploads an image and returns the index a quad names it by.
+    ///
+    /// Called **once per image**, not once per frame: each call adds a texture, so uploading in
+    /// a frame loop would grow the GPU's memory by one picture per frame. The atlas can afford
+    /// to be re-uploaded because it *replaces* the previous one; this appends.
+    ///
+    /// The pixels are `RGBA8`, which is what a decoded PNG is and what the GPU wants — the
+    /// renderer is deliberately not in the business of decoding files
+    /// (`ARCHITECTURE.md §1`, rule 2: it is an adapter, and file formats are not its concern).
+    pub fn upload_image(&mut self, width: u32, height: u32, rgba: &[u8]) -> u32 {
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("vela.image"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: IMAGE_FORMAT,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // Linear both ways: a background is scaled to the frame, and nearest would make that
+        // look like stairs.
+        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("vela.image_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("vela.image_bind"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
+        self.images.push((texture, bind_group));
+        u32::try_from(self.images.len() - 1).unwrap_or(u32::MAX)
+    }
+
+    /// How many images have been uploaded.
+    #[must_use]
+    pub fn image_count(&self) -> usize {
+        self.images.len()
     }
 
     /// A one-texel opaque texture, so a filled rectangle is the same draw as a glyph.

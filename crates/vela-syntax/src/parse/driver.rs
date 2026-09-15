@@ -47,8 +47,13 @@ pub fn parse(file: FileId, src: &str) -> ParseResult {
     let mut diagnostics = lexed.diagnostics;
 
     let mut parser = Parser::new(file, src, &tokens);
-    let program = parser.parse_program();
+    let mut program = parser.parse_program();
     diagnostics.extend(parser.take_diagnostics());
+
+    // The comments the lexer collected ride along with the tree. Attached here rather than built
+    // by the parser: no rule of the grammar is written in terms of a comment, and a parser that
+    // produced them would be one that had to step over them (`crate::Comment`).
+    program.comments = lexed.comments;
 
     // Source order, so the first thing reported is the first thing wrong. Lexical and
     // syntactic diagnostics are produced by separate passes and would otherwise

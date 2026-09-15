@@ -4,16 +4,22 @@
 //! in `crate::registry`.
 
 pub mod build;
+pub mod bundle;
+pub mod bundle_run;
 pub mod check;
+pub mod format;
+pub mod frame;
 pub mod new;
 pub mod patch;
 pub mod play;
-mod run;
+pub mod run;
+pub mod target;
 pub mod test;
 pub mod ui;
 
 pub use build::Build;
 pub use check::Check;
+pub use format::Format;
 pub use new::NewProject;
 pub use patch::Patch;
 pub use run::Run;

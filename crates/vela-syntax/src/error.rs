@@ -124,6 +124,23 @@ pub fn unexpected_character(file: FileId, offset: u32) -> Diagnostic {
     )
 }
 
+/// `E0010` — a `{`, which is reserved for text tags.
+///
+/// An error rather than a silent literal, because the two readings differ in *meaning*: today a
+/// brace is text, and the day text tags exist the same characters would style the words around
+/// them. Accepting it now would change what already-written dialogue says, and the way out costs
+/// one keystroke.
+#[must_use]
+pub fn reserved_text_tag(file: FileId, start: u32, end: u32) -> Diagnostic {
+    diag(
+        "E0010",
+        "text tags are reserved and not implemented",
+        Span::new(file, start, end),
+        "this begins a text tag",
+    )
+    .with_help("write `{{` for a literal brace, `[expr]` to interpolate a value")
+}
+
 /// `E1001` — a token that does not fit where it was found.
 #[must_use]
 pub fn unexpected(span: Span, found: &str, expected: &str) -> Diagnostic {

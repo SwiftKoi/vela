@@ -2,6 +2,19 @@
 
 **Goal.** A real Ren'Py project can be ported incrementally, with a number that goes to zero.
 
+**Decided early, from reading the Ren'Py reference: two things are *additive*, so they belong
+here rather than in the syntax freeze.**
+
+- **Local labels** — `label .quiet_morning:` scoped to the enclosing label, addressable as
+  `chapter.quiet_morning`. Ren'Py scripts use them constantly for a chapter's sibling scenes, and
+  our labels are global within a file. Nothing existing changes meaning when they arrive, which is
+  exactly why they do not have to be decided before the freeze — and they are also the natural
+  prefix for the statement identity `RUNTIME.md §5` is missing.
+- **A story-level hook that runs on load** — Ren'Py's `after_load` label: the place a *content* fix
+  lives ("chapter 4 no longer uses that flag, go to the revised scene") as opposed to the
+  Rust-side schema migration `vela-replay` already does. Nothing about it needs deciding now, and
+  Ren'Py's `block_rollback()` is the detail to copy when it lands.
+
 **Depends on.** M5–M10 (the engine must be real first).
 
 **Crates.** `vela-migrate`.

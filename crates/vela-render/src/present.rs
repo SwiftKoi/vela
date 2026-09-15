@@ -12,8 +12,9 @@
 use vela_text::TextEngine;
 use vela_world::{Command, SceneState, Stage};
 
-use crate::draw::{Color, DrawList, RectQuad};
+use crate::draw::{Color, DrawList, ImageQuad, RectQuad};
 use crate::menu::Menu;
+use crate::renderer::Renderer;
 use crate::text::{self, Placement};
 
 /// How a dialogue box looks.
@@ -83,6 +84,10 @@ pub struct Presenter {
     dialogue: Option<Dialogue>,
     menu: Option<Menu>,
     font: String,
+    /// Images waiting to reach the GPU, by the name a scene stages them under.
+    staged: Vec<(String, u32, u32, Vec<u8>)>,
+    /// Where each staged image ended up, once it has been uploaded.
+    uploaded: Vec<(String, u32)>,
 }
 
 impl Presenter {
@@ -97,7 +102,38 @@ impl Presenter {
             dialogue: None,
             menu: None,
             font: font.to_string(),
+            staged: Vec::new(),
+            uploaded: Vec::new(),
         }
+    }
+
+    /// Adds an image a scene can stage, as pixels.
+    ///
+    /// Pixels and not a path: the caller decodes (`vela-assets` owns file formats), and the
+    /// renderer is handed the result. Nothing here can read a file, which is the adapter rule
+    /// doing its job rather than a limitation.
+    pub fn stage_image(&mut self, name: impl Into<String>, width: u32, height: u32, rgba: Vec<u8>) {
+        self.staged.push((name.into(), width, height, rgba));
+    }
+
+    /// Sends every staged image to the GPU, once.
+    ///
+    /// Called where the renderer becomes available rather than per frame: uploading appends a
+    /// texture, so doing it in the frame loop would add one picture per frame to GPU memory.
+    /// Calling it twice is harmless — the second call finds nothing staged.
+    pub fn upload_images(&mut self, renderer: &mut Renderer) {
+        for (name, width, height, rgba) in std::mem::take(&mut self.staged) {
+            let id = renderer.upload_image(width, height, &rgba);
+            self.uploaded.push((name, id));
+        }
+    }
+
+    /// The texture id an image name was uploaded as, if it was.
+    fn texture_of(&self, name: &str) -> Option<u32> {
+        self.uploaded
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, id)| *id)
     }
 
     /// The injected text engine, so a caller can upload the atlas.
@@ -244,8 +280,31 @@ impl Presenter {
         let slot = width / count as f32;
 
         for (index, image) in images.iter().enumerate() {
-            let tint = tint_of(image);
             let left = index as f32 * slot;
+
+            // The picture, when there is one. A scene stages a *name*, so a name with no image
+            // behind it — a typo, or an asset the build has not produced — falls through to the
+            // placeholder rather than to nothing: a blank screen reads as a broken renderer, and
+            // a labelled one reads as a missing background.
+            if let Some(texture) = self.texture_of(image) {
+                draw.push_image(ImageQuad {
+                    x: left,
+                    y: 0.0,
+                    width: slot,
+                    height,
+                    uv: [0.0, 0.0, 1.0, 1.0],
+                    image: texture,
+                    color: Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    },
+                });
+                continue;
+            }
+
+            let tint = tint_of(image);
             draw.push_rect(RectQuad::from_corners(left, 0.0, left + slot, height, tint));
             text::place(
                 &mut self.text,

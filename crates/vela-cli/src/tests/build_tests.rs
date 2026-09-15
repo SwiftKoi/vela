@@ -20,7 +20,7 @@ fn build_writes_a_bundle_with_scripts_and_assets() {
     let (code, out) = cli(&["build", &project.to_string_lossy()]);
     assert_eq!(code, 0, "{out}");
     assert!(
-        out.contains("built 1 script(s), 1 asset(s), 1 artifact(s)"),
+        out.contains("built 1 module(s), 1 asset(s), 1 artifact(s)"),
         "{out}"
     );
 
@@ -35,15 +35,17 @@ fn build_writes_a_bundle_with_scripts_and_assets() {
         "the artifact was not written, or was not normalized"
     );
 
-    // And the script, as a container the runtime can load rather than a file named `.velac`.
+    // And the program, as a container the runtime can load rather than a file named `.velac`. Its
+    // label is *qualified*: after linking, `main.start` is the label's name, which is also what
+    // `vela.toml` calls the entry point.
     let script = std::fs::read(project.join("dist/scripts/main.velac")).expect("a compiled module");
     let module = vela_bytecode::decode(&script).expect("the bundle does not decode");
     assert!(
         module
             .labels
             .iter()
-            .any(|label| module.strings.get(label.name) == Some("start")),
-        "the compiled module has no `start` label"
+            .any(|label| module.strings.get(label.name) == Some("main.start")),
+        "the compiled program has no `main.start` label"
     );
 }
 
@@ -77,7 +79,7 @@ fn verify_reproducible_passes_and_says_so() {
 }
 
 #[test]
-fn build_compiles_every_module_under_src() {
+fn build_links_every_module_under_src_into_one_program() {
     let project = temp_project("build-modules", "label start:\n    \"Hi.\"\n    return\n");
     let nested = project.join("src/chapters");
     std::fs::create_dir_all(&nested).expect("create the module directory");
@@ -90,9 +92,25 @@ fn build_compiles_every_module_under_src() {
     let (code, out) = cli(&["build", &project.to_string_lossy()]);
     assert_eq!(code, 0, "{out}");
     assert!(
-        project.join("dist/scripts/chapters/forest.velac").is_file(),
-        "the bundle does not mirror the source tree:\n{out}"
+        out.contains("built 2 module(s)"),
+        "both modules should be compiled:\n{out}"
     );
+
+    // One script, whatever the module count: a linked program *is* one module, and its labels are
+    // both modules' labels under their owners' names.
+    assert!(
+        !project.join("dist/scripts/chapters").exists(),
+        "the bundle should hold one linked program, not a per-module tree:\n{out}"
+    );
+    let script = std::fs::read(project.join("dist/scripts/main.velac")).expect("a program");
+    let module = vela_bytecode::decode(&script).expect("the program does not decode");
+    let names: Vec<&str> = module
+        .labels
+        .iter()
+        .filter_map(|label| module.strings.get(label.name))
+        .collect();
+    assert!(names.contains(&"main.start"), "{names:?}");
+    assert!(names.contains(&"chapters.forest.clearing"), "{names:?}");
 }
 
 #[test]
@@ -369,20 +387,82 @@ fn patch_without_a_subcommand_is_a_usage_error() {
 
 #[test]
 fn an_option_this_command_does_not_have_is_refused() {
-    // Silently ignoring one is how `vela build --target web` looks like it built for web. The
+    // Silently ignoring one is how `vela build --targt web` looks like it built for web. The
     // first evidence otherwise would be a player, so it is a usage error instead.
     let project = temp_project("build-target", "label start:\n    \"Hi.\"\n    return\n");
-
-    let (code, out) = cli(&["build", &project.to_string_lossy(), "--target", "web"]);
-    assert_eq!(code, 2, "{out}");
-    assert!(out.contains("--target"), "{out}");
-    assert!(out.contains("not built yet"), "{out}");
-    assert!(
-        !project.join("dist").exists(),
-        "a refused build wrote output"
-    );
 
     let (code, out) = cli(&["build", &project.to_string_lossy(), "--wat"]);
     assert_eq!(code, 2, "{out}");
     assert!(out.contains("--wat"), "{out}");
+    assert!(
+        !project.join("dist").exists(),
+        "a refused build wrote output"
+    );
+}
+
+#[test]
+fn an_unknown_target_is_a_usage_error() {
+    let project = temp_project(
+        "build-bad-target",
+        "label start:\n    \"Hi.\"\n    return\n",
+    );
+
+    let (code, out) = cli(&["build", &project.to_string_lossy(), "--target", "amiga"]);
+    assert_eq!(code, 2, "{out}");
+    assert!(out.contains("amiga"), "{out}");
+    assert!(
+        out.contains("win"),
+        "the message should list what there is:\n{out}"
+    );
+    assert!(
+        !project.join("dist").exists(),
+        "a refused build wrote output"
+    );
+}
+
+#[test]
+fn a_target_builds_one_bundle_with_a_descriptor_and_a_launcher() {
+    let project = temp_project("build-targets", "label start:\n    \"Hi.\"\n    return\n");
+    let dist = project.join("dist");
+
+    let (code, out) = cli(&["build", &project.to_string_lossy(), "--target", "linux,web"]);
+    assert_eq!(code, 0, "{out}");
+
+    // Each target is a self-contained bundle: the story is target-independent, so the same
+    // scripts and assets appear in both, and only the descriptor and launcher differ.
+    for (target, launcher) in [("linux", "launch.sh"), ("web", "index.html")] {
+        let dir = dist.join(target);
+        assert!(
+            dir.join("manifest.json").is_file(),
+            "{target} has no manifest"
+        );
+        assert!(dir.join("scripts/main.velac").is_file(), "{target}");
+        assert!(
+            dir.join("target.json").is_file(),
+            "{target} has no descriptor"
+        );
+        assert!(dir.join(launcher).is_file(), "{target} has no launcher");
+    }
+
+    // A target is not cosmetic: the descriptors say different things, and the launchers are
+    // written for different systems.
+    let linux = std::fs::read_to_string(dist.join("linux/target.json")).expect("linux descriptor");
+    let web = std::fs::read_to_string(dist.join("web/target.json")).expect("web descriptor");
+    assert!(linux.contains("\"backend\": \"vulkan\""), "{linux}");
+    assert!(web.contains("\"backend\": \"webgpu-webgl2\""), "{web}");
+    assert_ne!(linux, web, "two targets wrote the same descriptor");
+
+    // The web launcher is a page; the desktop one is a shell script that runs the engine on
+    // this very bundle.
+    let web_page = std::fs::read_to_string(dist.join("web/index.html")).expect("web page");
+    assert!(web_page.contains("Player"), "{web_page}");
+    let shell = std::fs::read_to_string(dist.join("linux/launch.sh")).expect("shell launcher");
+    assert!(shell.contains("run"), "{shell}");
+
+    // `--target` builds the targets, not a plain bundle at the root: the root is what a
+    // single-target build uses, and leaving one there would be a second thing to explain.
+    assert!(
+        !dist.join("manifest.json").exists(),
+        "a root bundle was written too"
+    );
 }

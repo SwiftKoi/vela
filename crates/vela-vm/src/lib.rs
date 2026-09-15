@@ -28,6 +28,8 @@ mod command_schema;
 mod driver;
 mod exec;
 mod fault;
+#[cfg(not(target_arch = "wasm32"))]
+mod load;
 mod machine;
 mod ops;
 mod session;
@@ -35,6 +37,8 @@ mod state;
 
 pub use driver::{Execution, Host, Scripted, TakeFirst, replay, run};
 pub use fault::Fault;
+#[cfg(not(target_arch = "wasm32"))]
+pub use load::LoadError;
 pub use machine::{Step, Vm};
 pub use session::{Session, Snapshot};
 pub use state::{FrameState, Resume, VmState};

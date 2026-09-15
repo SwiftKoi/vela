@@ -1,0 +1,123 @@
+//! What a screen pack holds, and the file it lives in.
+
+use std::fs;
+use std::path::Path;
+
+use vela_syntax::{Item, ScreenDecl, StyleDecl};
+
+use crate::error::PackError;
+use crate::pack::{read, write};
+use crate::screens::ScreenSet;
+use crate::theme::Palette;
+
+/// The pack format this build writes and the oldest it reads.
+///
+/// Bumped for any change to the shape below — including a change to the declaration fields the
+/// pack carries, because those *are* the format. A newer pack is refused, not guessed at.
+pub const PACK_VERSION: u16 = 1;
+
+/// The four bytes every pack starts with.
+///
+/// `VELS` — Vela screens — so a file that is not a pack says so before anything reads a length out
+/// of it.
+pub const MAGIC: [u8; 4] = *b"VELS";
+
+/// A module's screens, in the form a bundle ships.
+#[derive(Clone, Debug)]
+pub struct PackedSet {
+    /// The declared screens.
+    pub screens: Vec<ScreenDecl>,
+    /// The styles they resolve against.
+    pub styles: Vec<StyleDecl>,
+    /// The active theme's colours.
+    pub palette: Palette,
+}
+
+/// One module's screens, versioned and named.
+#[derive(Clone, Debug)]
+pub struct ScreenPack {
+    /// The format version.
+    pub pack_version: u16,
+    /// The module the screens came from, so a message can say where a screen is.
+    pub module: String,
+    /// What it declares.
+    pub set: PackedSet,
+}
+
+impl ScreenPack {
+    /// Compiles a module's parsed items into a pack.
+    ///
+    /// This is the one place a screen is *compiled*: everything after it — every run from a bundle
+    /// — decodes the result instead. A module that declares no screens, styles, or theme still
+    /// produces a pack of nothing, which [`Self::is_empty`] lets the caller skip writing.
+    #[must_use]
+    pub fn compile(module: impl Into<String>, items: &[Item]) -> Self {
+        Self {
+            pack_version: PACK_VERSION,
+            module: module.into(),
+            set: ScreenSet::from_items(items).packed(),
+        }
+    }
+
+    /// Whether this module declared nothing at all for the interface.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.set.screens.is_empty() && self.set.styles.is_empty() && self.set.palette.is_empty()
+    }
+
+    /// The screens, ready to lay out.
+    #[must_use]
+    pub fn into_set(self) -> ScreenSet {
+        ScreenSet::from_packed(self.set)
+    }
+
+    /// The pack as the bytes a bundle stores.
+    ///
+    /// Encoding cannot fail: a pack is plain data with no reference to the outside world, which is
+    /// why this returns bytes rather than a `Result` while decoding does not.
+    #[must_use]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        write::encode(self)
+    }
+
+    /// Reads a pack, refusing a version this build does not read.
+    ///
+    /// # Errors
+    ///
+    /// Fails on a bad magic number, a truncated container, a checksum that does not match, a
+    /// version this build does not know, or a section that does not describe a screen.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, PackError> {
+        read::decode(bytes)
+    }
+
+    /// Writes the pack to `path`, creating its parents.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the file cannot be written.
+    pub fn write(&self, path: &Path) -> Result<(), PackError> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|source| PackError::Io {
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        }
+        fs::write(path, self.to_bytes()).map_err(|source| PackError::Io {
+            path: path.to_path_buf(),
+            source,
+        })
+    }
+
+    /// Reads the pack at `path`.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the file cannot be read, or [`Self::from_bytes`] would.
+    pub fn read(path: &Path) -> Result<Self, PackError> {
+        let bytes = fs::read(path).map_err(|source| PackError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        Self::from_bytes(&bytes)
+    }
+}

@@ -105,6 +105,17 @@ pub struct World {
 4. **RNG is state, not a service.** `Rng` lives in `World` and is advanced only by the
    scripted `rand` operation. Two runs with equal logs have equal RNG sequences.
 
+> **Implemented so far (M5, corrected in M9).** A fresh run **seeds the world from the module's
+> `default` declarations** before the first instruction, so `default trust: int = 0` means zero
+> and a snapshot taken at any point carries the state the story declared. A *restored* world is not
+> seeded: it holds what the save held, and a name the save does not have reads as its declaration —
+> which is also `LoadDefault`'s fallback, so a save written before a `default` existed still
+> answers with the value that `default` declares rather than with `none`.
+>
+> That fallback is a correction: reading a `default` used to answer `none` for any slot the world
+> had not been told about, which made the first `trust + 1` an `add.i` given `none`. The rule it
+> restores is the one stated above — the world's defaults *are* the declarations.
+
 ## 3. Capabilities / host interface
 
 Scripts reach the outside world only through declared effects. Each declares the capability
@@ -224,6 +235,16 @@ pub struct SaveHeader {
 >
 > That field is save version 3. A version step is usually a *world* rewrite; this one rewrites
 > nothing, because what changed was the shape of the file rather than the state in it (§6.2).
+>
+> **Still open, and it is a syntax decision: an anchor that survives an *edit*.** The anchor above
+> survives a *rebuild* — a recompile, an optimization level, a different layout — but it is a
+> position in a file, and a position moves when the file does: insert a line above a `call` and
+> every save suspended inside that call is refused as stale. Ren'Py's answer is worth copying: a
+> `from` clause on the call names the return site, and its build *inserts* the clauses it finds
+> missing. That is also what a translation key wants (a message id that outlives the words around
+> it) and what a warped-to statement wants, so one mechanism would serve saves, translation, and
+> `M11`'s warp. What is settled here is only that the anchor must become *nameable*; the syntax
+> lands with the first of those three, and before a patch is shipped rather than after.
 
 ## 6. Save migrations
 
@@ -380,6 +401,30 @@ session.assert_world(|w| w.get_int("trust") == 1);
 ```
 
 This is what makes stories testable in CI — the differentiating feature from `VISION.md §3.1`.
+
+> **Implemented so far (M9).** `vela_vm::Session::load` exists and does what the example asks:
+> given a built bundle directory it reads the entry point from the bundle's manifest and the
+> module from `scripts/`, and starts the story — no source is read and no compiler is involved,
+> which is `ARCHITECTURE.md §8`'s *"bytecode loads without recompilation"* made true. Given a
+> lone `.velac` it starts at the module's first label, so `Session::load("story.velac")` works
+> when there is no manifest to read.
+>
+> The loader is **native-only**: a browser has no bundle directory, and a page constructs
+> `vela_web::Player` from bytes it fetched (`BUILD_AND_ASSETS.md §5`). Gating it off `wasm32`
+> also keeps the JSON reader it needs for the manifest out of the size-gated wasm module.
+>
+> `vela run <bundle>` is the same loader behind the CLI, and `crates/vela-cli/src/tests/`
+> observes that it plays the same command stream as the story does from source — after the
+> source tree has been deleted, so nothing *could* recompile.
+>
+> **What it starts at is the whole entry point.** A bundle holds a *linked* program, so
+> `main.start` is a label's name rather than a module and a label: the manifest's `entry` is
+> passed to the machine as written, and the image is found by reading that name as a path
+> (`main.start` → `scripts/main.velac`). A story split across files therefore runs from a bundle
+> with nothing to link at load: the linking happened at build time (`LANGUAGE.md §6.1`).
+>
+> The `mock_input` / `assert_world` half of this example is `vela-test`'s, and is not written
+> yet: the session API it drives is here, the assertion DSL around it is the next step.
 
 ## 9. Debugging hooks
 

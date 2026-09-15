@@ -43,6 +43,53 @@ impl Screens {
         }
     }
 
+    /// No screens at all.
+    ///
+    /// What a built bundle gets: screens are compiled from source, and a distribution bundle
+    /// ships none. The presenter's built-in dialogue box and menu are what draw instead, which
+    /// is a real game rather than a placeholder — a project that declared screens simply gets
+    /// the engine's own until screens are packed too.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            sets: Vec::new(),
+            paths: Vec::new(),
+        }
+    }
+
+    /// Loads the screens a built bundle carries.
+    ///
+    /// `vela build` compiles each source module's screens into `screens/<module>.velspk`
+    /// (`SCREENS.md §13`); this deserializes them. No `.vela` file is read and no parser runs — the
+    /// interface is compiled at build time exactly as the story is, which is the whole point of a
+    /// built artifact (`RUNTIME.md §8`).
+    ///
+    /// A bundle with no screens is not an error: `examples/hello` declares none, and its run falls
+    /// back to the presenter's built-in box.
+    ///
+    /// # Errors
+    ///
+    /// Fails on a pack this build cannot read, or one written at a version it does not know —
+    /// named rather than skipped, because a screen silently dropped is a blank box on screen.
+    pub fn load_bundle(dir: &Path) -> Result<Self, vela_ui::PackError> {
+        let Ok(entries) = fs::read_dir(dir.join("screens")) else {
+            return Ok(Self::empty());
+        };
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "velspk"))
+            .collect();
+        // Sorted, so two runs of one bundle build the same sets in the same order.
+        paths.sort();
+
+        let mut sets = Vec::new();
+        for path in &paths {
+            sets.push(vela_ui::ScreenPack::read(path)?.into_set());
+        }
+        Ok(Self { sets, paths })
+    }
+
     /// The files this set was built from.
     #[must_use]
     pub fn paths(&self) -> &[PathBuf] {

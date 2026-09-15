@@ -48,6 +48,8 @@ pub enum AssetError {
     Manifest(String),
     /// A patch could not be read, written, or applied.
     Patch(String),
+    /// A file could not be decoded.
+    Codec(String),
 }
 
 impl fmt::Display for AssetError {
@@ -72,6 +74,7 @@ impl fmt::Display for AssetError {
             ),
             Self::Manifest(message) => write!(f, "the manifest could not be read: {message}"),
             Self::Patch(message) => write!(f, "{message}"),
+            Self::Codec(message) => write!(f, "{message}"),
         }
     }
 }

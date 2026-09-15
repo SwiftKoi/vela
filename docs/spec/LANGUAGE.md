@@ -27,7 +27,16 @@ analyzable.*
 - **Indentation**: spaces only. A tab in leading whitespace is `E0003`. The corpus is
   formatted at 4 spaces; indentation width within a block must be consistent (`E0004`).
   Mixed widths at the same level are `E0005`.
-- **Comments**: `#` to end of line. No block comments.
+- **Comments**: `#` to end of line. No block comments. A comment is *trivia with content*: no rule
+  of the grammar mentions one, so the parser never sees it — but a tool that rewrites a file must
+  put it back, and a tool that documents code has to read it, so the lexer records every comment
+  beside the tokens rather than dropping it (`TOOLING.md §3`).
+
+  The comment block directly above a declaration **is that declaration's documentation**. This is a
+  rule, not a marker: consecutive comment lines, the last of which is the line before the
+  declaration, with nothing between them. A blank line ends the block — a comment set apart from
+  what follows is about the file, not about the declaration — and a comment written after code on
+  the same line documents nothing, because it is about the code it sits beside.
 - **Line continuation**: a line ending in `\` continues (used for long expressions).
 - **Identifiers**: `[A-Za-z_][A-Za-z0-9_]*`.
   - values and modules: `snake_case`
@@ -42,9 +51,20 @@ analyzable.*
   Hexadecimal exists because colours are naturally written that way, and the obvious
   spelling `#rrggbb` would collide with the comment marker.
 - **Float literals**: `1.0`, `1e3`, `1.5e-2`. A trailing `.` is `E0007`.
-- **String literals**: `"..."` with escapes `\" \\ \n \t` and `\{` (literal brace).
-  `{expr}` inside a string is **interpolation** (§5.5), evaluated in the surrounding scope.
+- **String literals**: `"..."` with escapes `\" \\ \n \t`.
+  `[expr]` inside a string is **interpolation** (§5.5), evaluated in the surrounding scope.
   Unterminated string is `E0008`.
+- **Two sigils, two jobs.** `[` interpolates a value; `{` is **reserved for text tags**, which are
+  not implemented (`E0010`). Doubling is the escape: `[[` is a literal `[` and `{{` a literal `{`.
+  A backslash before either (`\[`, `\{`) is also literal — an escape that does nothing is
+  normalized away by the formatter, which always writes the doubling.
+
+  The split is deliberate and it is Ren'Py's, for the same reason: both things live *inside*
+  dialogue, and one sigil cannot be both. `"{b}Hi{/b}"` has to mean bold while `"Score: [score]"`
+  means the number, and with one sigil the first reads as "interpolate `b`". That is also why a
+  brace is an **error** rather than a literal today: the two readings differ in meaning, and
+  accepting the wrong one now would silently change what already-written dialogue says on the day
+  tags arrive.
 - **Path literals**: `@"assets/forest.png"` — a compile-time-checked asset reference (§7.5).
 
 ## 3. Grammar
@@ -267,7 +287,7 @@ Function parameters and return types are always explicit (`E3003`). Inference ne
 across branches without a declared type (`E3004`) — this keeps error messages local.
 
 ### 5.5 String interpolation
-`"Score: {score}"` desugars to a concatenation of `str(score)`. The interpolated expression
+`"Score: [score]"` desugars to a concatenation of `str(score)`. The interpolated expression
 must be `str`-convertible; a value with a struct type requires an explicit conversion
 (`E3005`) so output formatting is never implicit. Float interpolation uses the pinned
 formatter (`RUNTIME.md §4`) — this is a determinism requirement, not a style choice.
@@ -300,6 +320,28 @@ qualified, and the LSP can rename across modules safely.
 
 Visibility: everything is private to its module unless marked `pub` on the declaration.
 Unused `use` is `W1002`.
+
+### 6.1 Linking
+
+A story is written as several modules and **runs as one**. `vela build` links them into a single
+program: every label becomes `module.label`, so the entry point written in `vela.toml`
+(`entry = "main.start"`) is also that label's name in the image, and `jump forest.clearing` is a
+call to the label `chapters.forest.clearing`. There is no module left at run time — which is what
+`vela-mir`'s resolved-by-lowering `LabelRef` was always for.
+
+A reference may be written with the alias or with the module's full path; linking resolves either
+to the module it names. Two modules that cannot be told apart are refused by the linker, naming
+both files, because neither module could have seen the other:
+
+- two modules declaring the same `default`: world state is global, so one name cannot be two slots;
+- two modules declaring one effect with different signatures: an effect is a capability the host
+  provides, named once for the whole engine.
+
+**What crosses a module boundary, and what does not.** *Labels* do — that is the story graph, and
+it is what a project is split along. *Values* do not: `forest.helper(2)` is `E2005`, because
+checking is per-module (§5: types do not cross either, for the same reason — no signature is in
+scope). A qualified name used for anything but `jump` and `call` is therefore **refused** rather
+than lowered into something that faults when a player reaches it.
 
 ## 7. Declarations
 
@@ -335,6 +377,13 @@ Two things are deliberately *not* names:
 That last rule is the only place the leading position is ambiguous, and it is one token of
 lookahead in one function — the same mechanism the grammar uses for narration versus a
 character speaking.
+
+**A speaker names a character, not a value.** `eileen "Hi."` resolves `eileen` among the module's
+`character` declarations, which is a namespace of its own: a `var eileen` in the same body neither
+shadows it nor is shadowed by it, and the checker says "no character named `eileen`" rather than
+"undefined name". Ren'Py needed a whole `character.` store to escape the collision between a
+character and a variable of the same name; the answer here is that the position is not a value
+position at all, so there is nothing to collide with.
 
 ### 7.1 Character
 ```vela
@@ -380,6 +429,15 @@ at build time; a missing asset is `E7001` and an unused asset is `W7001`. The co
 "works on my machine" bug — a file renamed on one machine and missing on another — is a
 compile error here rather than a blank rectangle in front of a playtester.
 
+**Checked, but not *typed* — deliberately, and for now.** A path literal has type `Unknown`, so it
+can be passed where a path is expected and is resolved at build time, but it cannot be stored in a
+`struct` field, held in a `default`, or declared as a parameter type: writing `fn play(track: Audio)`
+is an error, not a feature that is missing. The reason is that asset identity is a *build* fact —
+`BUILD_AND_ASSETS.md §9` answers it against the manifest, and the manifest is not part of the
+program's type environment. Making assets a real type is what would let the save schema and a
+plugin's ABI name one, so it is a change to agree on before either of them ships, not a detail to
+discover while writing a struct.
+
 > **Implemented so far (M9).** `E7001` is reported by `vela check` for every `@"path"` that
 > names nothing in the project's manifest, underlined at the literal itself.
 >
@@ -409,7 +467,7 @@ diagnostic has an obvious home.
 | --- | --- | --- |
 | `E0xxx` | Lexical | `E0001` BOM, `E0003` tab indent, `E0008` unterminated string |
 | `E1xxx` | Syntax | `E1001` unexpected token, `E1002` expected block |
-| `E2xxx` | Names | `E2001` undefined name, `E2002` missing `use`, `E2003` duplicate definition |
+| `E2xxx` | Names | `E2001` undefined name, `E2002` missing `use`, `E2003` duplicate definition, `E2005` a value in another module |
 | `E3xxx` | Types | `E3001` empty enum, `E3002` unwrap of `T?`, `E3006` int/float mixing |
 | `E4xxx` | Control flow | `E4001` non-exhaustive match, `E4002` missing return, `E4005` all menu choices unreachable |
 | `E5xxx` | Story graph | `E5001` undefined character, `E5003` undefined label |

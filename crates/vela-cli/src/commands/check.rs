@@ -146,8 +146,8 @@ impl Check {
         diagnostics.extend(project_screen_diagnostics(project));
 
         match emit {
-            Emit::Mir => write_mir(&mut session, out),
-            Emit::Disasm => write_disasm(&mut session, out),
+            Emit::Mir => write_mir(&mut session, out)?,
+            Emit::Disasm => write_disasm(&mut session, out)?,
             Emit::Diagnostics => {}
         }
 
@@ -186,48 +186,50 @@ impl Check {
     }
 }
 
-/// Writes each module's MIR, and anything lowering had to say about it.
+/// Writes the **linked program's** MIR.
 ///
-/// Lowering is the last step that can see a source problem, so its diagnostics belong with
-/// the output it produced rather than in the check's own list — which is a different
-/// question, asked before lowering even runs.
-fn write_mir(session: &mut Session, out: &mut dyn Write) {
-    // Collected first: `mir` needs the session mutably, and the filter reads it.
-    let files: Vec<vela_span::FileId> = session
-        .file_ids()
-        .into_iter()
-        .filter(|file| session.module_of(*file).is_some())
-        .collect();
-
-    for file in files {
-        let compiled = session.mir(file);
-        let _ = out.write_all(vela_mir::print_module(&compiled.module).as_bytes());
-        for diagnostic in &compiled.diagnostics {
-            let _ = out.write_all(render(diagnostic, session.sources()).as_bytes());
-        }
-    }
+/// The program, not each module: a cross-module `jump` is an unresolved reference until linking,
+/// and a dump that showed it as written would be a listing of something that is not what runs
+/// (`LANGUAGE.md §6`).
+///
+/// # Errors
+///
+/// Fails when the modules cannot be linked, which is the only thing that can go wrong here.
+fn write_mir(session: &mut Session, out: &mut dyn Write) -> Result<(), Error> {
+    let linked = session
+        .linked()
+        .map_err(|error| Error::diagnostics(error.to_string()))?;
+    let _ = out.write_all(vela_mir::print_module(&linked).as_bytes());
+    Ok(())
 }
 
-/// Writes each module's bytecode, as a listing.
+/// Writes the linked program's bytecode, as a listing.
 ///
-/// Verification runs first, and a module that does not verify is not disassembled: a listing
-/// of something that cannot run would be read as though it could.
-fn write_disasm(session: &mut Session, out: &mut dyn Write) {
-    let files: Vec<vela_span::FileId> = session
-        .file_ids()
-        .into_iter()
-        .filter(|file| session.module_of(*file).is_some())
-        .collect();
+/// Verification runs first, and a program that does not verify is not disassembled: a listing of
+/// something that cannot run would be read as though it could.
+///
+/// # Errors
+///
+/// Fails when the modules cannot be linked, or the result does not verify — the second is an
+/// engine bug, and saying so beats printing a listing nobody can trust.
+fn write_disasm(session: &mut Session, out: &mut dyn Write) -> Result<(), Error> {
+    let linked = session
+        .linked()
+        .map_err(|error| Error::diagnostics(error.to_string()))?;
+    let bytecode = vela_bytecode::compile(&linked, true);
 
-    for file in files {
-        let compiled = session.mir(file);
-        let bytecode = vela_bytecode::compile(&compiled.module, true);
-
-        for diagnostic in vela_bytecode::verify(&bytecode) {
-            let _ = out.write_all(render(&diagnostic, session.sources()).as_bytes());
+    let diagnostics = vela_bytecode::verify(&bytecode);
+    if !diagnostics.is_empty() {
+        for diagnostic in &diagnostics {
+            let _ = out.write_all(render(diagnostic, session.sources()).as_bytes());
         }
-        let _ = out.write_all(vela_bytecode::disassemble(&bytecode).as_bytes());
+        return Err(Error::internal(
+            "the linked program does not verify".to_string(),
+        ));
     }
+
+    let _ = out.write_all(vela_bytecode::disassemble(&bytecode).as_bytes());
+    Ok(())
 }
 
 /// Loads a project into a session: its sources, its entry point, and its asset manifest.

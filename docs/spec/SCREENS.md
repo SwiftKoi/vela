@@ -168,6 +168,12 @@ Rules:
   `E5008`).
 - Only tokens and typed values are permitted; a raw magic color in a screen is `W4008`.
 - Theme switching at runtime re-resolves styles without recompiling screens.
+- **Styles and themes resolve within the file that declares them.** A screen uses the styles, theme,
+  and characters of its own module; there is no project-wide style table, and a screen cannot name a
+  style declared in another file. This is the same boundary as `default` and every other
+  non-label name (`LANGUAGE.md §6.1`), and it is why a screen pack is one file's worth (§13). It is
+  written down because it is the sort of thing an editor makes *visible*: a completion list that
+  quietly omits another file's styles looks like a bug unless the rule is the rule.
 - **Contrast checking**: a foreground/background pair below a WCAG threshold is `W4009`, with
   the computed ratio in the message. Accessibility as a lint, not a manual audit.
 
@@ -312,9 +318,70 @@ construction — there is no hidden mutation to lose. This is the payoff for §2
 > The **diff is not consulted yet**: `vela_ui::reload::diff` exists and is tested, but no widget
 > carries state — there is no scroll offset or input buffer to preserve — so the rebuild is
 > unconditional and node-id preservation has nothing to act on. It lands with the first stateful
-> widget, which is also what the `list` in §13 waits on. Stated rather than implied.
+> widget, which is also what the `list` in §14 waits on. Stated rather than implied.
 
-## 13. Open questions
+## 13. The screen pack
+
+A **bundle** must not compile anything at run time (`BUILD_AND_ASSETS.md §1`, `RUNTIME.md §8`),
+and that holds for the interface as much as for the story. `vela run` on a *project* parses a
+screen's declaration at startup; a run from a *bundle* does not. Instead, `vela build` compiles
+each module's screens once and writes a **screen pack**:
+
+```
+dist/
+  manifest.json
+  scripts/main.velac        the story, compiled
+  screens/main.velspk       the interface, compiled
+```
+
+A pack carries the module's name and the module's `ScreenSet` inputs — the `screen` and `style`
+declarations and the active theme's colour palette. Running a bundle decodes a pack and rebuilds
+the set against the engine's own widget vocabulary, so there is no parser, no checker, and no
+`.vela` file in the path to drawing a screen.
+
+### 13.1 Container
+
+Binary, little-endian, and shaped exactly like `.velac` (`BYTECODE.md §3.1`) — the two are the
+same kind of thing and should not look like two different ideas:
+
+```
+magic     [u8; 4]   b"VELS"
+version   u16       PACK_VERSION
+flags     u32       reserved; written zero
+sections  each u32 length-prefixed, in fixed order:
+            module    string
+            screens   count + ScreenDecl
+            styles    count + StyleDecl
+            palette   count + (token, r, g, b)
+checksum  u64       FNV-1a over every byte before it
+```
+
+The reader is **total**: no input makes it panic. A length is checked against what is left before
+anything is allocated, expressions are depth-limited, and the checksum catches the two ways a pack
+actually arrives broken — a truncated transfer and a half-written file. It is not a signature.
+
+- **Versioned.** A reader refuses a `pack_version` it does not know, naming the version, rather
+  than reading it as if the fields it did not recognize were absent. The version is bumped for any
+  change to the container or to the declaration fields it carries, because those *are* the format.
+- **Binary, not text.** A pack is not source and is not meant to be edited; a readable form would
+  be a second thing to keep in step with the language.
+- **One per module.** A `ScreenSet` is one file's worth, because styles resolve where they are
+  declared (§5). A module that declares no screens, styles, or theme produces no pack.
+- **Not a second IR.** A screen is evaluated against its arguments and the active theme at layout
+  time (§2), so a live expression tree exists at run time however it is encoded. The pack carries
+  that tree rather than a widget IR that would need a second evaluator kept in step with this one.
+- **Not the story.** Only the interface is packed; the prose lives in `.velac` and nowhere else.
+
+> **Implemented so far (M9).** `vela_ui::ScreenPack` is the artifact: `vela build` compiles the
+> declarations into it and writes one `screens/<module>.velspk` per module that declares UI, and
+> `vela run <bundle>` decodes them with no parse. A pack from a version this build does not know is
+> refused rather than half-read. `crates/vela-ui/tests/pack.rs` pins the round trip and the
+> refusal; `crates/vela-ui/src/pack/tests.rs` pins every expression tag against the reader and a
+> corrupt container against the refusal; `crates/vela-cli/src/tests/bundle_tests.rs` pins that a
+> built bundle carries the screens, that the story is *not* in the pack, and that the runtime loads
+> them.
+
+## 14. Open questions
 
 1. **Scroll and virtualization** (M7): how much of a long list is materialized? Start with a
    `list` widget that materializes only the visible window; expose `virtual` explicitly.

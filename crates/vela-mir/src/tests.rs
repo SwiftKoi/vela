@@ -58,7 +58,7 @@ fn a_constant_expression_is_folded_during_lowering() {
 
 #[test]
 fn string_interpolation_over_constants_folds_to_one_string() {
-    let (module, _) = lower("const LIMIT: int = 6\nconst TEXT: str = \"limit {LIMIT}\"\n");
+    let (module, _) = lower("const LIMIT: int = 6\nconst TEXT: str = \"limit [LIMIT]\"\n");
     let text = module
         .consts
         .iter()

@@ -4,7 +4,7 @@
 //! how the bowtie in the first triangulation was found exactly, rather than guessed at from
 //! a screenshot.
 
-use crate::draw::{DrawList, GlyphQuad, Quad, RectQuad};
+use crate::draw::{Color, DrawList, GlyphQuad, ImageQuad, Quad, RectQuad, Source};
 use crate::renderer::{Renderer, Vertex};
 
 impl Renderer {
@@ -65,45 +65,46 @@ impl Renderer {
             draw.quads(),
             self.atlas.as_ref().map(|(_, atlas)| atlas),
             &self.white,
+            &self.images,
             &self.uniforms_bind,
         );
     }
 }
 
-/// Emits one draw call per run of consecutive quads of the same kind.
+/// Emits one draw call per run of consecutive quads from the same texture.
 ///
-/// Runs rather than two fixed batches, because submission order is the picture and a frame may
-/// interleave rectangles and glyphs — a menu drawn over a dialogue is text, then a panel, then
-/// more text. Rectangles sample the white texel, glyphs the atlas; a glyph run with no atlas
-/// has nothing to sample and is skipped, since drawing it against the white texel would paint
-/// opaque boxes where the letters should be.
+/// Runs rather than fixed batches, because submission order is the picture and a frame may
+/// interleave all three kinds — a background, a panel, a portrait, the dialogue over them.
+/// Quads of one source share a bind group; a change of source is a new draw call.
 fn emit_runs(
     pass: &mut wgpu::RenderPass<'_>,
     quads: &[Quad],
     atlas: Option<&wgpu::BindGroup>,
     white: &wgpu::BindGroup,
+    images: &[(wgpu::Texture, wgpu::BindGroup)],
     uniforms: &wgpu::BindGroup,
 ) {
     let mut first = 0usize;
     while first < quads.len() {
-        let glyphs = quads[first].is_glyph();
+        let source = quads[first].source();
         let mut last = first;
-        while last < quads.len() && quads[last].is_glyph() == glyphs {
+        while last < quads.len() && quads[last].source() == source {
             last += 1;
         }
-        let range = (first as u32 * 6)..(last as u32 * 6);
-        match (atlas, glyphs) {
-            (Some(atlas), true) => {
-                pass.set_bind_group(0, uniforms, &[]);
-                pass.set_bind_group(1, atlas, &[]);
-                pass.draw_indexed(range, 0, 0..1);
-            }
-            (None, true) => {}
-            (_, false) => {
-                pass.set_bind_group(0, uniforms, &[]);
-                pass.set_bind_group(1, white, &[]);
-                pass.draw_indexed(range, 0, 0..1);
-            }
+
+        // A run whose texture is not there has nothing to sample: a glyph with no atlas built,
+        // or an image that was never uploaded. Skipping it is the honest failure — drawing it
+        // against the white texel would paint opaque boxes where the letters or the picture
+        // should be, which reads as a rendering bug rather than as a missing asset.
+        let bound = match source {
+            Source::White => Some(white),
+            Source::Atlas => atlas,
+            Source::Image(index) => images.get(index as usize).map(|(_, bind)| bind),
+        };
+        if let Some(bound) = bound {
+            pass.set_bind_group(0, uniforms, &[]);
+            pass.set_bind_group(1, bound, &[]);
+            pass.draw_indexed((first as u32 * 6)..(last as u32 * 6), 0, 0..1);
         }
         first = last;
     }
@@ -119,6 +120,7 @@ pub fn build_vertices(draw: &DrawList) -> Vec<Vertex> {
         match quad {
             Quad::Rect(rect) => vertices.extend(rect_vertices(rect)),
             Quad::Glyph(glyph) => vertices.extend(glyph_vertices(glyph)),
+            Quad::Image(image) => vertices.extend(image_vertices(image)),
         }
     }
     vertices
@@ -135,51 +137,102 @@ fn rect_vertices(rect: &RectQuad) -> [Vertex; 4] {
             position: [l, t],
             uv: [0.5, 0.5],
             color,
+            mode: MASK,
         },
         Vertex {
             position: [r, t],
             uv: [0.5, 0.5],
             color,
+            mode: MASK,
         },
         Vertex {
             position: [l, b],
             uv: [0.5, 0.5],
             color,
+            mode: MASK,
         },
         Vertex {
             position: [r, b],
             uv: [0.5, 0.5],
             color,
+            mode: MASK,
         },
     ]
 }
 
 /// The four corners of a glyph quad, carrying the atlas rectangle.
 fn glyph_vertices(glyph: &GlyphQuad) -> [Vertex; 4] {
-    let (l, t) = (glyph.x, glyph.y);
-    let (r, b) = (glyph.x + glyph.width, glyph.y + glyph.height);
-    let [u0, v0, u1, v1] = glyph.uv;
-    let color = [glyph.color.r, glyph.color.g, glyph.color.b, glyph.color.a];
+    textured_vertices(
+        glyph.x,
+        glyph.y,
+        glyph.width,
+        glyph.height,
+        glyph.uv,
+        glyph.color,
+        MASK,
+    )
+}
+
+/// The four corners of an image quad, carrying the part of the image it shows.
+fn image_vertices(image: &ImageQuad) -> [Vertex; 4] {
+    textured_vertices(
+        image.x,
+        image.y,
+        image.width,
+        image.height,
+        image.uv,
+        image.color,
+        COLOUR,
+    )
+}
+
+/// A coverage mask: the texture's red channel is alpha and the vertex carries the colour.
+const MASK: f32 = 0.0;
+
+/// Colour: the texture is the picture and the vertex tints it.
+const COLOUR: f32 = 1.0;
+
+/// The four corners of a textured quad.
+///
+/// One function for both texturers: a glyph and a picture differ in which texture they sample
+/// and in nothing else, and two copies of this would be two places for a corner order to drift.
+fn textured_vertices(
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    uv: [f32; 4],
+    color: Color,
+    mode: f32,
+) -> [Vertex; 4] {
+    let (l, t) = (x, y);
+    let (r, b) = (x + width, y + height);
+    let [u0, v0, u1, v1] = uv;
+    let color = [color.r, color.g, color.b, color.a];
     [
         Vertex {
             position: [l, t],
             uv: [u0, v0],
             color,
+            mode,
         },
         Vertex {
             position: [r, t],
             uv: [u1, v0],
             color,
+            mode,
         },
         Vertex {
             position: [l, b],
             uv: [u0, v1],
             color,
+            mode,
         },
         Vertex {
             position: [r, b],
             uv: [u1, v1],
             color,
+            mode,
         },
     ]
 }

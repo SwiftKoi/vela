@@ -215,7 +215,13 @@ pub enum Op {
     /// evaluating it here is exactly what short-circuiting exists to avoid.
     Unwrap,
 
-    /// Concatenate `n` strings.
+    /// Concatenate two strings.
+    ///
+    /// Two, not `n`: an interpolation lowers to a chain of additions, so the compiler only ever
+    /// emits a pair. The effect used to be declared as a count-carrying one while the emitter
+    /// wrote no count and the machine assumed two — three places, three answers, and the verifier
+    /// counted the odd one out as a value left on the stack, which is what made a loop containing
+    /// a `say` fail to verify (`E6001`).
     Concat,
     /// Render a value as text.
     ToStr,
@@ -312,7 +318,7 @@ pub const OPS: &[OpSpec] = &[
     spec(Op::IsNone, "is.none", Effect::Replace),
     spec(Op::UnwrapOr, "unwrap.or", Effect::Binary),
     spec(Op::Unwrap, "unwrap", Effect::Replace),
-    spec(Op::Concat, "concat", Effect::CallN),
+    spec(Op::Concat, "concat", Effect::Binary),
     spec(Op::ToStr, "to.str", Effect::Replace),
     spec(Op::ToInt, "to.int", Effect::Replace),
     spec(Op::ToFloat, "to.float", Effect::Replace),

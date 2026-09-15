@@ -15,10 +15,17 @@
 6. Web specifics: WebGPU + WebGL2 fallback, single-threaded default, range-request streaming,
    graph-derived prefetch plan, `IndexedDB` saves (`BUILD_AND_ASSETS.md §5`).
 7. Delta patches + the reproducibility check + the wasm size gate.
+8. The bundle runtime: a loader that takes a built bundle straight to the VM
+   (`Session::load`), `vela run <bundle>` with no compiler in the path, and the per-target
+   **launcher** a player starts (`BUILD_AND_ASSETS.md §8`).
+
+Item 8 was implied by §8's "assets + bytecode + launcher" but was not a work item of its own —
+item 5 reads as platform plumbing, so the launcher went missing and every run recompiled from
+source. Naming it is the point: `vela build` already produced a bundle nothing consumed.
 
 **Exit criteria.**
-- [ ] `examples/standard` builds and runs on all four targets from one command — it builds; the
-      targets and the running are item 5
+- [ ] `examples/standard` builds and runs on all four targets from one command — the build is
+      item 5 and the running is items 5 and 8; see the progress note for what is verified where
 - [x] Reproducible build: two builds are byte-identical
 - [x] A text-only change produces a patch < 5% of the full bundle — a test in `cargo test`, so
       gate 5 rather than a gate of its own
@@ -34,7 +41,8 @@ Mitigation: `check-layers`'s adapter rule runs on every target driver PR.
 
 ---
 
-**Progress.** Work items 1 and 3 have landed, along with `E7001` from item 4 and most of item 7.
+**Progress.** Work items 1, 3, 5, and 8 have landed, along with `E7001` from item 4 and most of
+item 7.
 
 - `Manifest`, `Asset`, `Artifact`, `Variant` — content-addressed, canonically ordered, with
   `size` and `variants` present but empty (and omitted from the JSON while they are, so a
@@ -53,11 +61,49 @@ Mitigation: `check-layers`'s adapter rule runs on every target driver PR.
 - `tests/golden/assets/` pins the whole import as a golden.
 - The compiler, the VM, the save layer, and the asset layer compile for
   `wasm32-unknown-unknown` with no source changes, and `crates/vela-web` runs the engine there:
-  `tools/wasm-smoke.sh` drives the wasm module in a JavaScript runtime and diffs its command
+  `tools/wasm-smoke.sh` drives the **web bundle** in a JavaScript runtime and diffs its command
   stream against `vela run --headless`. Gate 9, with a 300 KB ceiling on the module.
+- Item 8, the bundle runtime: `vela_vm::Session::load` takes a built bundle straight to the VM —
+  entry point from the manifest, module from `scripts/`, no compiler — and `vela run <bundle>`
+  runs one. `crates/vela-cli/src/tests/bundle_tests.rs` deletes the source tree after building
+  and asserts the bundle still plays the same command stream, which is what makes "loads without
+  recompilation" an observation rather than a claim.
+- Item 5, the target drivers: `vela build --target win,mac,linux,web` writes one self-contained
+  bundle per target with its own `target.json` descriptor and launcher. What §4's four dimensions
+  actually do today — variants **not implemented**, backend recorded, input profile *consumed*,
+  packaging a declared hook — is written down in `BUILD_AND_ASSETS.md §4` rather than implied.
+- The launcher per target: `launch.sh` / `launch.cmd` / `index.html`.
+- The **screen pack** (`SCREENS.md §13`): `vela build` compiles each module's screens into
+  `screens/<module>.velspk` and the manifest records the `images` mapping, so a windowed bundle
+  run draws the project's own `dialogue` screen and opens its `pause` on Escape. Nothing about the
+  interface is parsed at run time either — a built game is the game that was tested, which it was
+  not before: it had no screens at all, so Escape did nothing and the dialogue box was the
+  presenter's rather than the project's.
+- **Multi-file stories run.** `vela_mir::link` merges a project's modules into one program whose
+  labels are qualified (`LANGUAGE.md §6.1`), so a `jump` from one file into another is an ordinary
+  call and a bundle runs a story split across files. Before this a cross-module `jump` checked
+  clean, built clean, and faulted at run time on a label index that was never in the module — the
+  one gap that made "a built project runs" untrue for anything bigger than one file.
+  `crates/vela-cli/src/tests/linking_tests.rs` runs a two-module story from source and from a
+  bundle and compares the command streams, and a *value* in another module is now refused at check
+  time (`E2005`) rather than lowered into a fault.
+- **`examples/standard` is now the broadest thing that works**, so the gates that run it (6 and 9)
+  are covering the whole engine rather than one file: three modules with cross-module `jump` and
+  `call`, defaults, a `fn`, a `struct`, an `enum` with `match`, loops, a menu, an effect, four
+  screens, and a `README.md` stating what it deliberately does not do. Expanding it found five
+  engine faults in one sitting — see M04's and M05's own notes — which is the argument for the
+  example being broad: the corpus is MIR-shaped and the examples are what a story actually does.
 
 Not yet, and in the order they are needed:
 
+- Cross-module **values and types**: `forest.helper(2)` is `E2005` because checking is per-module
+  and has no signature to check the call against — M02's open half. Until that lands, a project
+  splits along its story graph, not along its helper functions, and the refusal is the honest
+  answer rather than a guess.
+- **Link conflicts have no span.** A duplicate `default` or a disagreeing effect across two modules
+  is refused by `vela run` and `vela build`, naming both files, but not by `vela check` at a line:
+  MIR drops spans, and `vela-diag` has no span-less diagnostic — the same gap `W7001` waits on
+  (item 4 below).
 - The rest of item 1: audio, video, fonts, and the script-via-the-registry importer. A file
   nothing claims currently **fails** the build rather than being skipped. The spec's outputs for
   the first three are `ktx2` and `ogg`/`opus`, which need transcoders this build does not have;
@@ -71,15 +117,25 @@ Not yet, and in the order they are needed:
   file the session knows about, and a diagnostic must point somewhere. It needs either a
   span-less diagnostic in `vela-diag` or the manifest as a known source file; both are model
   changes, not a small addition.
-- Item 5 (targets) and item 6 (web) — the whole target half, and the two exit criteria that
-  cannot be checked here. A real wasm entry point needs an `unsafe` FFI boundary, and the
-  workspace sets `unsafe_code = "forbid"`; that is a decision to make deliberately rather than by
-  adding an `#[allow]` in passing.
+- Item 5's two live-but-unfed dimensions: **variant packing** needs an importer that emits a
+  variant (the transcoders §3.1 asks for), and **backend selection** needs a renderer that chooses
+  a backend from the descriptor. The driver, the descriptor, and the launcher are here; the inputs
+  each would act on are not.
+- Item 6 (web specifics): the graph-derived prefetch plan, range-request streaming, `IndexedDB`
+  saves, and the WebGL2 fallback. The browser **demo** (exit criterion 6) stays open for the
+  reason its note gives: it needs the renderer on `wgpu`'s web backends and a canvas.
 - Sub-file chunks in a patch: a changed file ships whole.
 
-**Verification note.** Two exit criteria cannot be checked on the development machine and are
-not covered by CI as configured: *"builds and runs on all four targets"* (there is no macOS
-here, and `x86_64-pc-windows-gnu` is not a running Windows) and the browser demo (no
-`wasm32-unknown-unknown` target, no bundler, no browser). CI is `ubuntu-latest` only. The asset
-half of this milestone is fully checkable; the target half will need either a toolchain
-decision or a CI change before its criteria can be ticked honestly.
+**Verification note.** Exit criterion 1 — *"builds and runs on all four targets from one
+command"* — cannot be checked on the development machine: there is no macOS here, and
+`x86_64-pc-windows-gnu` is not a running Windows. Until this work it was covered by no CI job
+either, which is how a bundle that only *built* passed for a bundle that *ran*. It is now covered
+by two: the `platforms` matrix builds each native target's bundle with `--target` and **runs it
+from `dist/`**, diffing the command stream against a source run; gate 9 plays the web bundle in
+wasm. The criterion is therefore ticked by those jobs going green, not by prose here — and it was
+*not* ticked on the machine this was written on.
+
+The browser demo (exit criterion 6) is still open and still not checkable here: it needs the
+renderer on `wgpu`'s web backends and a canvas, and there is no `wasm32-unknown-unknown` target,
+bundler, or browser on the development machine. CI has no browser either; gate 9 runs the engine
+in Node, which exercises the command boundary rather than the canvas.

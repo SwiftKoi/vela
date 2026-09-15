@@ -120,9 +120,11 @@ impl Parser<'_> {
         match token.kind {
             TokenKind::Int => {
                 self.bump();
+                let text = self.text(token);
                 Expr::Int {
                     span,
-                    value: parse_int(self.text(token)),
+                    value: parse_int(text),
+                    hex: text.starts_with("0x") || text.starts_with("0X"),
                 }
             }
             TokenKind::Float => {

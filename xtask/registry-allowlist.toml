@@ -24,4 +24,12 @@ files = [
     # A new expression variant should be a compile error here, not a binding that silently
     # stops being tracked.
     "crates/vela-ui/src/deps.rs",
+
+    # The screen pack's codec: a tag becomes a variant when decoding and comes back when encoding,
+    # over the same closed set of syntax-tree kinds. That is the carve-out CONVENTIONS.md §1.2
+    # makes for the front end — a plugin cannot add an expression variant — and the exhaustiveness
+    # the compiler enforces is what stops a variant silently losing its tag. A registry would
+    # replace that with a table whose omissions only surface in a bundle that will not load.
+    "crates/vela-ui/src/pack/read/expr.rs",
+    "crates/vela-ui/src/pack/write/expr.rs",
 ]

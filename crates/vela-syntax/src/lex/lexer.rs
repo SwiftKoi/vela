@@ -7,6 +7,7 @@ use vela_diag::Diagnostic;
 use vela_span::{FileId, Span};
 
 use crate::error;
+use crate::lex::comment::Comment;
 use crate::lex::cursor::Cursor;
 use crate::lex::indent::{IndentAction, IndentStack};
 use crate::lex::token::{Token, TokenKind};
@@ -21,6 +22,12 @@ pub struct LexResult {
     pub tokens: Vec<Token>,
     /// Lexical diagnostics, in source order.
     pub diagnostics: Vec<Diagnostic>,
+    /// Every comment in the file, in source order.
+    ///
+    /// Beside the tokens rather than among them: the grammar does not mention comments, and a
+    /// parser that had to step over them would be a parser with a rule about whitespace. A tool
+    /// that rewrites a file needs them, which is why they are recorded at all.
+    pub comments: Vec<Comment>,
 }
 
 /// Lexes a whole file.
@@ -42,6 +49,8 @@ pub(crate) struct Lexer<'a> {
     pub(crate) tokens: Vec<Token>,
     /// Accumulated diagnostics.
     pub(crate) diagnostics: Vec<Diagnostic>,
+    /// Accumulated comments.
+    comments: Vec<Comment>,
     /// Open indentation levels.
     indent: IndentStack,
     /// Depth of open bracket groups. Newlines inside one are not statement breaks.
@@ -59,6 +68,7 @@ impl<'a> Lexer<'a> {
             cursor: Cursor::new(src),
             tokens: Vec::new(),
             diagnostics: Vec::new(),
+            comments: Vec::new(),
             indent: IndentStack::new(),
             brackets: 0,
             at_line_start: true,
@@ -82,6 +92,7 @@ impl<'a> Lexer<'a> {
         LexResult {
             tokens: self.tokens,
             diagnostics: self.diagnostics,
+            comments: self.comments,
         }
     }
 
@@ -112,7 +123,7 @@ impl<'a> Lexer<'a> {
                 true
             }
             Some(b'#') => {
-                self.skip_to_eol();
+                self.record_comment();
                 self.cursor.bump_newline();
                 true
             }
@@ -225,7 +236,7 @@ impl<'a> Lexer<'a> {
                 Some(b' ' | b'\t') => {
                     self.cursor.bump();
                 }
-                Some(b'#') => self.skip_to_eol(),
+                Some(b'#') => self.record_comment(),
                 Some(b'\\') if matches!(self.cursor.peek_at(1), Some(b'\n' | b'\r')) => {
                     self.cursor.bump();
                     self.cursor.bump_newline();
@@ -233,6 +244,27 @@ impl<'a> Lexer<'a> {
                 _ => return,
             }
         }
+    }
+
+    /// Records a comment at the cursor and consumes it, without its line break.
+    ///
+    /// Not a token: the parser never sees one, and no rule in the grammar mentions one. But a
+    /// comment is the one thing in a file that a tool may neither invent nor discard — a formatter
+    /// that cannot see one deletes it — so it is collected beside the tokens.
+    pub(crate) fn record_comment(&mut self) {
+        let start = self.cursor.pos();
+        self.skip_to_eol();
+        let end = self.cursor.pos();
+
+        self.comments.push(Comment {
+            span: Span::new(self.file, start as u32, end as u32),
+            text: self
+                .cursor
+                .slice(start, end)
+                .trim_start_matches('#')
+                .trim_end()
+                .to_string(),
+        });
     }
 
     /// Consumes up to, but not including, the next line break.

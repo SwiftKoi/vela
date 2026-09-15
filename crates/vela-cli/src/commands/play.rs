@@ -66,6 +66,7 @@ impl Player {
         screens: Screens,
         saves: PathBuf,
         schema: vela_replay::Schema,
+        images: Vec<(String, u32, u32, Vec<u8>)>,
     ) -> Result<Self, Error> {
         let font = Font::from_bytes(FACE.to_vec(), 0)
             .ok_or_else(|| Error::internal("the bundled font failed to load".to_string()))?;
@@ -80,7 +81,13 @@ impl Player {
             timeline: Timeline::start(module, label)
                 .map_err(|fault| Error::internal(format!("{fault}")))?,
             module: module.clone(),
-            presenter: Presenter::new(text, FACE_NAME, size),
+            presenter: {
+                let mut presenter = Presenter::new(text, FACE_NAME, size);
+                for (name, width, height, rgba) in images {
+                    presenter.stage_image(name, width, height, rgba);
+                }
+                presenter
+            },
             surface: None,
             graph: graph(),
             size,
@@ -318,8 +325,14 @@ impl Player {
 impl vela_host::App for Player {
     fn opened(&mut self, window: &vela_host::Window) {
         // The atlas is uploaded after the first draw list is built, because building is what
-        // rasterises glyphs; an upload before it sends an empty image.
+        // rasterises glyphs; an upload before it sends an empty image. Images are the other way
+        // round — they are already pixels, and the presenter needs their texture ids *before*
+        // it builds a frame, so they go up now, once.
         self.surface = Surface::new(window.raw(), self.size, None);
+        let (presenter, surface) = (&mut self.presenter, &mut self.surface);
+        if let Some(surface) = surface.as_mut() {
+            presenter.upload_images(surface.renderer_mut());
+        }
     }
 
     fn action(&mut self, action: vela_host::Action, _window: &vela_host::Window) {
@@ -428,11 +441,19 @@ fn graph() -> RenderGraph {
 ///
 /// The `Arc` is not shared: `winit` owns the window and `vela-render` borrows the handle for
 /// the surface, which is the one place the two adapters have to agree on something.
-pub fn run(player: Player, title: &str, size: (u32, u32)) -> Result<(), Error> {
+///
+/// `bindings` are the target's input defaults (`BUILD_AND_ASSETS.md §4`): a bundle names a
+/// profile and the window installs it, rather than every run getting the built-in table.
+pub fn run(
+    player: Player,
+    title: &str,
+    size: (u32, u32),
+    bindings: vela_host::Bindings,
+) -> Result<(), Error> {
     let config = vela_host::Config {
         title: title.to_string(),
         size,
-        bindings: vela_host::Bindings::new(),
+        bindings,
     };
     let mut player = player;
     vela_host::run(config, &mut player)

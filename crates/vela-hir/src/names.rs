@@ -186,6 +186,7 @@ impl Resolver<'_> {
 
     /// Walks an expression.
     fn expr(&mut self, expr: &Expr) {
+        self.qualified(expr);
         match expr {
             Expr::Name { span, name } => {
                 if !self.known(name) {
@@ -253,11 +254,69 @@ impl Resolver<'_> {
         }
     }
 
+    /// Reports a qualified name used for a *value*, which the language does not have.
+    ///
+    /// `jump forest.clearing` names a label and resolves (`resolve`); `forest.helper(2)` names a
+    /// value in another module, and there is no such thing yet — checking is per-module, so there
+    /// is no signature to check the call against. Without this the call lowers to a field read on
+    /// nothing and faults the first time a player reaches it.
+    ///
+    /// The qualifier is the alias or the module's full path, whichever was written: `forest.x` and
+    /// `chapters.forest.x` are the same reference, and both are looked up by their own spelling.
+    fn qualified(&mut self, expr: &Expr) {
+        let Some(path) = dotted(expr) else {
+            return;
+        };
+        if path.len() < 2 {
+            return;
+        }
+        // A local or a declaration may share a name with an alias; when it does, this is a field
+        // access on that binding and not a reference to a module.
+        if self.scope.contains(&path[0]) || self.module.definitions.contains_key(&path[0]) {
+            return;
+        }
+
+        let prefix = path[..path.len() - 1].join(".");
+        let qualifier = if self.module.aliases.contains_key(&prefix) {
+            prefix
+        } else if self.module.aliases.contains_key(&path[0]) {
+            path[0].clone()
+        } else {
+            return;
+        };
+        let owner = self
+            .module
+            .aliases
+            .get(&qualifier)
+            .map(|import| import.module.as_str().to_string());
+
+        if let Some(owner) = owner {
+            self.diagnostics
+                .push(error::module_value(&path.join("."), &owner, expr.span()));
+        }
+    }
+
     /// Whether a name means something here.
     fn known(&self, name: &str) -> bool {
         BUILTINS.contains(&name)
             || self.scope.contains(name)
             || self.module.definitions.contains_key(name)
             || self.module.aliases.contains_key(name)
+    }
+}
+
+/// The dotted path an expression names, when it is a chain of fields on a bare name.
+///
+/// `a.b.c` is a path; `f().b` is not, because it does not start at a name. Only the first form can
+/// be a reference to a module, which is the only question this answers.
+fn dotted(expr: &Expr) -> Option<Vec<String>> {
+    match expr {
+        Expr::Name { name, .. } => Some(vec![name.clone()]),
+        Expr::Field { base, name, .. } => {
+            let mut path = dotted(base)?;
+            path.push(name.clone());
+            Some(path)
+        }
+        _ => None,
     }
 }

@@ -11,6 +11,9 @@ rank = 7
 
 [dependencies]
 serde.workspace = true
+# Reading the `entry` out of a bundle's manifest (`RUNTIME.md §8`). Used only by the native-only
+# loader — see `src/load.rs` for why it is kept out of the wasm module.
+serde_json.workspace = true
 vela-span.workspace = true
 vela-bytecode.workspace = true
 vela-world.workspace = true

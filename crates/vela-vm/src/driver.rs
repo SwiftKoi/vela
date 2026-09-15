@@ -71,7 +71,11 @@ fn drive(
     let mut vm = Vm::new(module.clone());
     vm.start(start)?;
 
+    // A fresh run starts from the world the story *declares* (`RUNTIME.md §2`), not from an empty
+    // one: `default trust: int = 0` means zero, and reading one before anything wrote it used to
+    // hand back `none`.
     let mut world = World::new();
+    vm.seed(&mut world)?;
     let mut commands = Vec::new();
     let mut log = Vec::new();
 

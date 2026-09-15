@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use crate::digest::Digest;
 use crate::error::AssetError;
 use crate::importers::ImporterRegistry;
-use crate::manifest::{Artifact, Asset, MANIFEST_VERSION, Manifest};
+use crate::manifest::{Artifact, Asset, Manifest};
 
 /// A manifest and the artifact bytes it describes.
 ///
@@ -101,11 +101,11 @@ pub fn import_tree(root: &Path, registry: &ImporterRegistry) -> Result<Built, As
     assets.sort_by(|a, b| a.id.cmp(&b.id));
     artifacts.sort_by(|a, b| a.0.cmp(&b.0));
 
+    let mut manifest = Manifest::new();
+    manifest.assets = assets;
+
     Ok(Built {
-        manifest: Manifest {
-            manifest_version: MANIFEST_VERSION,
-            assets,
-        },
+        manifest,
         artifacts,
     })
 }

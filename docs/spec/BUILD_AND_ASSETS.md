@@ -20,11 +20,18 @@ The two halves are independent and cacheable. A change to a script does **not** 
 assets; a change to one asset does not recompile scripts. This split is what makes builds
 incremental at all.
 
-> **Implemented so far (M9).** `vela build` runs both halves: every module under `src/` compiles
-> to `dist/scripts/<path>.velac`, and every file under `assets/` imports to `dist/manifest.json`
-> with its artifacts beside it under `dist/assets/`. `--out <dir>` moves the destination, and a
-> project with no `assets/` builds an empty manifest rather than failing — the one-line script
-> has to stay buildable.
+> **Implemented so far (M9).** `vela build` runs both halves: every module under `src/` compiles,
+> the modules are **linked into one program** (`LANGUAGE.md §6.1`), and that program is written as
+> a single `dist/scripts/<entry-module>.velac`; every file under `assets/` imports to
+> `dist/manifest.json` with its artifacts beside it under `dist/assets/`. `--out <dir>` moves the
+> destination, and a project with no `assets/` builds an empty manifest rather than failing — the
+> one-line script has to stay buildable.
+>
+> **One script, however many files.** The story graph crosses module boundaries by construction — a
+> `jump` into another chapter is the reason to split a project at all — so the image the VM runs
+> has one label table with every label under its qualified name. What that costs: a patch that
+> touches any module replaces the whole script file, where a per-module layout would have replaced
+> one of them (§6.2, and the note there on what would restore the granularity).
 >
 > A build **refuses to ship a story that does not check**. The compiler will assemble a module
 > whose checking reported errors, because that is what lets a language server keep working over
@@ -33,8 +40,16 @@ incremental at all.
 > and saying so beats shipping it.
 >
 > Debug information is left out of the bundle, as `RUNTIME.md §9` requires of a release build.
-> Targets — and with them the launcher, the variant packing, and the packaging hooks — are item
-> 5.
+>
+> **A bundle runs.** `vela run <bundle-dir>` and `vela_vm::Session::load` take a built directory
+> straight to the VM: the entry point comes from the manifest, the module from `scripts/`, and no
+> `.vela` file is read — so a distribution is something a player starts rather than an artifact
+> nothing consumes (`RUNTIME.md §8`, §8 below). `crates/vela-cli/src/tests/bundle_tests.rs`
+> observes it by deleting the source tree and running the bundle anyway, and asserting the
+> command stream matches the source run.
+>
+> Targets are item 5 and the launcher is item 8 of `M09-build.md`; per-target layouts, the
+> descriptor, the launcher, and what of §4 is live are described in §4 below.
 
 ## 2. Asset manifest
 
@@ -44,6 +59,9 @@ is in the game.
 ```jsonc
 {
   "manifest_version": 1,
+  "name": "forest",                  // the project's name, for a launcher title
+  "entry": "main.start",             // where the story starts, `module.label`
+  "images": { "bg.forest": "forest.ktx2" },  // image name -> the artifact holding its picture
   "assets": [
     {
       "id": "bg.forest",
@@ -66,6 +84,11 @@ Properties:
   without duplicating the source.
 - **The manifest is what the compiler checks `@path` literals against** (`LANGUAGE.md §7.5`),
   so `E7001` and `W7001` come from here.
+- **It is also the bundle descriptor.** A built bundle ships no `vela.toml`, so `name`, `entry`,
+  and `images` are how it describes itself: where the story starts, what a `scene` names, and
+  what a launcher is titled. None is a property of an *import* — an importer never sees a
+  project — which is why all three are absent from a bare `import_tree` and omitted from the
+  file while they are.
 
 > **Implemented so far (M9).** `vela_assets::Manifest` holds that shape. `size` and `variants`
 > exist but are empty until targets do, and are *omitted from the JSON while they are* — so a
@@ -81,6 +104,11 @@ Properties:
 > `art/forest.png` is `art.forest` — because nothing declares ids yet. When `image`
 > declarations and `@"path"` literals meet, the declaration wins and this becomes the fallback;
 > the field is in the manifest either way, which is why the manifest is not what changes.
+>
+> The descriptor fields are filled in by `vela build`, not by the importer: `name` and `entry`
+> come from `vela.toml`, and `images` from the project's `image` declarations resolved against
+> the manifest the import produced. An import writes none of them, so
+> `tests/golden/assets/` pins an import and is unaffected by their existence.
 
 ## 3. Importers and transformers
 
@@ -158,6 +186,31 @@ Target selection changes: (a) which artifact variants are packed, (b) the shader
 game logic — the VM, World, and bytecode are target-independent by construction, which is
 what the layer rules in `REPO_LAYOUT.md §1` protect.
 
+> **Implemented so far (M9).** `vela build --target win,mac,linux,web` writes one self-contained
+> bundle per target — `dist/linux/`, `dist/web/`, … — each with the same scripts and assets and
+> its own `target.json` descriptor and **launcher**. The script tree is identical across targets
+> *because the story is target-independent by construction*; what differs is the descriptor and
+> the launcher, and those are real files a person and a runtime read.
+>
+> What of the four dimensions §4 names is live, stated rather than implied:
+>
+> * **(a) variants** — **not implemented.** `target.json` records an empty variant set, because
+>   there is nothing to record: no importer emits a variant (§3.1's `ktx2`/`ogg` need
+>   transcoders this build does not have), and a `Variant` carries a digest with no path beside
+>   it, so a selector could not name a file to pack even if one existed. Every target packs the
+>   default artifact.
+> * **(b) backend** — recorded (`vulkan`, `metal`, `dx12`, `webgpu-webgl2`). The renderer does
+>   not choose a backend from it yet.
+> * **(c) input profile** — recorded *and consumed*: `vela run <bundle>` reads it and installs
+>   the bindings (`vela-host::Bindings::profile`). All four targets shipped here are
+>   pointer-and-keyboard and share one profile; a touch profile arrives with `android`.
+> * **(d) packaging** — a declared hook, never executed by the build: signing wants credentials,
+>   and §8 keeps those out of the project tree.
+>
+> A flag that produced the same bytes for every target would be cosmetic. This one does not —
+> but the honest account is that it is not cosmetic because of the *launcher and descriptor*, not
+> because variants or backends are being selected yet.
+
 ## 5. Web specifics
 
 Web is a first-class target, not a port (`VISION.md §3.4`).
@@ -177,8 +230,9 @@ Web is a first-class target, not a port (`VISION.md §3.4`).
 
 > **Implemented so far (M9).** The precondition holds and is *checked*, and the engine now runs
 > there. `crates/vela-web` is the browser entry point: a `Player` a page constructs from a
-> `.velac` and drives with `step` / `line` / `choose`. `tools/wasm-smoke.sh` builds it, drives it
-> in a JavaScript runtime, and **diffs what it presents against `vela run --headless`** — one
+> `.velac` and drives with `step` / `line` / `choose`. `tools/wasm-smoke.sh` builds it, drives the
+> **web bundle** (`--target web`) in a JavaScript runtime — entry point and module from the
+> manifest, as a page would — and **diffs what it presents against `vela run --headless`**: one
 > engine, two platforms, one command stream, which is what makes the determinism contract survive
 > the platform boundary rather than stopping at it.
 >
@@ -187,13 +241,18 @@ Web is a first-class target, not a port (`VISION.md §3.4`).
 > as written. The crate is `wasm32`-only — on a native target it compiles to an empty library,
 > because a browser entry point has no meaning off a browser.
 >
+> `--target web` also lays the bundle out with a `target.json` and an `index.html` **launcher**
+> that fetches the manifest, the module, and the engine glue, then plays. The glue
+> (`vela_web.js`) is a separate artifact — a browser target's engine is not its assets — and is
+> produced by the wasm build rather than by `vela build`, which has no toolchain in it.
+>
 > The module is 287 KB and size-gated in CI (gate 9), against a ceiling that is meant to be
 > **lowered** and raised only with a reason.
 >
-> **Still to come: drawing.** A bundle that plays in a browser *window* needs the renderer on
-> `wgpu`'s web backends and a canvas, and `vela build --target web` to lay the bundle out with
-> `--serve` to look at it. Until then the entry point plays in text — a real engine rather than a
-> demonstration of one, but not yet something a player would recognise as a game.
+> **Still to come: drawing in the browser.** A bundle that plays in a browser *window* needs the
+> renderer on `wgpu`'s web backends and a canvas, and `--serve` to look at it. Until then the
+> `index.html` launcher plays in text — a real engine rather than a demonstration of one, but not
+> yet something a player would recognise as a game.
 
 ## 6. Incremental builds and delta patches
 
@@ -230,8 +289,16 @@ vela build --release --patch-from ./dist/1.4.0 --patch-out ./dist/1.4.1-patch
 > assets produces a patch of a few hundred bytes, which is the changed script and nothing else.
 > It runs under `cargo test`, so it is gate 5 rather than a gate of its own.
 >
+> **The script is one file, so a text change now costs the whole program.** Linking (§1) produces
+> one image, and the bar is met on the fixture because assets dominate a 600 KB bundle — but a
+> large story loses patch granularity that a per-module layout had. Two ways back, and neither is
+> free: sub-file chunks over the image (below), or shipping per-module images and linking them at
+> load — which is a *runtime* module table, the format decision `LINKING` deliberately did not take
+> (`vela-mir::link`). Worth deciding with a real project rather than on a fixture.
+>
 > **Not yet: sub-file chunks.** A changed file ships whole, so a one-byte edit to a large
-> texture costs the texture. The bar is met at this granularity because a text change alters a
+> texture costs the texture, and so does a one-line edit to the program. The bar is met at this
+> granularity because a text change alters a
 > script and nothing else; diffing file *contents* is what the next level of this needs. The
 > format has room for it — an entry names a path and a digest, and a chunked entry would name
 > several — which is why the version is in the index.
@@ -268,6 +335,25 @@ release auditable.
   credentials ever enter the project tree.
 - Store integrations (Steam, itch.io) are packaging hooks plus a metadata file. They are not
   built into the engine — this keeps us out of the store-specific-code business.
+
+> **Implemented so far (M9).** `vela build --target <t>` writes a launcher beside each target's
+> bundle: `launch.sh` on `mac` and `linux`, `launch.cmd` on `win`, `index.html` on `web`. A
+> desktop launcher runs the engine on the bundle directory, preferring a runtime copied beside
+> it and falling back to `vela` on `PATH` — the release step that embeds the engine is the thin
+> hook this section describes, and it is not done here. The web launcher is a page, and needs
+> the wasm glue built beside it (§5).
+>
+> A target's `target.json` records its backend, input profile, and packaging hook. The hook is
+> **not** executed: it names what a release step would run (`codesign`, `notarize`, `appimage`),
+> and running it would want credentials, which §8 keeps out of the project tree.
+>
+> What a launcher starts is a bundle with no compiler in it: `vela run <bundle>` and
+> `vela_vm::Session::load` read the manifest's entry point and the module the build wrote. The
+> interface is compiled in too — the build writes each module's screens as a **screen pack**
+> (`screens/<module>.velspk`, `SCREENS.md §13`) and the manifest records the `images` mapping —
+> so a windowed bundle run draws the project's own `dialogue` screen and opens its `pause` on
+> Escape, with no parse and no screen compiler at run time. A bundle with no screens is not an
+> error; the presenter's built-in box draws instead.
 
 ## 9. Diagnostics
 

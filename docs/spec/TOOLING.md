@@ -83,18 +83,72 @@ rejected (`E7301`) — errors are errors.
 `vela fmt` produces one canonical form of every file. This is not cosmetic: it is what makes
 diffs readable and merge conflicts rare in a project with many writers.
 
+The formatter is a **function of the syntax tree** — it reads the tree and nothing else — which is
+why it lives in `vela-syntax` (`format`, `print/`) and why two files with the same tree format to
+the same text. Both properties are checked rather than intended:
+`crates/vela-syntax/tests/format_roundtrip.rs` formats every `.vela` file in the repository twice,
+re-parses in between, and requires every comment to survive; `crates/vela-mir/tests/format_equivalence.rs`
+lowers each file before and after and requires the same printed program. Stability alone would not
+be enough: a printer that dropped a clause is perfectly idempotent.
+
 Rules:
 - One statement per line, always (this mirrors `LANGUAGE.md §1.6`).
-- 4-space indent; blank lines between labels/menus; single blank line inside long blocks.
-- Right-hand side of `=` is wrapped at 88 columns by splitting at the *outermost* binary
-  operator, never mid-token.
-- Trailing commas in multi-line lists/maps/params; no trailing whitespace.
-- Strings are never reflowed or re-escaped except to normalize redundant escapes.
-- A `# fmt: off` pragma exists and is linted (`W4011`) so its use is visible and reviewed.
+- 4-space indent per level. Indentation *width* is otherwise free (`E0004` asks only for
+  consistency), so the formatter is where 4 becomes the answer.
+- Blank lines are the author's. Each one is kept, a run collapses to one, and the formatter adds
+  none of its own: a formatter that closed up the paragraphs of a long story file would have
+  destroyed something a reader uses.
+- Comments are kept, in place (`LANGUAGE.md §1`): one written after code stays on that line, one on
+  a line of its own stays on its own line. This is the rule a formatter is most often caught
+  breaking, and the reason the lexer records comments at all.
+- The right-hand side of an `=` is wrapped at 88 columns by splitting at the *outermost* binary
+  operator, never mid-token. The continuation is a trailing `\` (`LANGUAGE.md §1`), and each
+  operator leads the line it continues:
+
+  ```vela
+  var allowed = has_key and \
+      not locked and \
+      tries < 3
+  ```
+
+  Only a binary chain is wrapped, only at its outermost operators, and an operand that is still too
+  long stays too long. That is the whole rule: a wrap has to re-parse to the same expression, and a
+  split at a binary operator with a `\` is the only one the language can express.
+- Strings are *decoded* by the parser, so the printer must re-escape: `\\`, `\"`, `\n`, `\t`, `\r`,
+  and both sigils doubled — `[[` and `{{` (`LANGUAGE.md §1`). Without the doubling a literal `[`
+  would return as an interpolation and a literal `{` as a text tag. An escape that did nothing is
+  dropped (`\q` is `q`, `\}`, `\[`, `\{`), which is what "normalize redundant escapes" means in
+  practice. Text is never reflowed.
+- Hex integer literals keep their radix, because colours are written that way (`LANGUAGE.md §1`);
+  `_` separators are dropped as decoration.
+- A `# fmt: off` region is reproduced verbatim, and an unterminated `off` runs to the end of the
+  file. The `W4011` lint that makes such a region visible in review is not written yet.
+- Trailing commas in multi-line lists/maps/params: **not reachable yet**. Nothing the formatter
+  emits is multi-line except a wrapped right-hand side, and a wrap never lands inside a list. The
+  rule stays here for whatever first produces one.
+
+**Where the tree cannot choose, the formatter decides.** Both spellings parse to the same node, so
+each of these costs a diff and is what makes two authors' files converge:
+
+| Written | Canonical | Why |
+| --- | --- | --- |
+| `pause 1.5` or `wait 1.5` | `pause 1.5` | one keyword per event, and a duration is the common case |
+| bare `pause` or `wait click` | `wait click` | a bare `pause` does not say what it is waiting for |
+| `column gap 8`, `box at bottom` | `column gap = 8`, `box at = bottom` | a screen arg's value is explicit, so a prop and a flag are told apart |
+| `text name style = aside` | `text name, style = aside` | commas separate args, or a bare flag swallows the arg after it |
+| `screen pause():` | `screen pause:` | no empty parenthesis pair |
+
+**A file that does not parse is refused, not rewritten.** The tree has gaps where the syntax error
+was, so printing it would replace the unparsable part with nothing — the one failure that looks like
+success. `vela fmt` reports the diagnostic and leaves the file alone.
+
+`vela fmt` writes the files it changes; `vela fmt --check` writes nothing and exits non-zero when
+any file would change, which is the form CI runs. `--diff` is not implemented yet.
 
 The formatter is deterministic and the compiler never depends on formatting — so a file that
 fails `--check` is still compilable, and CI's `fmt --check` is a style gate, not a
-correctness gate.
+correctness gate. `vela fmt --check` over *this repository's* fixtures is M10's work: the parse
+goldens pin spans, so reformatting a fixture re-blesses the golden that describes it.
 
 ## 4. Language Server (`vela-lsp`)
 
@@ -104,7 +158,7 @@ A thin adapter over the incremental query database in `vela-compile`
 | Capability | Notes |
 | --- | --- |
 | Diagnostics (push) | Same codes as `vela check`; must be identical, verified by a parity test |
-| Hover | Types of expressions, docs for labels/screens/widgets/effects |
+| Hover | Types of expressions, docs for labels/screens/widgets/effects — the comment block above a declaration (`LANGUAGE.md §1`) |
 | Completion | Labels (scoped, not global), screens + their params, widget names, props, enum variants, actions |
 | Goto definition | Labels, defaults, structs/enums, characters, images, assets (`@path`) |
 | Find references | Across modules — the reason namespacing matters |

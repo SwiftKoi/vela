@@ -18,6 +18,7 @@ use crate::eval::{Args, Ctx};
 use crate::focus::{self, Hotspot};
 use crate::instantiate;
 use crate::layout::{Constraints, Frame, layout};
+use crate::pack::PackedSet;
 use crate::paint;
 use crate::theme::{self, Palette};
 use crate::tree::{Node, Size};
@@ -79,6 +80,31 @@ impl ScreenSet {
     pub fn with_registry(mut self, registry: WidgetRegistry) -> Self {
         self.registry = registry;
         self
+    }
+
+    /// This set's inputs, for a pack that will be read back without a parse.
+    ///
+    /// The widget registry is not taken: it is the engine's built-in vocabulary, identical in the
+    /// build and in the run, and shipping it would let a bundle claim a widget this engine does
+    /// not have.
+    #[must_use]
+    pub fn packed(&self) -> PackedSet {
+        PackedSet {
+            screens: self.screens.clone(),
+            styles: self.styles.clone(),
+            palette: self.palette.clone(),
+        }
+    }
+
+    /// Rebuilds a set from a pack, against this build's widget vocabulary.
+    #[must_use]
+    pub fn from_packed(packed: PackedSet) -> Self {
+        Self {
+            screens: packed.screens,
+            styles: packed.styles,
+            palette: packed.palette,
+            registry: WidgetRegistry::builtin(),
+        }
     }
 
     /// Whether a screen by this name is declared.

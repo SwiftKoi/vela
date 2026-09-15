@@ -41,6 +41,7 @@ fn quads_keep_their_submission_order() {
         .map(|quad| match quad {
             Quad::Rect(rect) => rect.x,
             Quad::Glyph(glyph) => glyph.x,
+            Quad::Image(image) => image.x,
         })
         .collect();
     assert_eq!(xs, vec![0.0, 20.0, 40.0]);

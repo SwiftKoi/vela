@@ -1,0 +1,20 @@
+# The second chapter: control flow, and a call back into the hub.
+
+use main
+
+label settle:
+    "The fire was still going."
+    var warmth = 0
+    while warmth < 3:
+        warmth += 1
+    if warmth > 2:
+        "The room was warm."
+    elif warmth > 0:
+        "The room was warming."
+    else:
+        "The room was cold."
+    for night in [1, 2]:
+        "Night [night] passed."
+    call main.tally
+    pause 1.5
+    jump main.back_from_hearth

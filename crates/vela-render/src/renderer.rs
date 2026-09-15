@@ -16,6 +16,13 @@ pub struct Vertex {
     pub uv: [f32; 2],
     /// Linear colour, premultiplied by nothing — the shader multiplies by coverage.
     pub color: [f32; 4],
+    /// What this quad's texture is: `0.0` a coverage mask (the atlas, the white texel), `1.0`
+    /// colour to be tinted.
+    ///
+    /// A vertex attribute rather than a second pipeline, because it is a property of the quad
+    /// and not of the draw: the frame interleaves backgrounds, panels, and text, and a pipeline
+    /// switch per run would be state to keep in step for no gain.
+    pub mode: f32,
 }
 
 /// The per-frame uniform block.
@@ -38,6 +45,11 @@ pub struct Renderer {
     pub(crate) atlas: Option<(wgpu::Texture, wgpu::BindGroup)>,
     /// A single white texel, bound for solid rectangles.
     pub(crate) white: wgpu::BindGroup,
+    /// Uploaded images, by the index a quad names.
+    ///
+    /// A `Vec` keyed by position, not a map: an index is what a quad carries, and an image's
+    /// *name* is the caller's business. The renderer is told pixels.
+    pub(crate) images: Vec<(wgpu::Texture, wgpu::BindGroup)>,
     pub(crate) format: wgpu::TextureFormat,
 }
 
@@ -47,6 +59,10 @@ pub struct Renderer {
 /// and cost four times the memory and bandwidth. The colour comes from the vertex, which is
 /// what lets one glyph be drawn in two colours without two rasterisations.
 pub const ATLAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
+
+/// An image is colour, and its bytes are sRGB — which is what a PNG holds and what a display
+/// expects, so the sampler converts to linear and the shader can stay in one space.
+pub const IMAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 impl Renderer {
     /// A renderer with no surface — for offscreen frames and for tests.
@@ -116,6 +132,7 @@ impl Renderer {
             bind_group_layout,
             atlas: None,
             white,
+            images: Vec::new(),
             format,
         };
         renderer.set_viewport(size);

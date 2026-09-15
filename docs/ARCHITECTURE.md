@@ -111,7 +111,10 @@ typed HIR ────────────────────► E3xxx,
 MIR (typed IR, the stable contract)
    │  vela-mir::opt (pass pipeline — extensible)
    ▼
-optimized MIR
+optimized MIR, one module per file
+   │  vela-mir::link — the whole program into one module (LANGUAGE.md §6.1)
+   ▼
+one MIR module
    │  vela-bytecode::codegen
    ▼
 bytecode module ──► verifier (E6xxx if a pass is buggy) ──► .velac bundle
@@ -125,6 +128,11 @@ Same front end, driven by an incremental query database in `vela-compile`. Edits
 invalidate only the queries downstream of the changed syntax node, which is what makes
 completion and diagnostics feel instant on a 500k-word project. The LSP is a thin adapter
 over that database — it holds no state of its own.
+
+The formatter is the one editor feature that needs no database at all: it is a function from the
+syntax tree to text, so it sits in `vela-syntax` beside the tree (`TOOLING.md §3`). What it does
+need is the *whole* file rather than a query result — it refuses one that does not parse, because
+the tree's gaps are where the syntax errors were.
 
 ### 3.3 Runtime loop
 
@@ -242,7 +250,11 @@ We optimize **predictability over peak throughput**, with two exceptions that ar
 complexity because they are user-visible on every frame and every launch:
 
 - **Startup**: bytecode loads without recompilation; asset manifest is memory-mappable; no
-  scripting-language warmup.
+  scripting-language warmup. This is now a path rather than an intention: `vela_vm::Session::load`
+  takes a built bundle to the machine, and `vela run <bundle>` runs one with no compiler in the
+  path (`RUNTIME.md §8`, `BUILD_AND_ASSETS.md §8`). Linking is **not** part of startup either: a
+  program's modules are linked at build time, so the image a bundle holds is already one module
+  and loading it is the same `O(size)` read it always was.
 - **Frame time**: text layout and glyph atlas updates are cached and invalidated by change,
   not recomputed per frame. The UI tree is diffed on dirty flags, never fully relaid out.
 
