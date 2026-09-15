@@ -18,8 +18,17 @@ gate (`check-format`, `REPO_LAYOUT.md §4`): 46 files canonical, and the 15 that
 `E0xxx`/`E1xxx` fixtures, which are *meant* to be broken and are counted rather than failed. Running
 it by hand the first time found a language bug, not a formatting nit — `not` and `!` had been arriving
 in the tree as one variant although they bind at different levels (`not a == b` is not `!a == b`), so
-the formatter could not print either faithfully. Still open here: `--diff`, and the `W4011` lint that
-makes a `# fmt: off` region visible in review.
+the formatter could not print either faithfully.
+
+**Item 1 is complete.** `--diff` prints the change as a unified diff and writes nothing, and the
+pragma is linted (`W4011`), so a region the formatter cannot reach is visible in `vela check` rather
+than only in the file. Writing that lint meant *using* a region, which found three bugs in it: the
+region's first line was re-indented while its body was not (indentation is structure here, so a nested
+block inside a region would have nested differently than its author wrote it), a comment on the line
+after a region was printed twice, and a blank line after a `transform` disappeared. The corpus gate
+then caught the last of those in the one fixture that had been written around it — which is the
+argument for the gate, and the reason the printer's whitespace rules now have tests of their own
+instead of being implied by a round trip that was stable and wrong.
 
 **Input from the Ren'Py reference.** Ren'Py's `developer_tools` and `cli` pages are the closest
 thing to a spec for this milestone, and four of its tools are worth copying rather than inventing:

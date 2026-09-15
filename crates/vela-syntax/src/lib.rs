@@ -30,11 +30,11 @@ mod tree;
 #[cfg(test)]
 mod tests;
 
-pub use lex::Comment;
 pub use lex::cursor::Cursor;
 pub use lex::indent::{IndentAction, IndentError, IndentStack};
 pub use lex::lexer::{LexResult, lex};
 pub use lex::token::{Keyword, Token, TokenKind};
+pub use lex::{Comment, Pragma};
 pub use parse::{ParseResult, PathRef, parse};
 pub use print::{NotFormatted, format};
 pub use tree::*;

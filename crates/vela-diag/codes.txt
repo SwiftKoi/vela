@@ -70,3 +70,4 @@ W4006|warning|a condition is already known
 W4008|warning|a raw colour is written where a theme token belongs
 W4009|warning|a foreground and background have too little contrast
 W4010|warning|an interactive widget has no label
+W4011|warning|a formatting pragma leaves a region as written

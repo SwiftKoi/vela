@@ -39,7 +39,14 @@ pub fn resolve_names(module: &Module, tree: &Program) -> Vec<Diagnostic> {
         }
     }
 
-    resolver.diagnostics
+    // A formatting pragma is a property of the file rather than of a name, and this is the per-file
+    // pass that runs with the tree — and so with the comments — in hand. Its whole point is that
+    // `vela check` mentions it (`W4011`).
+    let mut diagnostics = super::pragmas::format_pragmas(tree);
+    diagnostics.extend(resolver.diagnostics);
+    // Source order, so the first thing reported is the first thing in the file.
+    diagnostics.sort_by_key(|diagnostic| diagnostic.primary.span.start());
+    diagnostics
 }
 
 /// Walks one module's bodies with the names currently in scope.

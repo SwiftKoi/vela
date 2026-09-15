@@ -9,7 +9,7 @@ use crate::print::expr;
 use crate::print::screen;
 use crate::print::writer::Writer;
 use crate::tree::{
-    CharacterDecl, EnumDecl, FnDecl, Item, LabelDecl, ScreenDecl, Setting, StructDecl, StyleDecl,
+    CharacterDecl, EnumDecl, FnDecl, LabelDecl, ScreenDecl, Setting, StructDecl, StyleDecl,
     ThemeDecl,
 };
 
@@ -138,22 +138,4 @@ fn settings(writer: &mut Writer<'_>, settings: &[Setting]) {
         writer.note(setting.span.end());
     }
     writer.level_down();
-}
-
-/// Whether an item's span ends at a `Dedent` rather than at a token of its own.
-///
-/// The answer decides which end is worth recording: see `stmt::opens_a_body` for why the end of a
-/// block cannot be used to measure the gap after it.
-pub(crate) fn opens_a_body(item: &Item) -> bool {
-    matches!(
-        item,
-        Item::Struct(_)
-            | Item::Enum(_)
-            | Item::Character(_)
-            | Item::Style(_)
-            | Item::Theme(_)
-            | Item::Screen(_)
-            | Item::Function(_)
-            | Item::Label(_)
-    )
 }

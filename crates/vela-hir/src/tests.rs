@@ -322,6 +322,22 @@ fn a_lambda_parameter_resolves_inside_the_body() {
     assert!(name_codes("label a:\n    var f = fn(v: int) -> v + 1\n    return\n").is_empty());
 }
 
+/// The pragma is reported once per pragma, so a region the formatter cannot reach shows up in
+/// `vela check` rather than only in the file.
+#[test]
+fn a_formatting_pragma_is_reported() {
+    let source = "label a:\n    # fmt: off\n    var   x   =   1\n    # fmt: on\n    return\n";
+    assert_eq!(name_codes(source), vec!["W4011", "W4011"]);
+}
+
+/// And an ordinary comment is not: the lint is about the pragma, not about comments.
+#[test]
+fn an_ordinary_comment_is_not_a_pragma() {
+    assert!(name_codes("label a:\n    # a note\n    return\n").is_empty());
+    // A near miss counts as ordinary too: the rule is the whole comment, not a prefix of it.
+    assert!(name_codes("label a:\n    # fmt: off because of the table\n    return\n").is_empty());
+}
+
 #[test]
 fn a_name_inside_an_interpolation_is_resolved() {
     assert_eq!(

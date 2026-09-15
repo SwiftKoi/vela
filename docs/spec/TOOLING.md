@@ -122,7 +122,11 @@ Rules:
 - Hex integer literals keep their radix, because colours are written that way (`LANGUAGE.md §1`);
   `_` separators are dropped as decoration.
 - A `# fmt: off` region is reproduced verbatim, and an unterminated `off` runs to the end of the
-  file. The `W4011` lint that makes such a region visible in review is not written yet.
+  file. The pragma is **linted** (`W4011`, reported by `vela check`) so that its use is visible in
+  review rather than discovered later; both `off` and `on` are reported, because an `on` with no
+  `off` above it does nothing at all and a warning is the cheapest way to find that out. The
+  comment-to-pragma rule has one definition, on `Comment::pragma` in `vela-syntax` — the formatter
+  and the lint read the same function, so they cannot disagree about whether a region was asked for.
 - Trailing commas in multi-line lists/maps/params: **not reachable yet**. Nothing the formatter
   emits is multi-line except a wrapped right-hand side, and a wrap never lands inside a list. The
   rule stays here for whatever first produces one.
@@ -142,8 +146,11 @@ each of these costs a diff and is what makes two authors' files converge:
 was, so printing it would replace the unparsable part with nothing — the one failure that looks like
 success. `vela fmt` reports the diagnostic and leaves the file alone.
 
-`vela fmt` writes the files it changes; `vela fmt --check` writes nothing and exits non-zero when
-any file would change, which is the form CI runs. `--diff` is not implemented yet.
+`vela fmt` writes the files it changes. `--check` writes nothing and exits non-zero when any file
+would change — naming them, which is the form CI runs — and `--diff` writes nothing and prints the
+change as a unified diff, for a reader who wants to see it before agreeing to it. Both exit non-zero
+when there is anything to do; asking for both at once is a usage error, because they answer
+different questions.
 
 The formatter is deterministic and the compiler never depends on formatting — so a file that
 fails `--check` is still compilable, and CI's `fmt --check` is a style gate, not a

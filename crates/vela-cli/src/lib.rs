@@ -10,6 +10,7 @@
 
 mod command;
 mod commands;
+mod diff;
 mod driver;
 mod format;
 mod manifest;

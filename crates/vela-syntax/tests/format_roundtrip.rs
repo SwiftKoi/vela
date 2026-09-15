@@ -126,12 +126,19 @@ fn the_canonical_form_parses_without_complaint() {
             continue;
         };
 
+        // Errors, not every diagnostic: a lint is not a complaint about syntax, and a file
+        // containing a `# fmt: off` pragma is *expected* to draw one (`W4011`).
         let reparsed = parse(FileId::from_raw(0), &formatted);
+        let errors: Vec<&str> = reparsed
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity() == Severity::Error)
+            .map(|diagnostic| diagnostic.code.as_str())
+            .collect();
         assert!(
-            reparsed.diagnostics.is_empty(),
-            "{} produced a file that does not parse: {:?}\n{formatted}",
-            path.display(),
-            reparsed.diagnostics
+            errors.is_empty(),
+            "{} produced a file that does not parse: {errors:?}\n{formatted}",
+            path.display()
         );
     }
 }

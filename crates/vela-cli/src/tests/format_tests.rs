@@ -108,6 +108,74 @@ fn two_layouts_of_one_program_converge() {
     );
 }
 
+/// `--diff` says how the file would change, and — like `--check`, but for a different reader —
+/// changes nothing.
+#[test]
+fn fmt_diff_shows_the_change_without_making_it() {
+    let project = temp_project("fmt-diff", LOOSE);
+
+    let (code, out) = cli(&["fmt", "--diff", &project.to_string_lossy()]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("--- main.vela"), "{out}");
+    assert!(out.contains("-  scene bg.room"), "{out}");
+    assert!(out.contains("+    scene bg.room"), "{out}");
+    assert!(
+        !out.contains("would reformat"),
+        "the diff names the file itself: {out}"
+    );
+
+    assert_eq!(
+        std::fs::read_to_string(project.join("src/main.vela")).expect("read"),
+        LOOSE,
+        "`--diff` wrote to the file"
+    );
+}
+
+/// The two flags answer different questions about the same finding, so asking both at once is a
+/// usage error rather than a choice the command makes for the caller.
+#[test]
+fn fmt_refuses_check_and_diff_together() {
+    let project = temp_project("fmt-both", LOOSE);
+    let (code, out) = cli(&["fmt", "--check", "--diff", &project.to_string_lossy()]);
+
+    assert_eq!(code, 2, "{out}");
+    assert!(out.contains("pick one"), "{out}");
+}
+
+/// A `# fmt: off` region keeps its own layout *relative to its first line*.
+///
+/// The first line moves to the indent the block calls for, and everything under it moves by the same
+/// amount. Moving only the first line would be worse than reformatting the region: indentation is
+/// structure here, so a nested block inside a region would end up nested differently than its author
+/// wrote it.
+#[test]
+fn a_pragma_region_keeps_its_own_layout() {
+    let project = temp_project(
+        "fmt-pragma",
+        "label start:\n  # fmt: off\n  if flag:\n      var   x   =   1\n  # fmt: on\n  return\n",
+    );
+
+    let (code, out) = cli(&["fmt", &project.to_string_lossy()]);
+    assert_eq!(code, 0, "{out}");
+
+    let formatted = std::fs::read_to_string(project.join("src/main.vela")).expect("read");
+    // The block's statements are canonical, and the region is reproduced as written — including the
+    // *extra* indentation its author gave that one line.
+    assert!(formatted.contains("\n    # fmt: off\n"), "{formatted}");
+    assert!(formatted.contains("\n    if flag:\n"), "{formatted}");
+    assert!(
+        formatted.contains("\n        var   x   =   1\n"),
+        "{formatted}"
+    );
+    assert!(formatted.contains("\n    # fmt: on\n"), "{formatted}");
+    assert!(formatted.contains("\n    return\n"), "{formatted}");
+
+    // And it is stable: a second run finds nothing to do, which is what makes the region a region.
+    let (code, out) = cli(&["fmt", "--check", &project.to_string_lossy()]);
+    assert_eq!(code, 0, "{out}");
+    assert!(out.contains("already canonical"), "{out}");
+}
+
 /// A comment is the one thing a formatter may not invent or discard.
 #[test]
 fn fmt_keeps_comments() {
