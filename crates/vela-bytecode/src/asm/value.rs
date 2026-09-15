@@ -35,9 +35,13 @@ impl Emitter<'_> {
             // A variant with no payload is built rather than stored: it is one instruction
             // either way, and this keeps the constant pool to values that have no
             // construction of their own.
+            //
+            // The operands are `(enum, variant)`, the order `EnumNew` is read in everywhere else.
+            // This wrote `(variant, 0)` and dropped the enum, so `Ending.cold` as a *value* built
+            // whichever enum happened to sit at index `cold`'s position — a fault, or worse, a
+            // value of the wrong type.
             ByteConst::Variant { enum_id, variant } => {
-                self.emit(Op::EnumNew, Operand::Pair(variant, 0));
-                let _ = enum_id;
+                self.emit(Op::EnumNew, Operand::Pair(enum_id, variant));
             }
             ByteConst::Function(index) => self.emit(Op::ConstFn, Operand::U32(index)),
         }
@@ -194,11 +198,30 @@ impl Emitter<'_> {
         }
     }
 
-    /// The type of a MIR value, from the slot it names.
+    /// The type of a MIR value: the slot's declared type, or the constant's own.
     pub(super) fn ty_of(&self, value: MirValue) -> Ty {
         match value {
             MirValue::Slot(slot) => self.body.slot_ty(slot).cloned().unwrap_or(Ty::Unknown),
-            MirValue::Const(_) => Ty::Unknown,
+            MirValue::Const(id) => self.const_ty(id),
+        }
+    }
+
+    /// The type of a pooled constant.
+    ///
+    /// Read from the pool rather than left `Unknown`, because the operator emitter *picks its
+    /// instruction* from this type: `"i is " + text` compiled to `add.i` for as long as every
+    /// literal was unknown, and `1.5 + x` to integer addition with it.
+    fn const_ty(&self, id: vela_mir::ConstId) -> Ty {
+        match self.module.pool.get(id) {
+            Some(vela_mir::Const::None) => Ty::None,
+            Some(vela_mir::Const::Bool(_)) => Ty::Bool,
+            Some(vela_mir::Const::Int(_)) => Ty::Int,
+            Some(vela_mir::Const::Float(_)) => Ty::Float,
+            Some(vela_mir::Const::Str(_)) => Ty::Str,
+            Some(vela_mir::Const::Variant { enum_name, .. }) => Ty::Enum(enum_name.clone()),
+            // A function's type is a signature the value does not carry, and an id that is not in
+            // the pool is a compiler bug the verifier reports; neither picks an operator.
+            Some(vela_mir::Const::Function(_)) | None => Ty::Unknown,
         }
     }
 }

@@ -58,8 +58,18 @@ pub(super) fn storage(
             vm.set_local(operand.u32().unwrap_or(0), value)?;
         }
         Op::LoadDefault => {
-            let name = vm.default_name(operand.u32().unwrap_or(0))?;
-            vm.push(world.get(&name).cloned().unwrap_or(Value::None));
+            let index = operand.u32().unwrap_or(0);
+            let name = vm.default_name(index)?;
+            // A name the world does not hold reads as its *declaration*, not as `none`: a save
+            // written before a `default` existed, and a world a caller built by hand, both reach
+            // here, and the declared value is the only honest answer.
+            match world.get(&name) {
+                Some(value) => vm.push(value.clone()),
+                None => {
+                    let value = vm.initial_value(index)?;
+                    vm.push(value);
+                }
+            }
         }
         Op::StoreDefault => {
             let name = vm.default_name(operand.u32().unwrap_or(0))?;
@@ -256,8 +266,11 @@ fn ordered(vm: &mut Vm, op: Op) -> Result<(), Fault> {
 }
 
 /// String concatenation.
-fn concat(vm: &mut Vm, operand: &Operand) -> Result<(), Fault> {
-    let count = operand.count().max(2);
+fn concat(vm: &mut Vm, _operand: &Operand) -> Result<(), Fault> {
+    // Two, and said so rather than defaulted: the count used to come from an operand the emitter
+    // never wrote, so this read `.max(2)` — a silent default that hid the disagreement between
+    // the instruction table and the compiler for as long as neither was exercised.
+    let count = 2;
     let mut parts = Vec::with_capacity(count);
     for _ in 0..count {
         let value = vm.pop()?;
@@ -317,7 +330,7 @@ fn effect(vm: &mut Vm, operand: &Operand, world: &mut World) -> Result<(), Fault
 }
 
 /// The name of a function, by index.
-fn name_of_function(vm: &Vm, index: u32) -> Result<String, Fault> {
+pub(super) fn name_of_function(vm: &Vm, index: u32) -> Result<String, Fault> {
     let body = vm
         .module()
         .fns

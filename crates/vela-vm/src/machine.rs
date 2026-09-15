@@ -280,10 +280,28 @@ impl Vm {
     }
 
     /// Enters a function or label.
+    ///
+    /// The caller has already pushed one value per parameter, in order, so this frame's slot
+    /// zero is the **first of them** rather than the top of the stack. `base` used to be
+    /// `stack.len()`, which put the parameters *below* the frame: every read of a parameter then
+    /// found nothing and handed back `none`, so `n == 1` was false for every `n` and a function
+    /// quietly took the wrong branch instead of failing.
     pub(crate) fn enter(&mut self, body: BodyRef) -> Result<(), Fault> {
-        let exists = match body {
-            BodyRef::Function(index) => self.module.fns.get(index as usize).is_some(),
-            BodyRef::Label(index) => self.module.labels.get(index as usize).is_some(),
+        let (exists, params) = match body {
+            BodyRef::Function(index) => (
+                self.module.fns.get(index as usize).is_some(),
+                self.module
+                    .fns
+                    .get(index as usize)
+                    .map_or(0, |function| function.params.len()),
+            ),
+            BodyRef::Label(index) => (
+                self.module.labels.get(index as usize).is_some(),
+                self.module
+                    .labels
+                    .get(index as usize)
+                    .map_or(0, |label| label.params.len()),
+            ),
         };
         if !exists {
             return Err(match body {
@@ -292,7 +310,7 @@ impl Vm {
             });
         }
 
-        let base = self.stack.len();
+        let base = self.stack.len().saturating_sub(params);
         self.frames.push(Frame { body, ip: 0, base });
         Ok(())
     }

@@ -58,9 +58,14 @@ impl Session {
     pub fn start(module: &Module, label: &str) -> Result<Self, Fault> {
         let mut vm = Vm::new(module.clone());
         vm.start(label)?;
+
+        // The world a story declares for itself, before anything runs (`RUNTIME.md §2`).
+        let mut world = World::new();
+        vm.seed(&mut world)?;
+
         Ok(Self {
             vm,
-            world: World::new(),
+            world,
             log: Vec::new(),
             current: None,
             finished: false,

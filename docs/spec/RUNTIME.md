@@ -105,6 +105,17 @@ pub struct World {
 4. **RNG is state, not a service.** `Rng` lives in `World` and is advanced only by the
    scripted `rand` operation. Two runs with equal logs have equal RNG sequences.
 
+> **Implemented so far (M5, corrected in M9).** A fresh run **seeds the world from the module's
+> `default` declarations** before the first instruction, so `default trust: int = 0` means zero
+> and a snapshot taken at any point carries the state the story declared. A *restored* world is not
+> seeded: it holds what the save held, and a name the save does not have reads as its declaration —
+> which is also `LoadDefault`'s fallback, so a save written before a `default` existed still
+> answers with the value that `default` declares rather than with `none`.
+>
+> That fallback is a correction: reading a `default` used to answer `none` for any slot the world
+> had not been told about, which made the first `trust + 1` an `add.i` given `none`. The rule it
+> restores is the one stated above — the world's defaults *are* the declarations.
+
 ## 3. Capabilities / host interface
 
 Scripts reach the outside world only through declared effects. Each declares the capability

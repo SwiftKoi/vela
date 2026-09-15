@@ -207,7 +207,7 @@ the interpreter and verifier both read it, so they cannot disagree.
 | Control | `Jump off`, `JumpIfFalse off`, `JumpIfTrue off`, `Return n`, `CallFn fn_id`, `CallLabel label_id` | varies |
 | Match | `Dispatch n` (pops a tag, jumps via jump table) | `[tag] → []` |
 | Optionals | `IsNone`, `UnwrapOr` | `[T?] → [bool]` / `[T?,T] → [T]` |
-| Strings | `Concat n`, `ToStr`, `ToInt`, `ToFloat` | varies |
+| Strings | `Concat`, `ToStr`, `ToInt`, `ToFloat` | `Concat` `[str,str] → [str]`; the rest `[T] → [T]` |
 | Commands | `Cmd variant_id n` | `[args…] → [cmd]` |
 | Effects | `CallEffect effect_id n` | `[args…] → [T]` |
 | Suspend | `Yield` | `[cmd] → [result]` |

@@ -287,6 +287,106 @@ fn a_rand_path_replays_identically() {
     assert_eq!(original.world, repeated.world);
 }
 
+/// A loop whose body presents a command verifies and runs.
+///
+/// It did neither: `concat` was declared as a count-carrying instruction while the compiler wrote
+/// no count and the machine assumed two, so the verifier counted a value left on the stack and the
+/// loop's back edge arrived at a different depth than its entry (`E6001`). Nothing in the corpus
+/// had a command inside a loop, so nothing caught it.
+#[test]
+fn a_loop_that_presents_a_command_runs() {
+    let module = compile(
+        "loop",
+        "label start:\n\
+         \x20   var i = 0\n\
+         \x20   while i < 2:\n\
+         \x20       i += 1\n\
+         \x20       \"i is {i}.\"\n\
+         \x20   return\n",
+    );
+
+    let execution = run(&module, "start", &mut TakeFirst).expect("the loop faulted");
+    let commands: Vec<String> = execution.commands.iter().map(ToString::to_string).collect();
+    assert_eq!(commands, vec!["say \"i is 1.\"", "say \"i is 2.\""]);
+}
+
+/// A `default` is worth what it was declared with, before anything writes it.
+///
+/// Reading one used to hand back `none` for any slot the world had not been told about, so
+/// `trust + 1` was `add.i` given `none` — on the first line that touched it.
+#[test]
+fn a_default_reads_as_its_declaration() {
+    let module = compile(
+        "defaults",
+        "default trust: int = 2\n\nlabel start:\n    \"trust is {trust}.\"\n    return\n",
+    );
+
+    let execution = run(&module, "start", &mut TakeFirst).expect("the default faulted");
+    let commands: Vec<String> = execution.commands.iter().map(ToString::to_string).collect();
+    assert_eq!(commands, vec!["say \"trust is 2.\""]);
+    // And the world a fresh run starts from *holds* it, which is what `RUNTIME.md §2` says the
+    // world's defaults are.
+    assert_eq!(
+        execution.world.get("trust"),
+        Some(&vela_world::Value::Int(2)),
+        "the declared default was not seeded into the world"
+    );
+}
+
+/// A function sees the arguments it was called with.
+///
+/// The callee's frame base was `stack.len()` — the *top* of the stack — so every parameter read
+/// found nothing and answered `none`: `n == 1` was false for every `n`, and the function took the
+/// wrong branch rather than failing.
+#[test]
+fn a_function_reads_its_arguments() {
+    let module = compile(
+        "arguments",
+        "fn word(n: int) -> str:\n\
+         \x20   if n == 1:\n\
+         \x20       return \"one\"\n\
+         \x20   return \"many\"\n\n\
+         label start:\n\
+         \x20   \"n=1 is {word(1)}.\"\n\
+         \x20   \"n=2 is {word(2)}.\"\n\
+         \x20   return\n",
+    );
+
+    let execution = run(&module, "start", &mut TakeFirst).expect("the call faulted");
+    let commands: Vec<String> = execution.commands.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        commands,
+        vec!["say \"n=1 is one.\"", "say \"n=2 is many.\""]
+    );
+}
+
+/// A variant with no payload, used as a value, is the variant it names.
+///
+/// The constant form emitted `(variant, 0)` while `EnumNew` reads `(enum, variant)` everywhere
+/// else, so `Ending.cold` built whichever enum sat at index `cold` — a fault, or a value of the
+/// wrong type.
+#[test]
+fn a_constant_variant_is_the_variant_it_names() {
+    let module = compile(
+        "variants",
+        "enum Ending:\n\
+         \x20   warm\n\
+         \x20   cold\n\n\
+         label start:\n\
+         \x20   var ending: Ending = Ending.cold\n\
+         \x20   match ending:\n\
+         \x20       when Ending.warm:\n\
+         \x20           \"warm\"\n\
+         \x20       when Ending.cold:\n\
+         \x20           \"cold\"\n\
+         \x20   return\n",
+    );
+
+    let execution = run(&module, "start", &mut TakeFirst).expect("the variant faulted");
+    let commands: Vec<String> = execution.commands.iter().map(ToString::to_string).collect();
+    assert_eq!(commands, vec!["say \"cold\""]);
+}
+
 /// A capability the host does not provide is refused rather than answered wrongly.
 #[test]
 fn an_unimplemented_effect_is_refused() {
