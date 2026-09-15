@@ -169,6 +169,9 @@ expr       = or_expr [ "if" expr "else" expr ] ;
 or_expr    = coalesce { "or" coalesce } ;
 coalesce   = and_expr [ "??" coalesce ] ;
 and_expr   = not_expr { "and" not_expr } ;
+(* `not` and `!` are two operators, not two spellings: `not` binds looser than a
+   comparison and `!` tighter than every binary operator, so `not a == b` and
+   `!a == b` are different programs. *)
 not_expr   = "not" not_expr | cmp_expr ;
 cmp_expr   = add_expr [ cmpop add_expr ] ;
 cmpop      = "==" | "!=" | "<" | "<=" | ">" | ">="

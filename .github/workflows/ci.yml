@@ -44,7 +44,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: 4. policy checks
-        run: cargo xtask check-diag-codes check-registries check-determinism check-scripts
+        run: cargo xtask check-diag-codes check-registries check-determinism check-scripts check-format
 
       - name: 5. tests
         run: cargo test --workspace

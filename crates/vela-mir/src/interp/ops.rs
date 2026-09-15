@@ -91,7 +91,7 @@ pub fn unary(op: UnOp, a: Value) -> Option<Value> {
     match (op, a) {
         (UnOp::Neg, Value::Int(number)) => Some(Value::Int(-number)),
         (UnOp::Neg, Value::Float(number)) => Some(Value::Float(-number)),
-        (UnOp::Not, Value::Bool(flag)) => Some(Value::Bool(!flag)),
+        (UnOp::Not | UnOp::Bang, Value::Bool(flag)) => Some(Value::Bool(!flag)),
         _ => None,
     }
 }

@@ -252,7 +252,9 @@ impl Checker<'_> {
                 }
                 ty
             }
-            UnOp::Not => {
+            // Both negations demand a bool and produce one; which level of the grammar they sit at
+            // is already in the tree's shape, so the typing rule is the same.
+            UnOp::Not | UnOp::Bang => {
                 if ty != Ty::Bool && ty != Ty::Unknown {
                     self.report(error::mismatch(&Ty::Bool, &ty, operand.span()));
                 }

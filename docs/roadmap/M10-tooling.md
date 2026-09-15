@@ -13,8 +13,13 @@ the rules" into text that is checked on every file in the repository. It is in `
 `crates/vela-syntax/tests/format_roundtrip.rs` (idempotent, re-parses, keeps every comment) and
 `crates/vela-mir/tests/format_equivalence.rs` (lowers to the same program before and after).
 `TOOLING.md §3` records the canonical form, including the choices the tree cannot make for itself.
-Still open from item 1: `--diff`, the `W4011` lint for `# fmt: off`, and running `--check` over this
-repository's own fixtures — the last needs the parse goldens re-blessed, because they pin spans.
+**Item 1 is done except two pieces.** `vela fmt --check` over this repository's own corpus is now a
+gate (`check-format`, `REPO_LAYOUT.md §4`): 46 files canonical, and the 15 that do not parse are the
+`E0xxx`/`E1xxx` fixtures, which are *meant* to be broken and are counted rather than failed. Running
+it by hand the first time found a language bug, not a formatting nit — `not` and `!` had been arriving
+in the tree as one variant although they bind at different levels (`not a == b` is not `!a == b`), so
+the formatter could not print either faithfully. Still open here: `--diff`, and the `W4011` lint that
+makes a `# fmt: off` region visible in review.
 
 **Input from the Ren'Py reference.** Ren'Py's `developer_tools` and `cli` pages are the closest
 thing to a spec for this milestone, and four of its tools are worth copying rather than inventing:

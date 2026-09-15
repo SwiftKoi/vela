@@ -144,7 +144,9 @@ impl Parser<'_> {
     pub(crate) fn parse_unary(&mut self) -> Expr {
         let op = match self.peek() {
             TokenKind::Minus => UnOp::Neg,
-            TokenKind::Bang => UnOp::Not,
+            // `!` is not `not`: it binds tighter than every binary operator, which is why it lives
+            // in this level of the chain and `not` lives a level above comparison.
+            TokenKind::Bang => UnOp::Bang,
             _ => return self.parse_postfix(),
         };
         let start = self.span();

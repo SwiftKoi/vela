@@ -197,6 +197,9 @@ impl Reader<'_> {
     fn un_op(&mut self) -> UnOp {
         match self.u8() {
             0 => UnOp::Neg,
+            2 => UnOp::Bang,
+            // Anything else, including 1, is `not`: the reader stays total, and a tag this build
+            // does not know is a pack whose version was already refused before reading started.
             _ => UnOp::Not,
         }
     }

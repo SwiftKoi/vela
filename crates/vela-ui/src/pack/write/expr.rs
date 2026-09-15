@@ -161,6 +161,7 @@ impl Writer {
         self.u8(match op {
             UnOp::Neg => 0,
             UnOp::Not => 1,
+            UnOp::Bang => 2,
         });
     }
 

@@ -268,7 +268,9 @@ impl<'a> Emitter<'a> {
                     Op::NegI
                 }
             }
-            UnOp::Not => Op::Not,
+            // One negation instruction for both: the two differ in *where they bind*, which the
+            // tree has already resolved into the shape it is emitting.
+            UnOp::Not | UnOp::Bang => Op::Not,
         }
     }
 }

@@ -2954,6 +2954,7 @@ dependencies = [
  "vela-mir",
  "vela-render",
  "vela-span",
+ "vela-syntax",
  "vela-text",
  "vela-vm",
  "vela-world",
