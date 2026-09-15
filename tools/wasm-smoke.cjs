@@ -28,9 +28,12 @@ const manifest = JSON.parse(
 
 // The program is one image, named for the module its entry point is in: `main.start` is
 // `scripts/main.velac`, and `chapters.forest.clearing` is `scripts/chapters/forest.velac`.
+//
+// Not called `module`: that is the name CommonJS already binds for this file's own exports, and
+// `const module` is a syntax error rather than a shadow.
 const dot = manifest.entry.lastIndexOf(".");
-const module = manifest.entry.slice(0, dot).replaceAll(".", "/");
-const modulePath = path.join(bundle, "scripts", `${module}.velac`);
+const moduleName = manifest.entry.slice(0, dot).replaceAll(".", "/");
+const modulePath = path.join(bundle, "scripts", `${moduleName}.velac`);
 
 // And the whole entry is the label: a linked program's labels are qualified, so `main.start` is a
 // label name rather than a module and a label.

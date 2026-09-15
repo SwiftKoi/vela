@@ -10,6 +10,7 @@ pub mod facade;
 pub mod file_size;
 pub mod layers;
 pub mod registries;
+pub mod scripts;
 
 mod registry;
 

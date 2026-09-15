@@ -143,6 +143,7 @@ its own file under `xtask/src/checks/`.
 | `check-diag-codes` | `spec/LANGUAGE.md §8` | Duplicate, unregistered, or gap-invalid diagnostic code |
 | `check-registries` | `CONVENTIONS.md §4` | A dispatch `match` exists outside its registry module |
 | `check-determinism` | `RUNTIME.md §4` | Banned types/methods found in source (see §4.2) |
+| `check-scripts` | §6 gate 9 needs them | A shell or JavaScript file in `tools/` that a parser rejects; reports a missing `bash`/`node` as *unchecked* rather than as passing |
 | `check-abi` | `TOOLING.md` / `PLUGIN` surface | A plugin ABI change that was not accompanied by a version bump (from M13) |
 
 ### 4.1 How rank checking works
@@ -214,7 +215,9 @@ Every push runs, in order (fastest failure first):
 1. `cargo fmt --check`
 2. `cargo xtask check-layers check-file-size check-facade check-exemptions`
 3. `cargo clippy -- -D warnings` (with the determinism lint set from `CONVENTIONS.md §2`)
-4. `cargo xtask check-diag-codes check-registries check-determinism`
+4. `cargo xtask check-diag-codes check-registries check-determinism check-scripts`
+   (`check-scripts` is here because gate 9 is a script: a syntax error in `tools/` used to be
+   discoverable only by running the wasm job)
 5. `cargo test --workspace` (unit + integration + golden)
 6. `vela build --verify-reproducible` on the standard example (`BUILD_AND_ASSETS.md §7`)
 7. `vela check --format sarif` on a fixture with one deliberate error, validated as JSON

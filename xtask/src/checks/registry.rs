@@ -7,7 +7,7 @@
 use crate::ctx::Ctx;
 use crate::report::Report;
 
-use super::{determinism, diag_codes, exemptions, facade, file_size, layers, registries};
+use super::{determinism, diag_codes, exemptions, facade, file_size, layers, registries, scripts};
 
 /// A registered architecture/policy check.
 pub struct Check {
@@ -55,6 +55,11 @@ pub static CHECKS: &[Check] = &[
         name: "check-determinism",
         about: "banned non-deterministic types and methods (REPO_LAYOUT.md §4.2)",
         run: determinism::run,
+    },
+    Check {
+        name: "check-scripts",
+        about: "the shell and JavaScript in tools/ parses (REPO_LAYOUT.md §6)",
+        run: scripts::run,
     },
 ];
 
