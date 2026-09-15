@@ -8,7 +8,7 @@ pub mod check;
 pub mod new;
 pub mod patch;
 pub mod play;
-mod run;
+pub mod run;
 pub mod test;
 pub mod ui;
 

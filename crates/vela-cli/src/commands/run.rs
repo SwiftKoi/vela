@@ -103,7 +103,8 @@ impl Command for Run {
         if !args.iter().any(|arg| arg == "--headless") && flag_value(args, "--capture").is_none() {
             let saves = saves_dir(&target);
             let schema = crate::commands::ui::schema(&project.files);
-            return play(&module, label, &entry, args, out, screens, saves, schema);
+            let title = title_of(project.manifest.as_ref(), &entry);
+            return play(&module, label, &title, args, out, screens, saves, schema);
         }
 
         let mut host = vela_vm::TakeFirst;
@@ -121,6 +122,18 @@ impl Command for Run {
     }
 }
 
+/// What a window is titled.
+///
+/// The project's name, which `vela.toml` declares. It used to be the entry point, so a title
+/// bar read `main.start` — a label path, which is a fact about the source rather than about the
+/// game. A project that does not name itself still gets a window, titled by where it starts.
+#[must_use]
+pub(crate) fn title_of(manifest: Option<&crate::manifest::Manifest>, entry: &str) -> String {
+    manifest
+        .and_then(|manifest| manifest.project.name.clone())
+        .unwrap_or_else(|| entry.to_string())
+}
+
 /// Where a project's saves live: a `saves/` directory beside it.
 fn saves_dir(target: &std::path::Path) -> std::path::PathBuf {
     let base = if target.is_dir() {
@@ -136,7 +149,7 @@ fn saves_dir(target: &std::path::Path) -> std::path::PathBuf {
 fn play(
     module: &vela_bytecode::Module,
     label: &str,
-    entry: &str,
+    title: &str,
     args: &[String],
     out: &mut dyn Write,
     screens: Screens,
@@ -156,10 +169,10 @@ fn play(
     // The first command is presented before the window opens, so the first frame has
     // something to draw rather than appearing blank for a moment.
     player.begin(out);
-    writeln!(out, "playing {entry}").map_err(|error| Error::internal(error.to_string()))?;
+    writeln!(out, "playing {title}").map_err(|error| Error::internal(error.to_string()))?;
     out.flush()
         .map_err(|error| Error::internal(error.to_string()))?;
-    crate::commands::play::run(player, entry, size)
+    crate::commands::play::run(player, title, size)
 }
 
 /// Renders a frame of the story to a PNG.

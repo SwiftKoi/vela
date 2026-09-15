@@ -272,3 +272,33 @@ fn run_refuses_a_project_with_errors() {
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("errors"), "{out}");
 }
+
+#[test]
+fn a_window_is_titled_by_the_project_not_by_its_entry_point() {
+    use crate::commands::run::title_of;
+    use crate::manifest::{Manifest, Project};
+
+    let named = Manifest {
+        schema: 1,
+        project: Project {
+            name: Some("standard".to_string()),
+            entry: "main.start".to_string(),
+        },
+    };
+    assert_eq!(
+        title_of(Some(&named), "main.start"),
+        "standard",
+        "a title bar reading `main.start` is a label path, not the name of a game"
+    );
+
+    // A project that does not name itself still opens, titled by where it starts.
+    let unnamed = Manifest {
+        schema: 1,
+        project: Project {
+            name: None,
+            entry: "main.start".to_string(),
+        },
+    };
+    assert_eq!(title_of(Some(&unnamed), "main.start"), "main.start");
+    assert_eq!(title_of(None, "main.start"), "main.start");
+}
