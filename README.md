@@ -121,9 +121,6 @@ tools/capture.sh --out frame.png examples/hello        # a frame as a PNG, with 
 tools/drive.sh   --keys Return,click1 examples/hello   # a window, driven by synthetic input
 ```
 
-`tools/drive.sh` runs under `xvfb-run` and refuses outright if it sees your own display, so it
-is safe to run while you are using the machine.
-
 The CI gate order is in `docs/engineering/REPO_LAYOUT.md §6`; `cargo xtask` is wired as an
 alias in `.cargo/config.toml`, so `cargo xtask check-layers` works from any subdirectory.
 
