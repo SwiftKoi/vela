@@ -40,6 +40,29 @@ fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
             writer.note(span.start());
             body(writer, inner);
         }
+        ScreenLine::Use {
+            span,
+            name,
+            args,
+            body: inner,
+        } => {
+            let arguments = if args.is_empty() {
+                String::new()
+            } else {
+                let rendered: Vec<String> = args.iter().map(arg_text).collect();
+                format!("({})", rendered.join(", "))
+            };
+            let text = format!("use {name}{arguments}");
+            if inner.is_empty() {
+                writer.line(&text);
+            } else {
+                writer.line(&format!("{text}:"));
+                writer.note(span.start());
+                body(writer, inner);
+            }
+        }
+        // A bare line, like `pass`: nothing follows it, and nothing can.
+        ScreenLine::Transclude { .. } => writer.line("transclude"),
         ScreenLine::Node(declared) => node(writer, declared),
     }
 }
@@ -89,7 +112,10 @@ fn arg_text(arg: &ScreenArg) -> String {
 /// Where a body line starts.
 fn start_of(line: &ScreenLine) -> u32 {
     match line {
-        ScreenLine::Layer { span, .. } | ScreenLine::If { span, .. } => span.start(),
+        ScreenLine::Layer { span, .. }
+        | ScreenLine::If { span, .. }
+        | ScreenLine::Use { span, .. }
+        | ScreenLine::Transclude { span } => span.start(),
         ScreenLine::Node(node) => node.span.start(),
     }
 }

@@ -139,10 +139,15 @@ impl ScreenSet {
         max_width: f32,
     ) -> Option<Node> {
         let screen = self.screen(name)?;
+        // The file's screens as references, so a `use` in this one can find the screen it names.
+        // Built here rather than stored, because a set that held both the screens and references to
+        // them would be a struct borrowing from itself.
+        let screens: Vec<&ScreenDecl> = self.screens.iter().collect();
         let ctx = Ctx {
             registry: &self.registry,
             palette: &self.palette,
             styles: &self.styles,
+            screens: &screens,
         };
         Some(instantiate::build(
             &screen.body,

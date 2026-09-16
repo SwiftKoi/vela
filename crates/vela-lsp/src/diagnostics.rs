@@ -26,7 +26,7 @@
 
 use vela_compile::Session;
 use vela_diag::Diagnostic;
-use vela_syntax::{Item, ParseResult, StyleDecl};
+use vela_syntax::{Item, ParseResult, ScreenDecl, StyleDecl};
 
 /// Every diagnostic for every file in the session, in the order `vela check` prints them.
 ///
@@ -88,12 +88,24 @@ fn screens(parsed: &ParseResult) -> Vec<Diagnostic> {
         })
         .collect();
 
+    // A `use` names a screen in *this* file (`SCREENS.md §5`), so the file's declarations are what
+    // the checker is given — collected once, rather than rebuilt per screen.
+    let screens: Vec<&ScreenDecl> = parsed
+        .program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Screen(screen) => Some(screen),
+            _ => None,
+        })
+        .collect();
+
     let mut diagnostics = vela_ui::check_inheritance(&styles);
-    for item in &parsed.program.items {
-        let Item::Screen(screen) = item else {
-            continue;
-        };
-        diagnostics.extend(vela_ui::check_screen(&screen.body, &registry));
+    // Screens using each other is a fact about the file's graph, not about one screen — asked once,
+    // like style inheritance, so a cycle is not reported again for every screen in the loop.
+    diagnostics.extend(vela_ui::compose::check_cycles(&screens));
+    for screen in &screens {
+        diagnostics.extend(vela_ui::check_screen(&screen.body, &registry, &screens));
         diagnostics.extend(vela_ui::check_screen_styles(&screen.body, &styles));
         diagnostics.extend(vela_ui::a11y::check_labels(&screen.body, &registry));
         diagnostics.extend(vela_ui::check_magic_colours(&screen.body));

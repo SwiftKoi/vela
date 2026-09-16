@@ -38,8 +38,19 @@ impl Parser<'_> {
         if self.at(TokenKind::Keyword(Keyword::If)) {
             return self.parse_screen_if(start);
         }
+        // `use` is a keyword, and the only position where it is not a module import is here.
+        if self.at(TokenKind::Keyword(Keyword::Use)) {
+            return self.parse_screen_use(start);
+        }
         if self.at_keyword_word("layer") {
             return self.parse_screen_layer(start);
+        }
+        // Composition's other half: where a caller's block lands. Contextual like `layer` — the
+        // word is only special in this position, so a project keeps it as a name everywhere else.
+        if self.at_keyword_word("transclude") {
+            self.bump();
+            self.end_statement();
+            return Some(ScreenLine::Transclude { span: start });
         }
         // `pass` is the language's own empty statement, and a screen needs *something* indented
         // to have a body. Read as a widget it would be a line named `pass` and reported as an
@@ -158,7 +169,7 @@ impl Parser<'_> {
     /// content and `style = body` is a named prop, so taking `style` as `line`'s value would
     /// leave `= body` unparsed. Looking one token further is enough to tell them apart: a name
     /// is followed by `=`, and a value is not.
-    fn next_is_another_name(&mut self) -> bool {
+    pub(crate) fn next_is_another_name(&mut self) -> bool {
         let saved = self.pos;
         self.bump();
         let followed_by_eq = self.at(TokenKind::Eq);

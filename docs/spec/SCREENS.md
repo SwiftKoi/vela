@@ -60,11 +60,51 @@ keeps rendering one-directional and testable.
 > (§11), so nothing calls it. Stated plainly rather than implied.
 
 Compile-time checks:
-- `screen` calls must match the declared parameter list (`E5004`).
+- A `use`'s arguments must match the screen's declared parameters (`E5010`, §2.1).
 - Every widget name must be in the `WidgetRegistry` (`E5005`).
 - Every prop must exist on that widget and typecheck (`E5006`).
 - Styles referenced must exist (`E5007`).
 - A `bind` expression's type must be displayable (`E3005`).
+
+### 2.1 Composition
+
+A screen includes another with `use`, and may hand it a block that the used screen places wherever it
+writes `transclude`:
+
+```vela
+screen game_menu(title):
+    box:
+        text title
+        transclude
+
+screen preferences:
+    use game_menu("Preferences"):
+        column:
+            text "Text speed"
+```
+
+Three rules, and all three follow from §2's "a screen is a pure function of its arguments":
+
+- **`use name` is a call with no arguments.** There is deliberately no Ren'Py-style sharing of the
+  caller's scope: a used screen sees what it was passed and nothing else, which is what keeps a
+  dependency set static (§8.2) and a screen's meaning independent of where it is used.
+- **The name resolves within this file**, like a style (§5). There is no project-wide screen table, so
+  a screen cannot name another module's screen.
+- **A block is placed, not dropped.** A block handed to a screen that never writes `transclude` is
+  `W4012` — a warning, because the author wrote content that would otherwise vanish silently. A
+  `transclude` with nothing passed draws nothing: nothing was written, so nothing is lost.
+
+Arguments bind as a call reads: positional values in order, named ones by name, and a parameter the
+call omits keeps its default. A parameter's type may be absent, in which case it accepts any argument
+(`LANGUAGE.md §5.4`) — which is how most migrated screens are written.
+
+The checker refuses a `use` of a screen that does not exist (`E5009`), a call whose arguments do not
+fit the screen's parameters (`E5010`), and a composition that loops (`E5011`). A cycle is not a slow
+screen, it is an unbounded one: drawing it would draw it again.
+
+> **Implemented (M12.1).** `use`, `transclude`, and the rules above. The screen pack moved to version
+> 4 to carry both lines (§13.1), and `crates/vela-ui/tests/compose.rs` pins the diagnostics, the tree
+> a composition draws, and the fold into the caller's dependency set.
 
 ## 3. Widget tree
 

@@ -163,7 +163,8 @@ fn every_expression_variant_round_trips() {
     }
 }
 
-/// A screen with a theme, a style, and a condition, so the round trip covers more than a leaf.
+/// A screen with a theme, a style, a condition, and a composition, so the round trip covers more
+/// than a leaf — including the two lines that only exist because screens compose.
 fn sample() -> ScreenPack {
     let source = "\
 theme dusk:
@@ -172,16 +173,51 @@ theme dusk:
 style body from text:
     color = theme.fg
 
+screen wrapper:
+    column:
+        transclude
+
 screen dialogue(name: str?, line):
     layer ui
-    box at bottom, stretch_x:
-        pad 24
-        if name is not none:
-            text name
-        text line style = body
+    use wrapper:
+        box at bottom, stretch_x:
+            pad 24
+            if name is not none:
+                text name
+            text line style = body
 ";
     let parsed = vela_syntax::parse(FileId::from_raw(0), source);
     ScreenPack::compile("main", &parsed.program.items)
+}
+
+/// `use` and `transclude` survive the codec, and land as themselves rather than as widgets.
+///
+/// A tag read as the wrong variant is the failure this pins: both new lines carry no widget name, so
+/// a reader that fell through to the widget arm would decode them as a node called `""`.
+#[test]
+fn composition_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let set = ScreenPack::from_bytes(&bytes)
+        .expect("a pack decodes")
+        .into_set();
+
+    let wrapper = set.screen("wrapper").expect("the wrapper survives");
+    assert!(
+        wrapper
+            .body
+            .iter()
+            .any(|line| matches!(line, vela_syntax::ScreenLine::Node(node)
+                if node.children.iter().any(|line| matches!(line, vela_syntax::ScreenLine::Transclude { .. })))),
+        "`transclude` did not survive"
+    );
+
+    let dialogue = set.screen("dialogue").expect("the caller survives");
+    assert!(
+        dialogue.body.iter().any(
+            |line| matches!(line, vela_syntax::ScreenLine::Use { body, .. } if !body.is_empty())
+        ),
+        "`use` with its block did not survive"
+    );
 }
 
 #[test]

@@ -15,7 +15,7 @@
 use crate::deps::{DepSet, deps_of};
 use crate::layout::Frame;
 use crate::tree::Node;
-use vela_syntax::ScreenLine;
+use vela_syntax::{ScreenDecl, ScreenLine};
 
 /// A laid-out screen, and what it was laid out from.
 #[derive(Debug)]
@@ -72,6 +72,7 @@ impl ScreenCache {
     /// that laid out every frame would see `layouts` climb whether or not anything changed.
     pub fn get_or_build(
         &mut self,
+        screens: &[&ScreenDecl],
         body: &[ScreenLine],
         node: &Node,
         constraints: crate::layout::Constraints,
@@ -86,7 +87,7 @@ impl ScreenCache {
             let frame = build();
             self.entry = Some(Cached {
                 frame,
-                deps: deps_of(body),
+                deps: deps_of(screens, body),
             });
             self.layouts += 1;
         }

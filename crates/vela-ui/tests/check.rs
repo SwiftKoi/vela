@@ -5,8 +5,21 @@
 //! the help text, because a code without a suggestion is half the diagnostic.
 
 use vela_span::FileId;
-use vela_syntax::{Item, parse};
+use vela_syntax::{Item, ScreenDecl, parse};
 use vela_ui::{WidgetRegistry, check_screen};
+
+/// Every `screen` a parsed fixture declares, as the checker wants them.
+fn screens_of(parsed: &vela_syntax::ParseResult) -> Vec<&ScreenDecl> {
+    parsed
+        .program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Screen(screen) => Some(screen),
+            _ => None,
+        })
+        .collect()
+}
 
 /// Checks a screen body and returns `(code, help)` for each diagnostic.
 fn diagnose(body: &str) -> Vec<(String, String)> {
@@ -21,10 +34,11 @@ fn diagnose(body: &str) -> Vec<(String, String)> {
             .map(|d| d.message.clone())
             .collect::<Vec<_>>()
     );
-    let Some(Item::Screen(screen)) = parsed.program.items.first() else {
+    let screens = screens_of(&parsed);
+    let Some(screen) = screens.first() else {
         panic!("expected a screen");
     };
-    check_screen(&screen.body, &WidgetRegistry::builtin())
+    check_screen(&screen.body, &WidgetRegistry::builtin(), &screens)
         .into_iter()
         .map(|d| {
             (
@@ -40,10 +54,11 @@ fn diagnose(body: &str) -> Vec<(String, String)> {
 fn a_valid_screen_is_clean() {
     let source = "screen dialogue(name: str?, line: str):\n    layer ui\n    box at bottom:\n        pad 24\n        column gap 8:\n            text name\n            text line style = body\n";
     let parsed = parse(FileId::from_raw(0), source);
-    let Some(Item::Screen(screen)) = parsed.program.items.first() else {
+    let screens = screens_of(&parsed);
+    let Some(screen) = screens.first() else {
         panic!("expected a screen");
     };
-    let diagnostics = check_screen(&screen.body, &WidgetRegistry::builtin());
+    let diagnostics = check_screen(&screen.body, &WidgetRegistry::builtin(), &screens);
     assert!(
         diagnostics.is_empty(),
         "{:?}",

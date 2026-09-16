@@ -41,6 +41,31 @@ pub enum ScreenLine {
         /// The lines drawn when it holds.
         body: Vec<ScreenLine>,
     },
+    /// `use <screen> [ ( args ) ] [ : block ]` — another screen, included here.
+    ///
+    /// A screen is a function (`SCREENS.md §2`), so this is a call: the used screen sees its own
+    /// parameters and nothing else. There is no Ren'Py-style shared scope, because a screen whose
+    /// meaning depended on where it was used could not have a static dependency set (`§8.2`).
+    ///
+    /// A block makes the used screen a *wrapper*: it becomes the lines placed where that screen
+    /// writes `transclude`.
+    Use {
+        /// The line's span.
+        span: Span,
+        /// The screen being used, as written. Resolved in this file, like a style (`§5`).
+        name: String,
+        /// The arguments: positional values, and named ones written `name = value`.
+        args: Vec<ScreenArg>,
+        /// The block, if one was written — inserted where the used screen transcludes.
+        body: Vec<ScreenLine>,
+    },
+    /// `transclude` — where a caller's block is placed.
+    ///
+    /// Nothing is written after it: it takes exactly what the `use` that reaches this screen passed.
+    Transclude {
+        /// The line's span.
+        span: Span,
+    },
     /// A widget, or a prop written on its own line.
     Node(ScreenNode),
 }

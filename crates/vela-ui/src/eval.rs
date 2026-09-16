@@ -10,7 +10,7 @@
 //! mean" does not live in the same file as "what node does this line build".
 
 use vela_render::Color;
-use vela_syntax::{BinOp, Expr, StrPart, StyleDecl, UnOp};
+use vela_syntax::{BinOp, Expr, ScreenDecl, StrPart, StyleDecl, UnOp};
 
 use crate::actions::Action;
 use crate::props::Anchor;
@@ -97,6 +97,11 @@ pub struct Ctx<'a> {
     pub palette: &'a Palette,
     /// The declared styles, for `style = ...`.
     pub styles: &'a [StyleDecl],
+    /// The file's screens, so a `use` can find the one it names (`SCREENS.md §2`).
+    ///
+    /// Screens resolve within the file that declares them, like styles — so this is one file's worth
+    /// and not a project-wide table.
+    pub screens: &'a [&'a ScreenDecl],
 }
 
 /// A numeric literal.
@@ -227,8 +232,12 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
     }
 }
 
-/// The value of an expression, for a comparison. An unbound name is `none`.
-fn value_of(expr: &Expr, values: &Args) -> Value {
+/// The value of an expression. An unbound name is `none`.
+///
+/// Used for a comparison, and for the arguments of a `use`: what a screen call passes is a value, and
+/// this is the small set of expressions this evaluator can produce one from. Anything else is `none`
+/// rather than a crash — the same answer an unrecognised condition gets, and for the same reason.
+pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
     match expr {
         Expr::Name { name, .. } => values.get(name).cloned().unwrap_or(Value::None),
         Expr::None { .. } => Value::None,

@@ -20,8 +20,9 @@
 
 use vela_diag::{Code, Diagnostic};
 use vela_span::Span;
-use vela_syntax::{ScreenArg, ScreenLine, ScreenNode};
+use vela_syntax::{ScreenArg, ScreenDecl, ScreenLine, ScreenNode};
 
+use crate::compose;
 use crate::widgets::{Widget, WidgetRegistry};
 
 /// Builds a diagnostic for a registered code.
@@ -41,13 +42,25 @@ fn diag(
     Diagnostic::new(code, message, span, label)
 }
 
-/// Checks a screen body against the registry.
+/// Checks a screen body against the registry and the file's other screens.
+///
+/// `screens` is the file's declarations rather than a lookup built here, because composition is
+/// per-file (`SCREENS.md §5`) and a caller that already has the parsed items should not have to build
+/// a second index for the same question.
 #[must_use]
-pub fn check_screen(lines: &[ScreenLine], registry: &WidgetRegistry) -> Vec<Diagnostic> {
+pub fn check_screen(
+    lines: &[ScreenLine],
+    registry: &WidgetRegistry,
+    screens: &[&ScreenDecl],
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     // A screen's top level has no parent widget, so a bare prop there has nothing to belong
     // to and a line must be a widget.
     check_lines(lines, None, registry, &mut diagnostics);
+    // `use` and `transclude` are a relationship between declarations, so their rules live together
+    // in one place rather than being spread through this walk (`compose.rs`). The graph *between*
+    // screens is a per-file question, so it is `compose::check_cycles`, asked once.
+    compose::check_uses(screens, lines, &mut diagnostics);
     diagnostics
 }
 
@@ -60,8 +73,12 @@ fn check_lines(
 ) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } => {}
+            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { body, .. } => check_lines(body, parent, registry, out),
+            // A `use`'s block is this screen's own code, sitting where the `use` is — so it is
+            // checked against the same parent widget, and its own widgets and props are checked
+            // like any other line. The used screen's body is checked when *it* is checked.
+            ScreenLine::Use { body, .. } => check_lines(body, parent, registry, out),
             ScreenLine::Node(node) => check_node(node, parent, registry, out),
         }
     }
@@ -95,7 +112,7 @@ fn check_node(
     let children = node
         .children
         .iter()
-        .filter(|line| is_widget_line(line, registry));
+        .filter(|line| is_child_line(line, registry));
     if widget.single_child && children.count() > 1 {
         out.push(wrong_arity(node, widget, node.children.len()));
     }
@@ -113,9 +130,18 @@ fn check_children_of_prop(
     check_lines(&node.children, parent, registry, out);
 }
 
-/// Whether a line names a widget rather than a prop.
-fn is_widget_line(line: &ScreenLine, registry: &WidgetRegistry) -> bool {
-    matches!(line, ScreenLine::Node(node) if registry.get(&node.name).is_some())
+/// Whether a line is a child of the widget above it rather than a prop of it.
+///
+/// A `use` is one child: what it draws is decided by the screen it names, and a single-child widget
+/// given a composition cannot be told statically how many nodes that produces. Counting it as one is
+/// the answer the arity rule needs — it catches a `box` with a `use` *and* a `text`, which is the
+/// mistake the rule exists for, without pretending to know the used screen's shape.
+fn is_child_line(line: &ScreenLine, registry: &WidgetRegistry) -> bool {
+    match line {
+        ScreenLine::Use { .. } => true,
+        ScreenLine::Node(node) => registry.get(&node.name).is_some(),
+        _ => false,
+    }
 }
 
 /// Checks the args after a name against what the widget declares.

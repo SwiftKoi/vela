@@ -6,8 +6,15 @@
 //! order is tree order with nothing skipped.
 
 use vela_span::FileId;
-use vela_syntax::{Item, ScreenLine, parse};
+use vela_syntax::{Item, ScreenDecl, ScreenLine, parse};
 use vela_ui::{Role, WidgetRegistry, a11y::check_labels, a11y::tree};
+
+/// No screens to compose with.
+///
+/// Every fixture here is one screen with no `use`, so the question `tree` asks of the other
+/// declarations has no answer to give. Composition is exercised where it belongs, in
+/// `tests/compose.rs`.
+const NO_SCREENS: &[&ScreenDecl] = &[];
 
 fn body_of(source: &str) -> Vec<ScreenLine> {
     let parsed = parse(FileId::from_raw(0), source);
@@ -66,7 +73,7 @@ fn roles_come_from_the_widget() {
 #[test]
 fn a_button_is_named_by_its_text_child() {
     let body = body_of("screen s:\n    button:\n        text \"Tell the truth\"\n");
-    let nodes = tree(&body, &WidgetRegistry::builtin());
+    let nodes = tree(&body, &WidgetRegistry::builtin(), NO_SCREENS);
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0].role, Role::Button);
     assert_eq!(nodes[0].label.as_deref(), Some("Tell the truth"));
@@ -77,7 +84,7 @@ fn a_button_is_named_by_its_text_child() {
 fn an_explicit_label_wins() {
     let body =
         body_of("screen s:\n    button label \"Confirm the choice\":\n        text \"OK\"\n");
-    let nodes = tree(&body, &WidgetRegistry::builtin());
+    let nodes = tree(&body, &WidgetRegistry::builtin(), NO_SCREENS);
     assert_eq!(nodes[0].label.as_deref(), Some("Confirm the choice"));
 }
 
@@ -107,7 +114,7 @@ fn a_container_is_not_linted() {
 #[test]
 fn an_interpolated_text_is_not_a_label() {
     let body = body_of("screen s:\n    button:\n        text \"[name]\"\n");
-    let nodes = tree(&body, &WidgetRegistry::builtin());
+    let nodes = tree(&body, &WidgetRegistry::builtin(), NO_SCREENS);
     assert_eq!(nodes[0].label, None);
     assert_eq!(
         codes(&check_labels(&body, &WidgetRegistry::builtin())),
@@ -123,7 +130,7 @@ fn focus_order_is_tree_order_and_skips_containers() {
     let body = body_of(
         "screen s:\n    column:\n        button:\n            text \"One\"\n        text \"A label\"\n        button:\n            text \"Two\"\n",
     );
-    let nodes = tree(&body, &WidgetRegistry::builtin());
+    let nodes = tree(&body, &WidgetRegistry::builtin(), NO_SCREENS);
     assert_eq!(nodes.len(), 1, "the column is the only top-level node");
     let column = &nodes[0];
     assert_eq!(column.focus, None, "a column is not focusable");
@@ -140,7 +147,7 @@ fn a_conditional_contributes_its_branches() {
     let body = body_of(
         "screen s:\n    column:\n        if flag:\n            button:\n                text \"Shown\"\n",
     );
-    let nodes = tree(&body, &WidgetRegistry::builtin());
+    let nodes = tree(&body, &WidgetRegistry::builtin(), NO_SCREENS);
     let column = &nodes[0];
     assert_eq!(column.children.len(), 1);
     assert_eq!(column.children[0].role, Role::Button);
@@ -153,7 +160,8 @@ fn an_empty_screen_has_no_nodes() {
     assert!(
         tree(
             &body_of("screen s:\n    pass\n"),
-            &WidgetRegistry::builtin()
+            &WidgetRegistry::builtin(),
+            NO_SCREENS,
         )
         .is_empty()
     );

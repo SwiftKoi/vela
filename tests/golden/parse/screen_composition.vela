@@ -1,0 +1,18 @@
+screen wrapper(title):
+    box:
+        text title
+        transclude
+
+screen page:
+    use wrapper("Settings"):
+        column:
+            text "Hello."
+
+screen plain:
+    layer ui
+    use wrapper
+    text "Done."
+
+screen nested:
+    use wrapper(title = "Outer"):
+        use wrapper("Inner")

@@ -14,7 +14,9 @@
 
 use std::collections::BTreeSet;
 
-use vela_syntax::{Expr, ScreenArg, ScreenLine, StrPart};
+use vela_syntax::{Expr, ScreenArg, ScreenDecl, ScreenLine, StrPart};
+
+use crate::compose;
 
 /// The names a screen body reads.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
@@ -68,24 +70,64 @@ impl DepSet {
     }
 }
 
-/// Collects the names a screen body reads.
+/// Collects the names a screen body reads, including what the screens it uses read.
+///
+/// Following `use` is not optional. A screen that draws `use navigation` has drawn whatever
+/// `navigation` reads, so a change to a field only the used screen mentions still makes this screen's
+/// frame stale — and a dependency set whose whole job is that a binding never silently misses an
+/// update would have a hole exactly the shape of composition.
 #[must_use]
-pub fn deps_of(lines: &[ScreenLine]) -> DepSet {
+pub fn deps_of(screens: &[&ScreenDecl], lines: &[ScreenLine]) -> DepSet {
     let mut deps = DepSet::new();
-    collect_lines(lines, &mut deps);
+    let mut path = Vec::new();
+    collect_lines(screens, lines, &mut deps, &mut path);
     deps
 }
 
 /// Walks the body.
-fn collect_lines(lines: &[ScreenLine], out: &mut DepSet) {
+///
+/// `path` is the `use` chain being walked. A cycle is refused by the checker (`E5011`), so this is a
+/// bound on a crafted pack rather than on a file — the same backstop the accessibility walk keeps.
+fn collect_lines(
+    screens: &[&ScreenDecl],
+    lines: &[ScreenLine],
+    out: &mut DepSet,
+    path: &mut Vec<String>,
+) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } => {}
+            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
             ScreenLine::If {
                 condition, body, ..
             } => {
                 collect_expr(condition, out);
-                collect_lines(body, out);
+                collect_lines(screens, body, out, path);
+            }
+            ScreenLine::Use {
+                name, args, body, ..
+            } => {
+                // Only the argument *values* are reads here. A named argument's name is a parameter
+                // of the used screen, not a field this screen mentions — the opposite of a widget's
+                // arg, where a bare name is the content (`text line`).
+                for arg in args {
+                    match arg {
+                        ScreenArg::Value(value) => collect_expr(value, out),
+                        ScreenArg::Named {
+                            value: Some(value), ..
+                        } => collect_expr(value, out),
+                        ScreenArg::Named { value: None, .. } => {}
+                    }
+                }
+                // The block is this screen's own code, wherever the used screen places it.
+                collect_lines(screens, body, out, path);
+
+                if !path.iter().any(|seen| seen == name)
+                    && let Some(callee) = compose::find(screens, name)
+                {
+                    path.push(name.clone());
+                    collect_lines(screens, &callee.body, out, path);
+                    path.pop();
+                }
             }
             ScreenLine::Node(node) => {
                 for arg in &node.args {
@@ -104,7 +146,7 @@ fn collect_lines(lines: &[ScreenLine], out: &mut DepSet) {
                         }
                     }
                 }
-                collect_lines(&node.children, out);
+                collect_lines(screens, &node.children, out, path);
             }
         }
     }

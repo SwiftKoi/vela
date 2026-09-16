@@ -11,6 +11,7 @@
 
 use vela_syntax::{Expr, ScreenArg, ScreenLine, ScreenNode};
 
+use super::compose::Compose;
 use crate::eval::{
     Args, Ctx, Value, action_of, anchor_of, anchor_word, color_of, eval, name_of, number,
     style_color, style_size, text_of,
@@ -120,7 +121,7 @@ pub fn build(
     font: &str,
     max_width: f32,
 ) -> Node {
-    let children = build_lines(body, ctx, args, text, font, max_width);
+    let children = build_lines(body, ctx, args, Compose::default(), text, font, max_width);
     let mut root = Node::new(Kind::Stack, children);
     root.props.width = SizeSpec::Percent(1.0);
     root.props.height = SizeSpec::Percent(1.0);
@@ -132,6 +133,7 @@ fn build_lines(
     lines: &[ScreenLine],
     ctx: &Ctx,
     args: &Args,
+    compose: Compose<'_>,
     text: &mut vela_text::TextEngine,
     font: &str,
     max_width: f32,
@@ -144,12 +146,51 @@ fn build_lines(
                 condition, body, ..
             } => {
                 if eval(condition, args) {
-                    out.extend(build_lines(body, ctx, args, text, font, max_width));
+                    out.extend(build_lines(body, ctx, args, compose, text, font, max_width));
+                }
+            }
+            // Composition's two halves. `use` expands a screen here, with its own parameters bound
+            // from this call's arguments; `transclude` is where the block *this* body was handed is
+            // placed. Which of the two a screen has is what makes it a caller or a wrapper.
+            ScreenLine::Use {
+                name,
+                args: call,
+                body,
+                ..
+            } => {
+                if let Some((callee, bound, inner)) =
+                    compose.expand(ctx.screens, name, call, args, body)
+                {
+                    out.extend(build_lines(
+                        &callee.body,
+                        ctx,
+                        &bound,
+                        inner,
+                        text,
+                        font,
+                        max_width,
+                    ));
+                }
+            }
+            ScreenLine::Transclude { .. } => {
+                // The block is built with the scope it was written in, and with no pane of its own:
+                // it *is* the pane, so a `transclude` written inside a block places nothing. Nesting
+                // one that far is a chain three `use`s deep, and nothing asks for it.
+                if let Some((lines, pane_args)) = compose.block() {
+                    out.extend(build_lines(
+                        lines,
+                        ctx,
+                        pane_args,
+                        Compose::default(),
+                        text,
+                        font,
+                        max_width,
+                    ));
                 }
             }
             ScreenLine::Node(node) => {
                 if ctx.registry.get(&node.name).is_some() {
-                    out.push(build_node(node, ctx, args, text, font, max_width));
+                    out.push(build_node(node, ctx, args, compose, text, font, max_width));
                 }
             }
         }
@@ -162,6 +203,7 @@ fn build_node(
     node: &ScreenNode,
     ctx: &Ctx,
     args: &Args,
+    compose: Compose<'_>,
     text: &mut vela_text::TextEngine,
     font: &str,
     max_width: f32,
@@ -172,7 +214,9 @@ fn build_node(
     apply_args(&mut built, &node.args, ctx, args, leaf);
 
     for line in &node.children {
-        apply_line(line, widget, &mut built, ctx, args, text, font, max_width);
+        apply_line(
+            line, widget, &mut built, ctx, args, compose, text, font, max_width,
+        );
     }
 
     measure_text(&mut built, text, font, max_width);
@@ -187,6 +231,7 @@ fn apply_line(
     parent: &mut Node,
     ctx: &Ctx,
     args: &Args,
+    compose: Compose<'_>,
     text: &mut vela_text::TextEngine,
     font: &str,
     max_width: f32,
@@ -204,6 +249,7 @@ fn apply_line(
                         parent,
                         ctx,
                         args,
+                        compose,
                         text,
                         font,
                         max_width,
@@ -211,18 +257,65 @@ fn apply_line(
                 }
             }
         }
+        // A widget's children may be a composition, which expands to however many nodes the used
+        // screen draws — so it is built as a list and appended, not turned into one child.
+        ScreenLine::Use {
+            name,
+            args: call,
+            body,
+            ..
+        } => {
+            if let Some((callee, bound, inner)) =
+                compose.expand(ctx.screens, name, call, args, body)
+            {
+                parent.children.extend(build_lines(
+                    &callee.body,
+                    ctx,
+                    &bound,
+                    inner,
+                    text,
+                    font,
+                    max_width,
+                ));
+            }
+        }
+        ScreenLine::Transclude { .. } => {
+            if let Some((lines, pane_args)) = compose.block() {
+                parent.children.extend(build_lines(
+                    lines,
+                    ctx,
+                    pane_args,
+                    Compose::default(),
+                    text,
+                    font,
+                    max_width,
+                ));
+            }
+        }
         ScreenLine::Node(child) => {
             if ctx.registry.get(&child.name).is_some() {
                 parent
                     .children
-                    .push(build_node(child, ctx, args, text, font, max_width));
-            } else if parent_widget.is_some_and(|widget| widget.accepts(&child.name)) {
-                // A prop written on its own line belongs to the widget above it — the
-                // ambiguity `check.rs` resolves with the same `accepts` question. Its value
-                // is the line's `args`, in whichever of the two shapes the parser chose.
-                apply_prop(parent, &child.name, PropValue::bare(&child.args), ctx);
+                    .push(build_node(child, ctx, args, compose, text, font, max_width));
+            } else {
+                apply_bare_prop(parent, parent_widget, child, ctx);
             }
         }
+    }
+}
+
+/// A prop written on its own line, if the widget above accepts it.
+///
+/// The same ambiguity `check.rs` resolves with the same `accepts` question: `pad` is not a widget, and
+/// `box` takes it. Its value is the line's `args`, in whichever of the two shapes the parser chose.
+fn apply_bare_prop(
+    parent: &mut Node,
+    parent_widget: Option<&Widget>,
+    child: &ScreenNode,
+    ctx: &Ctx,
+) {
+    if parent_widget.is_some_and(|widget| widget.accepts(&child.name)) {
+        apply_prop(parent, &child.name, PropValue::bare(&child.args), ctx);
     }
 }
 

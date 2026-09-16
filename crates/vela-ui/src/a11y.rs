@@ -14,9 +14,17 @@
 //! makes it a lie, which is why `W4007` lints that separately.
 
 use vela_diag::{Code, Diagnostic};
-use vela_syntax::{Expr, ScreenArg, ScreenLine, ScreenNode};
+use vela_syntax::{Expr, ScreenArg, ScreenDecl, ScreenLine, ScreenNode};
 
+use crate::compose;
 use crate::widgets::{Category, WidgetRegistry};
+
+/// How far a `use` chain is followed before the walk gives up.
+///
+/// A cycle is refused by the checker (`E5011`), so this is a bound on a *crafted* pack rather than on
+/// a file — the reader of a pack is total, and a total reader must not hand the walker something that
+/// recurses until the stack ends.
+const MAX_DEPTH: usize = 32;
 
 /// What a node is, in terms a screen reader uses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -81,29 +89,76 @@ pub struct A11yNode {
 }
 
 /// Builds the accessibility tree for a screen body.
+///
+/// A screen is expanded where it is *used*, not read as a declaration: a screen reader is reading what
+/// is drawn, so a `use` contributes the used screen's nodes and a `transclude` contributes the block
+/// the caller passed (`compose.rs`).
 #[must_use]
-pub fn tree(lines: &[ScreenLine], registry: &WidgetRegistry) -> Vec<A11yNode> {
+pub fn tree(
+    lines: &[ScreenLine],
+    registry: &WidgetRegistry,
+    screens: &[&ScreenDecl],
+) -> Vec<A11yNode> {
     let mut focus = 0usize;
-    nodes(lines, registry, &mut focus)
+    nodes(lines, registry, screens, None, 0, &mut focus)
 }
 
 /// Builds the nodes for a list of lines.
-fn nodes(lines: &[ScreenLine], registry: &WidgetRegistry, focus: &mut usize) -> Vec<A11yNode> {
+///
+/// `pane` is the block this body places at its `transclude`, and it belongs to the body that passed
+/// it — one level up the composition, which is why it travels separately from `lines`.
+fn nodes(
+    lines: &[ScreenLine],
+    registry: &WidgetRegistry,
+    screens: &[&ScreenDecl],
+    pane: Option<&[ScreenLine]>,
+    depth: usize,
+    focus: &mut usize,
+) -> Vec<A11yNode> {
+    if depth > MAX_DEPTH {
+        return Vec::new();
+    }
     lines
         .iter()
         .filter_map(|line| match line {
             ScreenLine::Layer { .. } => None,
             // A conditional contributes its branches' nodes: what a screen reader reads is what
             // is on screen, and which branch that is is a runtime question.
-            ScreenLine::If { body, .. } => Some(nodes(body, registry, focus)),
-            ScreenLine::Node(node) => Some(vec![node_of(node, registry, focus)]),
+            ScreenLine::If { body, .. } => Some(nodes(body, registry, screens, pane, depth, focus)),
+            ScreenLine::Use { name, body, .. } => Some(match compose::find(screens, name) {
+                Some(callee) => nodes(
+                    &callee.body,
+                    registry,
+                    screens,
+                    Some(body),
+                    depth + 1,
+                    focus,
+                ),
+                // A name that resolves to nothing contributes its block alone: the checker has
+                // already reported the name, and dropping the author's nodes too would double the
+                // damage.
+                None => nodes(body, registry, screens, pane, depth, focus),
+            }),
+            ScreenLine::Transclude { .. } => {
+                pane.map(|pane| nodes(pane, registry, screens, None, depth, focus))
+            }
+            ScreenLine::Node(node) => {
+                Some(vec![node_of(node, registry, screens, pane, depth, focus)])
+            }
         })
         .flatten()
         .collect()
 }
 
 /// Builds one node, and its children.
-fn node_of(node: &ScreenNode, registry: &WidgetRegistry, focus: &mut usize) -> A11yNode {
+fn node_of(
+    node: &ScreenNode,
+    registry: &WidgetRegistry,
+    screens: &[&ScreenDecl],
+    pane: Option<&[ScreenLine]>,
+    depth: usize,
+    focus: &mut usize,
+) -> A11yNode {
     let widget = registry.get(&node.name);
     let category = widget.map_or(Category::Container, |widget| widget.category);
     let role = Role::of(&node.name, category);
@@ -124,7 +179,7 @@ fn node_of(node: &ScreenNode, registry: &WidgetRegistry, focus: &mut usize) -> A
         role,
         label,
         focus: index,
-        children: nodes(&node.children, registry, focus),
+        children: nodes(&node.children, registry, screens, pane, depth, focus),
     }
 }
 
@@ -206,8 +261,12 @@ pub fn check_labels(lines: &[ScreenLine], registry: &WidgetRegistry) -> Vec<Diag
 fn check_lines(lines: &[ScreenLine], registry: &WidgetRegistry, out: &mut Vec<Diagnostic>) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } => {}
+            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { body, .. } => check_lines(body, registry, out),
+            // The block is this screen's own code, so a button written in it is checked here. The
+            // used screen's body is checked when that screen is checked — per screen, like every
+            // other per-file rule.
+            ScreenLine::Use { body, .. } => check_lines(body, registry, out),
             ScreenLine::Node(node) => {
                 let interactive = registry
                     .get(&node.name)

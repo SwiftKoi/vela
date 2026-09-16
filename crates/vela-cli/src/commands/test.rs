@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use vela_compile::Session;
 use vela_diag::Severity;
 use vela_span::{FileId, Span};
-use vela_syntax::{Item, parse};
+use vela_syntax::{Item, ScreenDecl, parse};
 use vela_test::{Plan, Report};
 use vela_ui::WidgetRegistry;
 use vela_ui::a11y::A11yNode;
@@ -307,12 +307,24 @@ fn focus_orders(files: &[PathBuf]) -> Sweep {
             continue;
         };
         let parsed = parse(FileId::from_raw(0), &text);
-        for item in &parsed.program.items {
-            let Item::Screen(screen) = item else {
-                continue;
-            };
+        // The file's screens, so the sweep reads what a `use` draws rather than a screen's
+        // declaration in isolation.
+        let screens: Vec<&ScreenDecl> = parsed
+            .program
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Screen(screen) => Some(screen),
+                _ => None,
+            })
+            .collect();
+
+        for screen in &screens {
             let mut order = Vec::new();
-            focusable(&vela_ui::a11y::tree(&screen.body, &registry), &mut order);
+            focusable(
+                &vela_ui::a11y::tree(&screen.body, &registry, &screens),
+                &mut order,
+            );
 
             sweep.nodes += order.len();
             for node in &order {

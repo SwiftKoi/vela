@@ -115,6 +115,25 @@ impl Writer {
                 self.expr(condition);
                 self.lines(body);
             }
+            ScreenLine::Use {
+                span,
+                name,
+                args,
+                body,
+            } => {
+                self.u8(3);
+                self.span(*span);
+                self.string(name);
+                self.u32(count(args.len()));
+                for arg in args {
+                    self.arg(arg);
+                }
+                self.lines(body);
+            }
+            ScreenLine::Transclude { span } => {
+                self.u8(4);
+                self.span(*span);
+            }
             ScreenLine::Node(node) => {
                 self.u8(2);
                 self.node(node);

@@ -46,6 +46,9 @@ E5005|error|no such widget
 E5006|error|a widget does not accept this prop
 E5007|error|no such style
 E5008|error|a style cannot inherit from itself
+E5009|error|no such screen
+E5010|error|a screen call's arguments do not match its parameters
+E5011|error|screens use each other in a loop
 E6001|error|the stack depth differs across paths into a block
 E6002|error|an instruction's operands do not match its declared stack effect
 E6003|error|a jump target is not an instruction boundary
@@ -71,3 +74,4 @@ W4008|warning|a raw colour is written where a theme token belongs
 W4009|warning|a foreground and background have too little contrast
 W4010|warning|an interactive widget has no label
 W4011|warning|a formatting pragma leaves a region as written
+W4012|warning|a block is passed to a screen that does not transclude

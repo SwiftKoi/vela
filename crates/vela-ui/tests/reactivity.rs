@@ -5,7 +5,7 @@
 //! regression fails as a test rather than as a timing that nobody reads.
 
 use vela_span::FileId;
-use vela_syntax::{Item, ScreenLine, parse};
+use vela_syntax::{Item, ScreenDecl, ScreenLine, parse};
 use vela_ui::{Constraints, Kind, Node, Size, layout};
 use vela_ui::{DepSet, ScreenCache, deps_of};
 
@@ -21,6 +21,19 @@ fn body_of(parsed: &vela_syntax::ParseResult) -> &[ScreenLine] {
     &screen.body
 }
 
+/// Every `screen` a fixture declares, which is what `deps_of` needs to follow a `use`.
+fn screens_of(parsed: &vela_syntax::ParseResult) -> Vec<&ScreenDecl> {
+    parsed
+        .program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Screen(screen) => Some(screen),
+            _ => None,
+        })
+        .collect()
+}
+
 fn names(deps: &DepSet) -> Vec<String> {
     deps.iter().cloned().collect()
 }
@@ -33,7 +46,7 @@ fn a_static_screen_depends_on_nothing() {
         "screen s:\n    box:\n        text \"Hello.\"\n",
     );
     let body = body_of(&parsed);
-    let deps = deps_of(body);
+    let deps = deps_of(&screens_of(&parsed), body);
     assert!(
         deps.is_empty(),
         "a screen with no bindings read {:?}",
@@ -56,7 +69,7 @@ fn an_interpolation_is_a_dependency() {
         "screen s:\n    box:\n        text \"Trust: [trust]\"\n",
     );
     let body = body_of(&parsed);
-    let deps = deps_of(body);
+    let deps = deps_of(&screens_of(&parsed), body);
     assert!(deps.contains("trust"), "{:?}", names(&deps));
 }
 
@@ -68,7 +81,7 @@ fn a_condition_and_its_body_are_both_read() {
         "screen s:\n    box:\n        if show_choices:\n            text line\n",
     );
     let body = body_of(&parsed);
-    let deps = deps_of(body);
+    let deps = deps_of(&screens_of(&parsed), body);
     assert!(deps.contains("show_choices"));
     assert!(deps.contains("line"));
 }
@@ -82,7 +95,7 @@ fn a_dependency_inside_a_conditional_still_counts() {
         "screen s:\n    box:\n        if flag:\n            text \"[unused]\"\n",
     );
     let body = body_of(&parsed);
-    assert!(deps_of(body).contains("unused"));
+    assert!(deps_of(&screens_of(&parsed), body).contains("unused"));
 }
 
 /// A call's callee and arguments are both read.
@@ -93,7 +106,7 @@ fn a_call_reads_its_callee_and_its_arguments() {
         "screen s:\n    box:\n        text \"[format(trust)] [count]\"\n",
     );
     let body = body_of(&parsed);
-    let deps = deps_of(body);
+    let deps = deps_of(&screens_of(&parsed), body);
     assert!(deps.contains("format"), "{:?}", names(&deps));
     assert!(deps.contains("trust"), "{:?}", names(&deps));
     assert!(deps.contains("count"), "{:?}", names(&deps));
@@ -110,7 +123,7 @@ fn a_bare_name_arg_is_treated_as_a_read() {
         "screen s:\n    box stretch_x:\n        text line\n",
     );
     let body = body_of(&parsed);
-    let deps = deps_of(body);
+    let deps = deps_of(&screens_of(&parsed), body);
     assert!(deps.contains("line"), "{:?}", names(&deps));
     assert!(deps.contains("stretch_x"), "{:?}", names(&deps));
 }
@@ -129,6 +142,7 @@ fn a_static_screen_never_relays_out() {
     for frame in 0..60 {
         let changed = vec![format!("field_{frame}")];
         cache.get_or_build(
+            &screens_of(&parsed),
             body,
             &node,
             Constraints::new(100.0, 100.0),
@@ -158,9 +172,14 @@ fn a_bound_screen_relays_out_only_for_its_own_field() {
     let constraints = Constraints::new(100.0, 100.0);
 
     let build = |cache: &mut ScreenCache, changed: &[String]| {
-        cache.get_or_build(body, &node, constraints, changed, || {
-            layout(&node, constraints)
-        });
+        cache.get_or_build(
+            &screens_of(&parsed),
+            body,
+            &node,
+            constraints,
+            changed,
+            || layout(&node, constraints),
+        );
     };
 
     build(&mut cache, &[]);
@@ -186,11 +205,15 @@ fn invalidating_forces_a_relayout() {
     let constraints = Constraints::new(100.0, 100.0);
     let mut cache = ScreenCache::new();
 
-    cache.get_or_build(body, &node, constraints, &[], || layout(&node, constraints));
+    cache.get_or_build(&screens_of(&parsed), body, &node, constraints, &[], || {
+        layout(&node, constraints)
+    });
     assert_eq!(cache.layouts(), 1);
     cache.invalidate();
     assert!(cache.frame().is_none());
-    cache.get_or_build(body, &node, constraints, &[], || layout(&node, constraints));
+    cache.get_or_build(&screens_of(&parsed), body, &node, constraints, &[], || {
+        layout(&node, constraints)
+    });
     assert_eq!(cache.layouts(), 2);
 }
 
@@ -205,7 +228,9 @@ fn a_hit_is_reported_as_one() {
     let node = Node::new(Kind::Box, vec![Node::measured(Size::new(10.0, 10.0))]);
     let constraints = Constraints::new(100.0, 100.0);
     let mut cache = ScreenCache::new();
-    cache.get_or_build(body, &node, constraints, &[], || layout(&node, constraints));
+    cache.get_or_build(&screens_of(&parsed), body, &node, constraints, &[], || {
+        layout(&node, constraints)
+    });
 
     assert!(cache.get(&[]).is_some_and(|(_, reused)| reused));
     assert!(cache.get(&["trust".to_string()]).is_none());
@@ -216,5 +241,5 @@ fn a_hit_is_reported_as_one() {
 fn an_empty_screen_is_static() {
     let parsed = parse(FileId::from_raw(0), "screen s:\n    pass\n");
     let body = body_of(&parsed);
-    assert!(deps_of(body).is_empty());
+    assert!(deps_of(&screens_of(&parsed), body).is_empty());
 }

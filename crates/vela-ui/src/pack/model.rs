@@ -20,7 +20,10 @@ use crate::theme::Palette;
 /// Version 3 adds a presence flag before a parameter's type, because a parameter may be written
 /// without one (`LANGUAGE.md §3`). A version-2 reader would take that flag byte for a type tag, so
 /// an old runtime must refuse rather than misread it.
-pub const PACK_VERSION: u16 = 3;
+/// Version 4 adds the two composition lines — `use` and `transclude` (`SCREENS.md §2`). A
+/// version-3 reader would read either tag as a widget, which is a *different* tree, so an old
+/// runtime must refuse rather than misread it.
+pub const PACK_VERSION: u16 = 4;
 
 /// The four bytes every pack starts with.
 ///

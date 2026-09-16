@@ -6,7 +6,7 @@
 //! one gets a suggestion rather than silence.
 
 use vela_span::FileId;
-use vela_syntax::{Item, ScreenLine, parse};
+use vela_syntax::{Item, ScreenDecl, ScreenLine, parse};
 use vela_ui::actions::ActionDecl;
 use vela_ui::widgets::PropType;
 use vela_ui::{ActionRegistry, WidgetRegistry, check_screen};
@@ -146,7 +146,16 @@ fn an_action_line_parses_and_checks() {
             .collect::<Vec<_>>()
     );
 
-    let Some(Item::Screen(screen)) = parsed.program.items.first() else {
+    let screens: Vec<&ScreenDecl> = parsed
+        .program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Screen(screen) => Some(screen),
+            _ => None,
+        })
+        .collect();
+    let Some(screen) = screens.first() else {
         panic!("expected a screen");
     };
     let ScreenLine::Node(button) = &screen.body[0] else {
@@ -154,7 +163,7 @@ fn an_action_line_parses_and_checks() {
     };
     assert_eq!(button.children.len(), 3, "text, action, enable_if");
 
-    let diagnostics = check_screen(&screen.body, &WidgetRegistry::builtin());
+    let diagnostics = check_screen(&screen.body, &WidgetRegistry::builtin(), &screens);
     assert!(
         diagnostics.is_empty(),
         "{:?}",

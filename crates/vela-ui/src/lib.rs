@@ -26,6 +26,7 @@ pub mod a11y;
 pub mod actions;
 pub mod cache;
 pub mod check;
+pub mod compose;
 pub mod deps;
 pub mod error;
 pub mod eval;

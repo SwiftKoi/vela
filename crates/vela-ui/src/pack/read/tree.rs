@@ -123,6 +123,23 @@ impl Reader<'_> {
                     body,
                 }
             }
+            3 => {
+                let span = self.span();
+                let name = self.string();
+                let count = self.count();
+                let mut args = Vec::with_capacity(count.min(1024));
+                for _ in 0..count {
+                    args.push(self.arg());
+                }
+                let body = self.lines();
+                ScreenLine::Use {
+                    span,
+                    name,
+                    args,
+                    body,
+                }
+            }
+            4 => ScreenLine::Transclude { span: self.span() },
             _ => ScreenLine::Node(self.node()),
         }
     }

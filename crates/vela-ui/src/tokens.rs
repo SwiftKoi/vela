@@ -42,8 +42,10 @@ pub fn check_magic_colours(lines: &[ScreenLine]) -> Vec<Diagnostic> {
 fn check_lines(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } => {}
+            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { body, .. } => check_lines(body, out),
+            // Written here, so a literal colour in it is this screen's literal.
+            ScreenLine::Use { body, .. } => check_lines(body, out),
             ScreenLine::Node(node) => {
                 for arg in &node.args {
                     let ScreenArg::Named {
