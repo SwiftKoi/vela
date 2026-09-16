@@ -1,6 +1,6 @@
 # Runtime Specification
 
-Status: **draft, normative for M4–M8.**
+Status: **draft, normative for M4–M8, extended by M11's debug interface (§9).**
 
 The runtime is `vela-vm` (execution), `vela-world` (state), and `vela-replay` (snapshots,
 rollback, saves, migrations). The design goal is single and absolute: **the same save, the
@@ -105,7 +105,7 @@ pub struct World {
 4. **RNG is state, not a service.** `Rng` lives in `World` and is advanced only by the
    scripted `rand` operation. Two runs with equal logs have equal RNG sequences.
 
-> **Implemented so far (M5, corrected in M9).** A fresh run **seeds the world from the module's
+> **Implemented (M5, corrected in M9).** A fresh run **seeds the world from the module's
 > `default` declarations** before the first instruction, so `default trust: int = 0` means zero
 > and a snapshot taken at any point carries the state the story declared. A *restored* world is not
 > seeded: it holds what the save held, and a name the save does not have reads as its declaration —
@@ -199,7 +199,7 @@ pub struct SaveHeader {
 - **Atomic writes**: write to a temp file in the save dir, fsync, rename. A crash mid-save
   never destroys the previous slot.
 
-> **Implemented so far (M8).** The container, the schema digest, and the version discipline
+> **Implemented (M8).** The container, the schema digest, and the version discipline
 > exist (`vela-replay`). The file is `magic | version | schema_digest | payload | checksum`, and
 > the payload is JSON — the envelope is binary so a bad file is rejected before it is parsed,
 > and the payload is text so a save can be read and diffed by hand. The checksum covers the
@@ -223,7 +223,7 @@ pub struct SaveHeader {
 > chain (§6) first. What a caller holds is always current — the returned save carries the
 > current version and schema digest — so a partly-migrated world never escapes the loader.
 >
-> **A suspension is anchored, not indexed.** Naming the body is only half of surviving a
+> **Note.** A suspension is anchored, not indexed. Naming the body is only half of surviving a
 > rebuild: the machine is also suspended at a *statement*, and an instruction index is a
 > position in one particular compilation. The same source built at a different optimization
 > level lays its instructions out differently, so an index-only restore resumes in the middle
@@ -236,7 +236,7 @@ pub struct SaveHeader {
 > That field is save version 3. A version step is usually a *world* rewrite; this one rewrites
 > nothing, because what changed was the shape of the file rather than the state in it (§6.2).
 >
-> **Still open, and it is a syntax decision: an anchor that survives an *edit*.** The anchor above
+> **Not yet.** Still open, and a syntax decision: an anchor that survives an *edit*. The anchor above
 > survives a *rebuild* — a recompile, an optimization level, a different layout — but it is a
 > position in a file, and a position moves when the file does: insert a line above a `call` and
 > every save suspended inside that call is refused as stale. Ren'Py's answer is worth copying: a
@@ -274,7 +274,7 @@ migration! {
 5. If the save is *newer* than the engine, fail with a clear "this save is from a newer
    version" message (`E7202`).
 
-> **Implemented so far (M8).** `vela-replay::migrations` holds the chain: `Migration` — the
+> **Implemented (M8).** `vela-replay::migrations` holds the chain: `Migration` — the
 > three operations above — `Migrator` to order and apply it, and the `migration!` macro a step
 > is written with. One version step is one file, and `migrations::registry` lists them; adding
 > a step is a new file plus one line there, never an edit to a growing `match`.
@@ -285,7 +285,7 @@ migration! {
 > rejects a chain that is not one version at a time when it is built, so that failure is a bug
 > in the table rather than a surprise with a player's file in hand.
 >
-> **A step may rewrite nothing.** Version 3 changed the shape of the *file* — a frame gained the
+> **Note.** A step may rewrite nothing. Version 3 changed the shape of the *file* — a frame gained the
 > statement it is suspended at (§5) — and left the world exactly as it was, so its migration has
 > no operations at all. It is still a step, and that is the point: `save_version` is a claim
 > about the file, and "this build accepts a version-2 save" is spelled as a step in the chain
@@ -310,7 +310,7 @@ Therefore:
 - The test corpus is append-only: deleting a historical save file requires an explicit
   maintainer decision recorded in the PR.
 
-> **Implemented so far (M8).** `tests/golden/saves/` holds a save for every version, and
+> **Implemented (M8).** `tests/golden/saves/` holds a save for every version, and
 > `crates/vela-replay/tests/corpus.rs` loads each into the current build and asserts the world
 > it produces against a `.expected` golden. The assertion is over `1..=SAVE_VERSION`, so a
 > version bump with no seeded save — or a deleted historical file — fails CI rather than a
@@ -348,14 +348,14 @@ up to it, discard the tail, and continue with the new input. The discarded tail 
 - Frames are snapshotted by value; because there are no host pointers, this is a memcpy of
   plain data, not a serialization round-trip.
 
-> **Implemented so far (M8).** `cargo xtask budget` measures it: it builds a world with 10k
+> **Implemented (M8).** `cargo xtask budget` measures it: it builds a world with 10k
 > `default` values beside a short call stack, takes the median of 100 snapshots, and holds it
 > to the 1 ms above — which, unlike the startup and frame budgets, is the spec's own number
 > rather than one derived from a measurement. The harness refuses to run in a debug build, so
 > the number it prints is the engine's and not the absence of an optimizer's. Measured 0.37 ms
 > on the development machine.
 >
-> **Not yet:** the auto-tuning half — a project whose snapshots exceed the budget still takes
+> **Not yet.** The auto-tuning half — a project whose snapshots exceed the budget still takes
 > one every 64 commands, so it pays the cost rather than spacing snapshots further apart.
 
 ### 7.3 Interaction with saves
@@ -364,7 +364,7 @@ Rollback history is **not** persisted. A save records `log_len` and the current 
 On load, the rollback buffer starts empty and refills as the player continues. This keeps
 saves small and makes them independent of session length.
 
-> **Implemented so far (M8).** `vela-replay::Timeline` wraps a session with a snapshot ring —
+> **Implemented (M8).** `vela-replay::Timeline` wraps a session with a snapshot ring —
 > interval 64 commands, depth 32 snapshots by default — and replays from the nearest snapshot
 > at or before the target. Frames are copied by value (`VmState`), not round-tripped through a
 > format, as §7.2 requires.
@@ -374,13 +374,13 @@ saves small and makes them independent of session length.
 > rebranch is the same call — a rollback discards the tail, and the next answer is a new one —
 > and rolls back to the other branch at a menu.
 >
-> **Reachable now.** `vela run` binds `rollback` (Backspace) to a step back, and a project's
+> **Implemented (M8).** `vela run` binds `rollback` (Backspace) to a step back, and a project's
 > `pause` screen can call the `quick_save()`/`quick_load()` actions; saves live in a `saves/`
 > directory beside the project. `examples/standard`'s pause menu has Save and Load buttons. A
 > load goes through the migration chain, so a save from an older build is carried forward and
 > the console reports `load <slot> (migrated N -> M)`.
 >
-> **Not yet:** a rollback or load re-applies the command now on screen but does not rebuild the
+> **Not yet.** A rollback or load re-applies the command now on screen but does not rebuild the
 > staged scene from the restored world, so a rollback across a `scene` change leaves the old
 > backdrop until the next one.
 
@@ -402,7 +402,7 @@ session.assert_world(|w| w.get_int("trust") == 1);
 
 This is what makes stories testable in CI — the differentiating feature from `VISION.md §3.1`.
 
-> **Implemented so far (M9).** `vela_vm::Session::load` exists and does what the example asks:
+> **Implemented (M9).** `vela_vm::Session::load` exists and does what the example asks:
 > given a built bundle directory it reads the entry point from the bundle's manifest and the
 > module from `scripts/`, and starts the story — no source is read and no compiler is involved,
 > which is `ARCHITECTURE.md §8`'s *"bytecode loads without recompilation"* made true. Given a
@@ -417,7 +417,7 @@ This is what makes stories testable in CI — the differentiating feature from `
 > observes that it plays the same command stream as the story does from source — after the
 > source tree has been deleted, so nothing *could* recompile.
 >
-> **What it starts at is the whole entry point.** A bundle holds a *linked* program, so
+> **Note.** What it starts at is the whole entry point. A bundle holds a *linked* program, so
 > `main.start` is a label's name rather than a module and a label: the manifest's `entry` is
 > passed to the machine as written, and the image is found by reading that name as a path
 > (`main.start` → `scripts/main.velac`). A story split across files therefore runs from a bundle
@@ -426,18 +426,31 @@ This is what makes stories testable in CI — the differentiating feature from `
 > The `mock_input` / `assert_world` half of this example is `vela-test`'s, and is not written
 > yet: the session API it drives is here, the assertion DSL around it is the next step.
 
-## 9. Debugging hooks
+## 9. Debugging
 
-The VM exposes a step-level tracing interface consumed by the DAP server (`TOOLING.md §6`):
+The VM exposes a **step-level interface** consumed by the DAP server (`TOOLING.md §6`). It is
+*pull-based*: the machine executes exactly one instruction when asked (`Vm::step`) and answers
+questions about where it is (`Vm::site`) and what its frames hold (`Vm::call_stack`,
+`Vm::locals`). A debugger pauses by simply not stepping any further. There is no hook the machine
+calls out to, so a build that never debugs pays nothing — the "no runtime cost in shipped games"
+this section asks for, made true by construction rather than by a feature flag.
 
-- Breakpoint on `(module, label, line)`.
-- Step over / into / out, expressed over the frame stack.
-- Inspect `World.defaults`, locals (named via debug slot names), and the call stack.
-- Evaluate an expression in the paused frame's scope — this reuses the type checker, so an
+- **Breakpoint on `(module, label, line)`.** A label breakpoint is a *site* whose body is that
+  label; a line breakpoint is a site whose span covers that line. Both are a comparison the
+  *debugger* makes, not a facility inside the machine.
+- **Step over / into / out**, expressed over the frame stack: `Site::depth` and
+  `FrameInfo::depth` are the depth each frame sits at, and a `Yield(Command)` is a stop like any
+  other.
+- **Inspect** `World.defaults` (through the session's `World`), locals (named via debug slot
+  names, `BYTECODE.md §5`), and the call stack.
+- **Evaluate** an expression in the paused frame's scope — this reuses the type checker, so an
   invalid expression gives a normal `Exxx` diagnostic instead of an interpreter crash.
 
-Trace hooks are compiled out of release builds (`Header::flags`), so there is no runtime cost
-in shipped games.
+**Compiled out of release builds.** A build without debug info clears `Header::FLAG_DEBUG`
+(`BYTECODE.md §5`), and the machine then reports neither a span nor a slot name — `Site::span` is
+`None` and `DebugLocal::name` is empty — from the single place the flag is read. A line
+breakpoint therefore has nothing to match on a released module, and the debugger refuses it
+rather than inventing a line.
 
 ## 10. Performance posture
 

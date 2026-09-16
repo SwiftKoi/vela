@@ -155,7 +155,12 @@ fn render_commands(module: &Module, out: &mut String) {
 /// The table is structural, so only the *root* of a type is an index; the rest is nested.
 /// Looking one up and then delegating is what keeps a name like `list<map<str, int>>` from
 /// needing an entry in the table for every part of it.
-fn render_type(module: &Module, id: TypeId) -> String {
+///
+/// Public because a debugger shows a variable's type too, and two renderers would eventually
+/// disagree about how a type is spelled — which is the one thing a debugger's view of a value
+/// must not do.
+#[must_use]
+pub fn render_type(module: &Module, id: TypeId) -> String {
     match module.types.get(id) {
         Some(ty) => render_ty(module, ty),
         None => "?".to_string(),

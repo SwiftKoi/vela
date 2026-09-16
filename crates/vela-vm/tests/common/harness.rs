@@ -11,6 +11,15 @@ use vela_bytecode::Module;
 /// deleted its first choice and turned a test about branching into a test about a two-choice
 /// menu.
 pub fn compile(name: &str, text: &str) -> Module {
+    compile_with(name, text, true)
+}
+
+/// Compiles a fixture, choosing whether the module carries debug info.
+///
+/// Debug info is what a debugger breaks on (`BYTECODE.md §5`), and `vela build --release` drops
+/// it. Compiling without it is how a test observes that a release module still knows *where* it
+/// is but not *what line* that was.
+pub fn compile_with(name: &str, text: &str, debug: bool) -> Module {
     let mut sources = vela_span::SourceMap::new();
     let id = sources.add(name, text);
     let parsed = vela_syntax::parse(id, text);
@@ -37,7 +46,7 @@ pub fn compile(name: &str, text: &str) -> Module {
             .collect::<Vec<_>>()
     );
 
-    let module = vela_bytecode::compile(&lowered.module, true);
+    let module = vela_bytecode::compile(&lowered.module, debug);
 
     let diagnostics = vela_bytecode::verify(&module);
     assert!(

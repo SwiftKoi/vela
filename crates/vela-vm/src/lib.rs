@@ -25,6 +25,8 @@
 mod access;
 mod aggregate;
 mod command_schema;
+mod control;
+mod debug;
 mod driver;
 mod exec;
 mod fault;
@@ -36,6 +38,7 @@ mod read;
 mod session;
 mod state;
 
+pub use debug::{DebugLocal, FrameInfo, Site};
 pub use driver::{Execution, Host, Scripted, TakeFirst, replay, run};
 pub use fault::Fault;
 #[cfg(not(target_arch = "wasm32"))]
