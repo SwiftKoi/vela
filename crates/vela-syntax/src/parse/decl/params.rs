@@ -15,16 +15,22 @@ impl Parser<'_> {
             let Some(name) = self.expect_name("a parameter") else {
                 break;
             };
-            self.expect(TokenKind::Colon, "`:`");
-            let ty = self.parse_type();
+            // The type is optional: `param = IDENT [ ":" type ]` (`LANGUAGE.md §3`). A screen's
+            // parameters are usually written without one, and an absent type is the checker's
+            // `Ty::Unknown` rather than a syntax error — so the colon is what decides.
+            let ty = self.parse_optional_type();
             let default = if self.eat(TokenKind::Eq) {
                 Some(self.parse_expr())
             } else {
                 None
             };
-            let end = default
-                .as_ref()
-                .map_or_else(|| ty.span(), |expr| expr.span());
+            let end = match (&default, &ty) {
+                (Some(expr), _) => expr.span(),
+                (None, Some(ty)) => ty.span(),
+                // Neither a type nor a default was written, so the span ends with the name —
+                // the last token consumed.
+                (None, None) => self.prev_span(),
+            };
             params.push(Param {
                 span: start.to(end),
                 name,

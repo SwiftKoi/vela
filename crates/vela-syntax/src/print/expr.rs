@@ -70,7 +70,12 @@ pub(crate) fn params_text(params: &[Param]) -> String {
     let rendered: Vec<String> = params
         .iter()
         .map(|param| {
-            let mut out = format!("{}: {}", param.name, type_text(&param.ty));
+            // A parameter written without a type is written back without one, so the printer
+            // round-trips `screen s(x):` rather than inventing a type for it.
+            let mut out = match &param.ty {
+                Some(ty) => format!("{}: {}", param.name, type_text(ty)),
+                None => param.name.clone(),
+            };
             if let Some(default) = &param.default {
                 out.push_str(" = ");
                 out.push_str(&text(default));

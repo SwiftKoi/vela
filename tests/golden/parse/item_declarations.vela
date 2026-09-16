@@ -21,7 +21,7 @@ transform slide_in:
     from x = -1.0
     to x = 0.0
 
-screen menu_box(prompt: str):
+screen menu_box(prompt, title: str):
     text prompt
 
 style body:

@@ -221,7 +221,12 @@ impl Checker<'_> {
         let saved = self.scope.snapshot();
         let param_types: Vec<Ty> = params
             .iter()
-            .map(|param| lower(&param.ty, self.env))
+            .map(|param| {
+                param
+                    .ty
+                    .as_ref()
+                    .map_or(Ty::Unknown, |ty| lower(ty, self.env))
+            })
             .collect();
         for (param, ty) in params.iter().zip(&param_types) {
             self.scope.insert(param.name.clone(), ty.clone());

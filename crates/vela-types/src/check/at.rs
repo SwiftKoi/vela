@@ -91,7 +91,10 @@ fn walk(checker: &mut Checker<'_>, tree: &Program) {
             Item::Function(decl) => {
                 checker.scope = Scope::default();
                 for param in &decl.params {
-                    let ty = crate::lower::lower(&param.ty, checker.env);
+                    let ty = param
+                        .ty
+                        .as_ref()
+                        .map_or(Ty::Unknown, |ty| crate::lower::lower(ty, checker.env));
                     // A parameter's own span, which the tree does record: hovering `trust` in
                     // `fn spend(trust: int)` says `trust: int`.
                     checker.note(

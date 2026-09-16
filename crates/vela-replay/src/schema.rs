@@ -161,7 +161,14 @@ fn render_variant(variant: &Variant) -> String {
     let types: Vec<String> = variant
         .fields
         .iter()
-        .map(|field| render_type(&field.ty))
+        // A payload field written without a type renders as `?`, the same as a type the parser
+        // could not read — the schema's job is to be stable, not to invent a type (`LANGUAGE.md §3`).
+        .map(|field| {
+            field
+                .ty
+                .as_ref()
+                .map_or_else(|| "?".to_string(), render_type)
+        })
         .collect();
     format!("{}({})", variant.name, types.join(", "))
 }

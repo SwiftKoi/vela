@@ -157,7 +157,10 @@ impl Lowerer<'_> {
 
         let (lowered, ()) = self.in_body(name, Ty::Unit, |this| {
             for param in params {
-                let ty = lower_type(&param.ty, this.env);
+                let ty = param
+                    .ty
+                    .as_ref()
+                    .map_or(Ty::Unknown, |ty| lower_type(ty, this.env));
                 let slot = this.declare(&param.name, ty);
                 this.body.push_param(slot);
             }

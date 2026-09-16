@@ -172,7 +172,7 @@ theme dusk:
 style body from text:
     color = theme.fg
 
-screen dialogue(name: str?, line: str):
+screen dialogue(name: str?, line):
     layer ui
     box at bottom, stretch_x:
         pad 24

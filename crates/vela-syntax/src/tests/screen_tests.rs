@@ -4,9 +4,61 @@
 //! the boundary that was already there: this is the one construct in the language whose lines
 //! are *ambiguous by design*, and every test here is about that.
 
+use vela_span::FileId;
+
 use crate::tree::{Expr, Item, ScreenArg, ScreenLine};
 
 use super::parse_tests::parse_src;
+
+/// A parameter may be written without a type, and the printer round-trips it.
+///
+/// `param = IDENT [ ":" type ]` (`LANGUAGE.md §3`). An absent type is the checker's `Ty::Unknown`
+/// (`§5.4`) — the shape a migrated screen's parameters arrive in — so the parser, the tree, and the
+/// printer all have to agree that "no colon" is a parameter and not an error.
+#[test]
+fn an_untyped_parameter_round_trips() {
+    let source = "screen s(prompt, title: str, show = false):\n    text prompt\n";
+    let program = parse_src(source);
+    assert!(
+        program.diagnostics.is_empty(),
+        "{:?}",
+        program
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
+            .collect::<Vec<_>>()
+    );
+
+    let Some(Item::Screen(screen)) = program.program.items.first() else {
+        panic!("expected a screen");
+    };
+    assert_eq!(screen.params.len(), 3, "the parameter list");
+    assert!(
+        screen.params[0].ty.is_none(),
+        "`prompt` has no written type"
+    );
+    assert!(screen.params[1].ty.is_some(), "`title` is typed");
+    assert!(
+        screen.params[2].ty.is_none(),
+        "`show` has no written type but a default"
+    );
+
+    // The canonical form writes a type back only where one was written, and re-parses to the same
+    // absence of one — without this the formatter would invent a type on every pass.
+    let formatted = crate::format(FileId::from_raw(0), source).expect("the screen formats");
+    assert!(
+        formatted.contains("screen s(prompt, title: str, show = false):"),
+        "{formatted}"
+    );
+
+    let reparsed = parse_src(&formatted);
+    let Some(Item::Screen(screen)) = reparsed.program.items.first() else {
+        panic!("expected a screen");
+    };
+    assert!(screen.params[0].ty.is_none(), "`prompt` lost its absence");
+    assert!(screen.params[1].ty.is_some(), "`title` lost its type");
+    assert!(screen.params[2].ty.is_none(), "`show` lost its absence");
+}
 
 #[test]
 fn a_screen_body_parses_into_a_widget_tree() {

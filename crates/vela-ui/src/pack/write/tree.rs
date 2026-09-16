@@ -35,7 +35,12 @@ impl Writer {
     fn param(&mut self, param: &Param) {
         self.span(param.span);
         self.string(&param.name);
-        self.ty(&param.ty);
+        // A presence flag, because a parameter may be written without a type (`LANGUAGE.md §3`):
+        // the flag says whether the type tag follows.
+        self.flag(param.ty.is_some());
+        if let Some(ty) = &param.ty {
+            self.ty(ty);
+        }
         match &param.default {
             Some(value) => {
                 self.flag(true);

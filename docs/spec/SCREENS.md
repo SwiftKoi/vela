@@ -32,6 +32,11 @@ screen dialogue(name: str?, line: str, show_choices: bool = false):
             text line style = body
 ```
 
+A parameter's type is optional: `screen dialogue(name, line)` is the same screen with both
+parameters accepting anything. An absent type is `Unknown` (`LANGUAGE.md §5.4`), which is how
+Ren'Py's screens are written and therefore how a migrated one arrives — the migration has nothing
+to refuse or invent.
+
 Screens are **pure functions of their arguments and bound state**. They produce a widget tree;
 they never mutate `World` during layout. Mutation happens through *actions* only (§7), which
 keeps rendering one-directional and testable.

@@ -17,7 +17,10 @@ use crate::theme::Palette;
 /// Version 2 adds a tag for `UnOp::Bang`: a pack can now carry a negation the reader of version 1
 /// would have read as `not`, which is a *different* operator, so an old runtime must refuse rather
 /// than misread it.
-pub const PACK_VERSION: u16 = 2;
+/// Version 3 adds a presence flag before a parameter's type, because a parameter may be written
+/// without one (`LANGUAGE.md §3`). A version-2 reader would take that flag byte for a type tag, so
+/// an old runtime must refuse rather than misread it.
+pub const PACK_VERSION: u16 = 3;
 
 /// The four bytes every pack starts with.
 ///

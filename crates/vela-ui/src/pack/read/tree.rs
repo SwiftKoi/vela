@@ -40,7 +40,8 @@ impl Reader<'_> {
         for _ in 0..count {
             let span = self.span();
             let name = self.string();
-            let ty = self.ty();
+            // The flag the writer set: a type tag follows only when one was written.
+            let ty = self.flag().then(|| self.ty());
             let default = self.flag().then(|| self.expr());
             params.push(Param {
                 span,

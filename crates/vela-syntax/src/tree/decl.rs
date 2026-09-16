@@ -11,8 +11,13 @@ pub struct Param {
     pub span: Span,
     /// Its name.
     pub name: String,
-    /// Its type.
-    pub ty: Type,
+    /// Its type, if one was written.
+    ///
+    /// A type may be omitted, and most screen parameters are: Ren'Py's screens rarely type theirs,
+    /// and the migration has to accept what a project wrote rather than invent a type for it. The
+    /// checker reads an absent type as `Ty::Unknown` — its existing answer for "nobody said", which
+    /// fits everywhere and is never reported against (`LANGUAGE.md §5.4`).
+    pub ty: Option<Type>,
     /// A default, if one was written.
     pub default: Option<Expr>,
 }

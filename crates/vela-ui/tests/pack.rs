@@ -20,7 +20,7 @@ theme dusk:
 style body:
     color = theme.fg
 
-screen dialogue(name: str?, line: str):
+screen dialogue(name: str?, line):
     text line style = body
 
 screen pause:

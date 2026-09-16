@@ -337,6 +337,26 @@ fn calling_a_function_with_the_wrong_argument_type_is_reported_e3007() {
     assert_eq!(codes(source), vec!["E3007"]);
 }
 
+/// A parameter written without a type accepts any argument.
+///
+/// An absent type is `Unknown`, which fits everywhere and is never reported against
+/// (`LANGUAGE.md §5.4`) — which is what lets a migrated screen's untyped parameters be called at all.
+#[test]
+fn an_untyped_parameter_accepts_any_argument() {
+    let source = "fn takes(anything) -> int:\n    return 1\n\n\
+                  label a:\n    var n: int = takes(\"a string\")\n    return\n";
+    assert!(codes(source).is_empty(), "{:?}", codes(source));
+}
+
+/// The other half of that rule: a *typed* parameter still refuses the wrong argument, so the
+/// relaxation above is an absence of a type rather than an absence of checking.
+#[test]
+fn a_typed_parameter_still_refuses_a_wrong_argument() {
+    let source = "fn takes(n: int) -> int:\n    return n\n\n\
+                  label a:\n    var x = takes(\"two\")\n    return\n";
+    assert_eq!(codes(source), vec!["E3007"]);
+}
+
 /// A test's assertion is typed, so a test that could never pass says so before it runs.
 ///
 /// This is the whole reason `expect` holds an expression rather than a string: an assertion written in

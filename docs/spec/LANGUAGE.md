@@ -98,7 +98,11 @@ effect_decl    = "effect" module_path "(" [ params ] ")" [ "->" type ] ;
 
 fn_decl        = "fn" IDENT "(" [ params ] ")" [ "->" type ] block ;
 params         = param { "," param } [ "," ] ;
-param          = IDENT ":" type [ "=" expr ] ;
+param          = IDENT [ ":" type ] [ "=" expr ] ;
+              (* A parameter may omit its type. An absent type is `Unknown` (`§5.4`), which is
+                 how a screen's parameters are usually written — Ren'Py's screens rarely type
+                 theirs, and the migration accepts what the project wrote rather than inventing
+                 a type for it (`SCREENS.md §2`). *)
 label_decl     = "label" IDENT block ;
 
 struct_decl    = "struct" IDENT block_field+ ;     (* indented field list *)
@@ -292,8 +296,17 @@ null**: use `match` to unwrap, or `x ?? default`. Unsafe unwrap is `E3002`; ther
 ### 5.4 Inference
 Local `var` declarations infer from the initializer. Module `default` declarations may omit
 the type only if the initializer's type is unambiguous (literal, constructor, or `const`).
-Function parameters and return types are always explicit (`E3003`). Inference never widens
+A parameter may omit its type; an absent type is `Unknown`, which accepts any argument and is
+never reported against — the shape a screen's parameters arrive in (`SCREENS.md §2`). A return
+type is still written where a function returns a value. Inference never widens
 across branches without a declared type (`E3004`) — this keeps error messages local.
+
+> **Revised (M12.1).** A parameter's type became optional. The rule was "function parameters and
+> return types are always explicit (`E3003`)"; a migrated screen rarely types its parameters, and
+> refusing every one would have blocked the screen language on a detail Ren'Py does not require.
+> The absent type is `Unknown` rather than a new kind of "unspecified", because `Unknown` already
+> means "nobody said" and already fits everywhere — so an untyped parameter accepts any argument,
+> and a typed one still refuses a wrong one.
 
 ### 5.5 String interpolation
 `"Score: [score]"` desugars to a concatenation of `str(score)`. The interpolated expression

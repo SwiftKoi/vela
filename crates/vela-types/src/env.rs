@@ -102,7 +102,9 @@ impl Env {
                                 variant
                                     .fields
                                     .iter()
-                                    .map(|field| lower(&field.ty, env))
+                                    .map(|field| {
+                                        field.ty.as_ref().map_or(Ty::Unknown, |ty| lower(ty, env))
+                                    })
                                     .collect(),
                             )
                         };
@@ -125,8 +127,11 @@ impl Env {
                 Item::Effect(decl) => {
                     let (params, ret) = {
                         let env: &Self = self;
-                        let params: Vec<Ty> =
-                            decl.params.iter().map(|p| lower(&p.ty, env)).collect();
+                        let params: Vec<Ty> = decl
+                            .params
+                            .iter()
+                            .map(|p| p.ty.as_ref().map_or(Ty::Unknown, |ty| lower(ty, env)))
+                            .collect();
                         let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| lower(ty, env));
                         (params, ret)
                     };
@@ -136,8 +141,11 @@ impl Env {
                 Item::Function(decl) => {
                     let (params, ret) = {
                         let env: &Self = self;
-                        let params: Vec<Ty> =
-                            decl.params.iter().map(|p| lower(&p.ty, env)).collect();
+                        let params: Vec<Ty> = decl
+                            .params
+                            .iter()
+                            .map(|p| p.ty.as_ref().map_or(Ty::Unknown, |ty| lower(ty, env)))
+                            .collect();
                         let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| lower(ty, env));
                         (params, ret)
                     };

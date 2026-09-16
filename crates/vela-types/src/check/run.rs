@@ -24,7 +24,8 @@ pub fn check(tree: &Program, env: &Env) -> Vec<Diagnostic> {
             Item::Function(decl) => {
                 checker.scope = Scope::default();
                 for param in &decl.params {
-                    let ty = lower(&param.ty, env);
+                    // An omitted type is `Unknown`, which fits every argument (`LANGUAGE.md §5.4`).
+                    let ty = param.ty.as_ref().map_or(Ty::Unknown, |ty| lower(ty, env));
                     checker.scope.insert(param.name.clone(), ty);
                 }
                 // Whether every path through the body exits comes back from the walk itself,

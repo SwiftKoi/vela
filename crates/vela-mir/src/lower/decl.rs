@@ -40,7 +40,12 @@ impl Lowerer<'_> {
                 fields: variant
                     .fields
                     .iter()
-                    .map(|field| lower_type(&field.ty, self.env))
+                    .map(|field| {
+                        field
+                            .ty
+                            .as_ref()
+                            .map_or(Ty::Unknown, |ty| lower_type(ty, self.env))
+                    })
                     .collect(),
             })
             .collect();
@@ -114,7 +119,12 @@ impl Lowerer<'_> {
         let params = decl
             .params
             .iter()
-            .map(|param| lower_type(&param.ty, self.env))
+            .map(|param| {
+                param
+                    .ty
+                    .as_ref()
+                    .map_or(Ty::Unknown, |ty| lower_type(ty, self.env))
+            })
             .collect();
         let ret = decl
             .ret
@@ -138,7 +148,13 @@ impl Lowerer<'_> {
 
         let (body, ()) = self.in_body(name, ret, |this| {
             for param in &decl.params {
-                let ty = lower_type(&param.ty, this.env);
+                // An omitted type lowers to `Unknown`, matching what the checker gave the body
+                // (`LANGUAGE.md §5.4`) — MIR has to agree with the checker or the two disagree
+                // about the same parameter.
+                let ty = param
+                    .ty
+                    .as_ref()
+                    .map_or(Ty::Unknown, |ty| lower_type(ty, this.env));
                 let slot = this.declare(&param.name, ty);
                 this.body.push_param(slot);
             }
