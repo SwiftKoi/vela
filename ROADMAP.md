@@ -63,6 +63,7 @@ the boundary rather than working around it.
 | [M10](docs/roadmap/M10-tooling.md) | Tooling | LSP, formatter, test runner, and analysis |
 | [M11](docs/roadmap/M11-debugger.md) | Debugger | Debug a story like software, including backwards |
 | [M12](docs/roadmap/M12-migration.md) | Migration | A Ren'Py project ports incrementally, measurably |
+| [M12.5](docs/roadmap/M12.5-project-parity.md) | Parity | The rest of a project — screens, theme, config — is migrated or deliberately not |
 | [M13](docs/roadmap/M13-extensibility.md) | Extensibility | Third parties extend the engine; rich media works |
 | [M14](docs/roadmap/M14-hardening.md) | 1.0 | Every claim in `VISION.md §5` is measurably true |
 
@@ -87,6 +88,8 @@ M0 bootstrap
    M10 tooling            M11 debugger+docs          M12 migration
         └────────────────────────┴────────────────────────┘
                                  ▼
+                     M12.5 project parity (screens)
+                                 ▼
                     M13 extensibility + rich media
                                  ▼
                           M14 1.0 hardening
@@ -97,6 +100,8 @@ M0 bootstrap
   presentation.
 - After M5: M8 and M6 are independent.
 - After M9: M11 and M12 are independent.
+- After M12: M12.5's screen work is `vela-ui`, and anything that touches the widget registry
+  collides with M13's rich media — the two want the same files.
 - Throughout: `xtask` checks and the golden corpus grow with whichever milestone lands first.
 
 ---

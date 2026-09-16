@@ -59,15 +59,26 @@ The reader's structure is indentation, and getting that right was most of the de
 after `if h.who:` — Ren'Py's own `screens.rpy` is full of them — ended the block, which sent the rest
 of a screen to the enclosing file and turned a 1,500-line file into 596 report entries.
 
+The rest of the project — the 1,538-line `screens.rpy`, the theme in `gui.rpy`, the engine config in
+`options.rpy`, the per-language translation trees — has its own document: **`M12.5-project-parity.md`**
+is the survey of every file in the sample and the disposition of each, because migrating a screen
+language is *implementing* it rather than translating it, and that is a decision this milestone
+should not have made by accident.
+
 ## Still open
 
 - **Work items 2–7.** The expression translator is a whitelist rather than a Python subset; `renpy.*`
   calls have no shim; local labels (`label .quiet_morning`) are reported rather than translated, and
   the note below argues they belong in the language before they belong here.
-- **Assets are inventoried, not copied**, and image declarations are not generated. Ren'Py derives
-  image names automatically from filenames, so reproducing that is the first piece of asset work —
-  and it is blocked upstream for the sample by two importers that do not exist: JPEG (four
-  backgrounds) and Opus (one track).
+- **Assets: images are migrated, the rest is reported.** Ren'Py derives an image name from its
+  filename, so the migration reproduces that — the files under `images/` are copied into `assets/`,
+  an `image` declaration is generated for each in `src/images.vela`, and the story's `scene`/`show`
+  names are rewritten to the dotted form (`show sylvie green normal` → `sylvie.green.normal`, which
+  is the name that resolves). The JPEG blocker is gone: `vela-assets` decodes JPEG as well as PNG
+  (`decode` picks by magic bytes; the texture importer re-encodes a JPEG as a PNG, so there is one
+  artifact format). **Opus is still open** (one track: `illurock.opus`), and the **GUI skin**'s 48
+  images are reported rather than copied, because they belong to Ren'Py's screens — the disposition
+  for those is `M12.5-project-parity.md §2`.
 - **The ported sample is not under `tests/`** as work item 7 asks. It cannot be: the sample is
   Ren'Py's own project, with Ren'Py's art. What is committed instead is the migration *test*, and
   `examples/the_question_migrated` is regenerated on demand.
