@@ -24,6 +24,8 @@ vela-diag.workspace = true
 # function that decides what a reference points at. Reusing it is the point — a language server with
 # its own resolution rule would be a second answer to a question that already has one.
 vela-hir.workspace = true
+# For hover: the type of a local, a parameter, or an expression, which only the checker can say.
+vela-types.workspace = true
 vela-ui.workspace = true
 
 [lints]

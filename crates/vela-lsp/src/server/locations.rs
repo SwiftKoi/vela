@@ -79,12 +79,37 @@ impl Server {
         json!({ "changes": changes })
     }
 
-    /// What the offset in a request's position names, if anything.
+    /// What to say about a position, or `null` when there is nothing to say.
     ///
-    /// Shared by the three index capabilities: each of them starts by asking what the editor is pointing
-    /// at, and only what they do with the answer differs.
-    pub(super) fn target(&mut self, message: &Value) -> Option<symbols::Found> {
-        let uri = string_at(message, &["params", "textDocument", "uri"]);
+    /// `null` rather than an empty answer: an editor draws a hover box for a non-empty string and
+    /// nothing for `null`, and a box that says nothing is worse than no box.
+    pub(super) fn hover(&mut self, message: &Value) -> Value {
+        let Some((file, offset)) = self.position_of(message) else {
+            return Value::Null;
+        };
+
+        let Some(hover) = crate::hover::at(&mut self.session, file, offset) else {
+            return Value::Null;
+        };
+
+        let mut result = json!({
+            "contents": { "kind": "markdown", "value": hover.markdown },
+        });
+        // The range only when the answer is *in this document*: a label declared in another file has a
+        // span, and a range in a different file's coordinates would underline unrelated characters.
+        if let Some(span) = hover.range {
+            let range = position::range(self.session.sources(), span);
+            result["range"] = json!({
+                "start": { "line": range.start.line, "character": range.start.character },
+                "end": { "line": range.end.line, "character": range.end.character },
+            });
+        }
+        result
+    }
+
+    /// The document a request is about, and the offset in it.
+    fn position_of(&mut self, message: &Value) -> Option<(FileId, u32)> {
+        let uri = self.request_uri(message)?;
         let name = self.open.get(&uri).cloned()?;
         let file = self.session.file_named(&name)?;
 
@@ -93,6 +118,21 @@ impl Server {
             character: number_at(message, &["params", "position", "character"]),
         };
         let offset = position::offset(self.session.sources(), file, at)?;
+        Some((file, offset))
+    }
+
+    /// The URI a request is about.
+    fn request_uri(&self, message: &Value) -> Option<String> {
+        let uri = string_at(message, &["params", "textDocument", "uri"]);
+        (!uri.is_empty()).then_some(uri)
+    }
+
+    /// What the offset in a request's position names, if anything.
+    ///
+    /// Shared by the three index capabilities: each of them starts by asking what the editor is pointing
+    /// at, and only what they do with the answer differs.
+    pub(super) fn target(&mut self, message: &Value) -> Option<symbols::Found> {
+        let (file, offset) = self.position_of(message)?;
         symbols::at(&mut self.session, file, offset)
     }
 

@@ -1,6 +1,6 @@
 //! Typing statements.
 
-use vela_syntax::{Expr, MatchArm, Pattern, Stmt, WaitEvent};
+use vela_syntax::{Expr, MatchArm, Pattern, Stmt, VarStmt, WaitEvent};
 
 use crate::check::coverage;
 use crate::check::run::Checker;
@@ -44,21 +44,7 @@ impl Checker<'_> {
     /// a compile error rather than a statement nobody checks.
     fn simple(&mut self, statement: &Stmt) -> Option<bool> {
         match statement {
-            Stmt::Var(stmt) => {
-                let value = self.expr(&stmt.value);
-                let ty = match &stmt.ty {
-                    Some(annotation) => {
-                        let declared = lower(annotation, self.env);
-                        self.expect(&declared, &value, stmt.value.span());
-                        declared
-                    }
-                    // An unwritten type is inferred from the initialiser, which is what
-                    // `LANGUAGE.md §5.4` promises for locals.
-                    None => value,
-                };
-                self.scope.insert(stmt.name.clone(), ty);
-                Some(false)
-            }
+            Stmt::Var(stmt) => Some(self.local(stmt)),
 
             Stmt::Assign(stmt) => {
                 let target = self.expr(&stmt.target);
@@ -116,6 +102,39 @@ impl Checker<'_> {
             // `nested` handles these before `simple` is reached.
             Stmt::Menu(_) | Stmt::If(_) | Stmt::While(_) | Stmt::For(_) | Stmt::Match(_) => None,
         }
+    }
+
+    /// Checks a local declaration, which is the one statement that introduces a name.
+    ///
+    /// Its own method because the two decisions it makes are worth reading together: where the type
+    /// comes from — an annotation, or the initialiser — and that the name is recorded for a caller that
+    /// asked about an offset (`check::at`). It never exits, so it answers `false`.
+    fn local(&mut self, stmt: &VarStmt) -> bool {
+        let value = self.expr(&stmt.value);
+        let ty = match &stmt.ty {
+            Some(annotation) => {
+                let declared = lower(annotation, self.env);
+                self.expect(&declared, &value, stmt.value.span());
+                declared
+            }
+            // An unwritten type is inferred from the initialiser, which is what
+            // `LANGUAGE.md §5.4` promises for locals.
+            None => value,
+        };
+
+        // Recorded against the *declaration* rather than the name: the tree keeps a `var` as one span,
+        // so `var name: T = ` is the closest thing to "the name" there is. It stops before the
+        // initialiser, which is what keeps a hover on `1` in `var n = 1` an answer about the literal
+        // rather than about `n`.
+        self.note(
+            stmt.span.to(stmt.value.span()),
+            crate::check::at::Found::Name {
+                name: stmt.name.clone(),
+                ty: ty.clone(),
+            },
+        );
+        self.scope.insert(stmt.name.clone(), ty);
+        false
     }
 
     /// Checks a statement that contains bodies, answering whether every path through it exits.

@@ -13,6 +13,7 @@
 //! program, which is the only way an editor and CI can be guaranteed to agree.
 
 pub mod diagnostics;
+pub mod hover;
 pub mod position;
 pub mod symbols;
 pub mod transport;

@@ -14,7 +14,7 @@ use crate::server::Server;
 use crate::transport;
 
 /// A project with one error and one warning, as the test session sees it.
-const SOURCE: &str = "\
+pub(super) const SOURCE: &str = "\
 label start:
     var n: int = 1
     var s = \"n is [n]\"
@@ -24,28 +24,28 @@ label start:
 ";
 
 /// A server whose workspace is a session holding one file, plus the URI of that file.
-fn server() -> (Server, String) {
-    let uri = "file:///game/src/main.vela".to_string();
+pub(super) fn server() -> (Server, String) {
+    let uri = "file:///game/main.vela".to_string();
     let server = Server::new("/game", |_root: &str| {
         let mut session = Session::new();
-        session.set_file("src/main.vela", SOURCE);
+        session.set_file("main.vela", SOURCE);
         session
     });
     (server, uri)
 }
 
 /// A message a client would send.
-fn request(id: u32, method: &str, params: Value) -> Value {
+pub(super) fn request(id: u32, method: &str, params: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params })
 }
 
 /// A notification, which has no id and expects no answer.
-fn notice(method: &str, params: Value) -> Value {
+pub(super) fn notice(method: &str, params: Value) -> Value {
     json!({ "jsonrpc": "2.0", "method": method, "params": params })
 }
 
 /// Frames a list of messages the way a client would.
-fn framed(messages: &[Value]) -> Cursor<Vec<u8>> {
+pub(super) fn framed(messages: &[Value]) -> Cursor<Vec<u8>> {
     let mut bytes = Vec::new();
     for message in messages {
         transport::write(&mut bytes, message).expect("frame a message");
@@ -54,7 +54,7 @@ fn framed(messages: &[Value]) -> Cursor<Vec<u8>> {
 }
 
 /// Every message the server wrote.
-fn replies(messages: &[Value]) -> Vec<Value> {
+pub(super) fn replies(messages: &[Value]) -> Vec<Value> {
     let (mut server, _) = server();
     let mut output = Vec::new();
     server
@@ -64,7 +64,7 @@ fn replies(messages: &[Value]) -> Vec<Value> {
 }
 
 /// Every message in a stream of framed bytes.
-fn read_all(output: Vec<u8>) -> Vec<Value> {
+pub(super) fn read_all(output: Vec<u8>) -> Vec<Value> {
     let mut reader = Cursor::new(output);
     let mut out = Vec::new();
     while let Some(message) = transport::read(&mut reader).expect("read a reply") {
@@ -74,7 +74,7 @@ fn read_all(output: Vec<u8>) -> Vec<Value> {
 }
 
 /// The published diagnostics for a URI, which is the last `publishDiagnostics` about it.
-fn published(messages: &[Value], uri: &str) -> Vec<Value> {
+pub(super) fn published(messages: &[Value], uri: &str) -> Vec<Value> {
     messages
         .iter()
         .filter(|message| message["method"] == "textDocument/publishDiagnostics")
@@ -85,10 +85,10 @@ fn published(messages: &[Value], uri: &str) -> Vec<Value> {
 }
 
 /// Opening the document the session already knows.
-fn opened() -> Value {
+pub(super) fn opened() -> Value {
     notice(
         "textDocument/didOpen",
-        json!({ "textDocument": { "uri": "file:///game/src/main.vela", "text": SOURCE } }),
+        json!({ "textDocument": { "uri": "file:///game/main.vela", "text": SOURCE } }),
     )
 }
 
@@ -109,15 +109,14 @@ fn initialize_answers_with_the_capabilities_it_actually_has() {
     assert_eq!(capabilities["definitionProvider"], true);
     assert_eq!(capabilities["referencesProvider"], true);
     assert_eq!(capabilities["renameProvider"], true);
+    assert_eq!(capabilities["hoverProvider"], true);
 
-    // And nothing it does not: an advertised capability is one an editor calls. Hover and completion
-    // need the type and the scope at an offset, which is a question the type checker has to answer.
-    for absent in ["hoverProvider", "completionProvider"] {
-        assert!(
-            capabilities.get(absent).is_none(),
-            "`{absent}` is advertised but not implemented"
-        );
-    }
+    // And nothing it does not: an advertised capability is one an editor calls. Completion needs the
+    // names in scope at an offset, which is the next thing to build.
+    assert!(
+        capabilities.get("completionProvider").is_none(),
+        "`completionProvider` is advertised but not implemented"
+    );
 }
 
 /// Two modules, so the index has a cross-module `jump` to follow.
@@ -125,21 +124,21 @@ fn initialize_answers_with_the_capabilities_it_actually_has() {
 /// Named without a `src/` prefix because the workspace in these tests has no directory to check: the
 /// server's rule is "names are relative to `src/` when the project has one" (`source_root`), and the
 /// integration test is where a real project exercises that half.
-const MAIN: &str = "\
+pub(super) const MAIN: &str = "\
 use chapters.forest as forest
 
 label start:
     jump forest.clearing
 ";
 
-const FOREST: &str = "\
+pub(super) const FOREST: &str = "\
 label clearing:
     \"Trees.\"
     return
 ";
 
 /// A server for that two-module workspace.
-fn cross_module() -> Server {
+pub(super) fn cross_module() -> Server {
     Server::new("/game", |_root: &str| {
         let mut session = Session::new();
         session.set_file("main.vela", MAIN);
@@ -150,7 +149,7 @@ fn cross_module() -> Server {
 }
 
 /// A request about a position, framed the way an editor sends one.
-fn about_position(id: u32, method: &str, uri: &str, line: u32, character: u32) -> Value {
+pub(super) fn about_position(id: u32, method: &str, uri: &str, line: u32, character: u32) -> Value {
     request(
         id,
         method,
@@ -162,124 +161,9 @@ fn about_position(id: u32, method: &str, uri: &str, line: u32, character: u32) -
 }
 
 #[test]
-fn goto_definition_lands_in_another_module() {
-    let mut server = cross_module();
-    let mut output = Vec::new();
-    server
-        .serve(
-            &mut framed(&[
-                request(1, "initialize", json!({})),
-                notice(
-                    "textDocument/didOpen",
-                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
-                ),
-                // Line 3 is the `jump`, and column 12 is inside `forest.clearing`.
-                about_position(
-                    2,
-                    "textDocument/definition",
-                    "file:///game/main.vela",
-                    3,
-                    12,
-                ),
-            ]),
-            &mut output,
-        )
-        .expect("the server answers");
-
-    let messages = read_all(output);
-    let reply = messages
-        .iter()
-        .find(|message| message["id"] == 2)
-        .expect("a reply to the request");
-
-    let locations = reply["result"].as_array().expect("a list of locations");
-    assert_eq!(locations.len(), 1, "{reply}");
-    assert_eq!(
-        locations[0]["uri"], "file:///game/chapters/forest.vela",
-        "the label lives in the other module"
-    );
-    assert_eq!(locations[0]["range"]["start"]["line"], 0);
-}
-
-/// References are the same walk, and the declaration is among them: an editor that renamed a label
-/// without its declaration would leave the project saying two different things.
-#[test]
-fn references_name_every_place_including_the_declaration() {
-    let mut server = cross_module();
-    let mut output = Vec::new();
-    server
-        .serve(
-            &mut framed(&[
-                request(1, "initialize", json!({})),
-                notice(
-                    "textDocument/didOpen",
-                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
-                ),
-                about_position(
-                    2,
-                    "textDocument/references",
-                    "file:///game/main.vela",
-                    3,
-                    12,
-                ),
-            ]),
-            &mut output,
-        )
-        .expect("the server answers");
-
-    let messages = read_all(output);
-    let reply = messages
-        .iter()
-        .find(|message| message["id"] == 2)
-        .expect("a reply to the request");
-
-    let locations = reply["result"].as_array().expect("a list of locations");
-    let uris: Vec<&str> = locations
-        .iter()
-        .map(|location| location["uri"].as_str().unwrap_or(""))
-        .collect();
-
-    assert!(uris.contains(&"file:///game/main.vela"), "{uris:?}");
-    assert!(
-        uris.contains(&"file:///game/chapters/forest.vela"),
-        "{uris:?}"
-    );
-}
-
-/// A position that names nothing answers `null` rather than the enclosing label: an editor draws no
-/// goto arrow, which is honest, instead of jumping somewhere plausible.
-#[test]
-fn a_position_that_names_nothing_answers_null() {
-    let mut server = cross_module();
-    let mut output = Vec::new();
-    server
-        .serve(
-            &mut framed(&[
-                request(1, "initialize", json!({})),
-                notice(
-                    "textDocument/didOpen",
-                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
-                ),
-                // Line 0 is `use chapters.forest as forest`; column 1 is inside the keyword, which is
-                // not a name this index knows.
-                about_position(2, "textDocument/definition", "file:///game/main.vela", 1, 0),
-            ]),
-            &mut output,
-        )
-        .expect("the server answers");
-
-    let messages = read_all(output);
-    let reply = messages
-        .iter()
-        .find(|message| message["id"] == 2)
-        .expect("a reply to the request");
-    assert!(reply["result"].is_null(), "{reply}");
-}
-
-#[test]
 fn opening_a_document_publishes_its_diagnostics() {
     let messages = replies(&[request(1, "initialize", json!({})), opened()]);
-    let diagnostics = published(&messages, "file:///game/src/main.vela");
+    let diagnostics = published(&messages, "file:///game/main.vela");
 
     assert!(
         !diagnostics.is_empty(),
@@ -310,13 +194,13 @@ fn an_edit_republishes_and_a_fix_clears() {
         notice(
             "textDocument/didChange",
             json!({
-                "textDocument": { "uri": "file:///game/src/main.vela" },
+                "textDocument": { "uri": "file:///game/main.vela" },
                 "contentChanges": [{ "text": "label start:\n    \"fine\"\n    return\n" }],
             }),
         ),
     ]);
 
-    let last = published(&messages, "file:///game/src/main.vela");
+    let last = published(&messages, "file:///game/main.vela");
     assert!(last.is_empty(), "the fix did not clear: {last:?}");
 }
 
@@ -327,7 +211,7 @@ fn closing_a_document_clears_its_diagnostics() {
         opened(),
         notice(
             "textDocument/didClose",
-            json!({ "textDocument": { "uri": "file:///game/src/main.vela" } }),
+            json!({ "textDocument": { "uri": "file:///game/main.vela" } }),
         ),
     ]);
 
@@ -336,108 +220,17 @@ fn closing_a_document_clears_its_diagnostics() {
         .filter(|message| message["method"] == "textDocument/publishDiagnostics")
         .collect();
     assert_eq!(publishes.len(), 2, "one on open, one on close");
-    assert!(published(&messages, "file:///game/src/main.vela").is_empty());
+    assert!(published(&messages, "file:///game/main.vela").is_empty());
 }
 
 /// A request for something this server does not do is answered as not-found. Silence would leave an
 /// editor waiting on a response that never comes.
 #[test]
 fn an_unknown_request_is_answered_with_an_error() {
-    let messages = replies(&[request(7, "textDocument/hover", json!({}))]);
+    let messages = replies(&[request(7, "textDocument/typeDefinition", json!({}))]);
 
     assert_eq!(messages[0]["id"], 7);
     assert_eq!(messages[0]["error"]["code"], -32601);
-}
-
-/// A rename comes back as a workspace edit, one document at a time, with the *name* in each range.
-///
-/// The ranges are what an editor applies verbatim, so a range that covered `jump forest.clearing`
-/// instead of `clearing` would delete the keyword.
-#[test]
-fn a_rename_edits_every_file_the_name_appears_in() {
-    let mut server = cross_module();
-    let mut output = Vec::new();
-    server
-        .serve(
-            &mut framed(&[
-                request(1, "initialize", json!({})),
-                notice(
-                    "textDocument/didOpen",
-                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
-                ),
-                request(
-                    2,
-                    "textDocument/rename",
-                    json!({
-                        "textDocument": { "uri": "file:///game/main.vela" },
-                        "position": { "line": 3, "character": 12 },
-                        "newName": "glade",
-                    }),
-                ),
-            ]),
-            &mut output,
-        )
-        .expect("the server answers");
-
-    let messages = read_all(output);
-    let reply = messages
-        .iter()
-        .find(|message| message["id"] == 2)
-        .expect("a reply to the request");
-
-    let changes = &reply["result"]["changes"];
-    let main = changes["file:///game/main.vela"]
-        .as_array()
-        .unwrap_or_else(|| panic!("the reference is not edited: {reply}"));
-    assert_eq!(main.len(), 1, "{reply}");
-    assert_eq!(main[0]["newText"], "glade");
-
-    // `    jump forest.clearing` — the target starts at column 9, and only `clearing` is replaced.
-    assert_eq!(main[0]["range"]["start"]["character"], 16);
-    assert_eq!(main[0]["range"]["end"]["character"], 24);
-
-    let forest = changes["file:///game/chapters/forest.vela"]
-        .as_array()
-        .unwrap_or_else(|| panic!("the declaration is not edited: {reply}"));
-    assert_eq!(forest.len(), 1, "{reply}");
-}
-
-/// A rename that would not be a name is refused *before* anything is edited: an editor that applied it
-/// would leave a file the parser cannot read, and the author looking at an error nobody wrote.
-#[test]
-fn a_rename_to_something_that_is_not_a_name_is_refused() {
-    let mut server = cross_module();
-    let mut output = Vec::new();
-    server
-        .serve(
-            &mut framed(&[
-                request(1, "initialize", json!({})),
-                notice(
-                    "textDocument/didOpen",
-                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
-                ),
-                request(
-                    2,
-                    "textDocument/rename",
-                    json!({
-                        "textDocument": { "uri": "file:///game/main.vela" },
-                        "position": { "line": 3, "character": 12 },
-                        "newName": "not a name",
-                    }),
-                ),
-            ]),
-            &mut output,
-        )
-        .expect("the server answers");
-
-    let messages = read_all(output);
-    let reply = messages
-        .iter()
-        .find(|message| message["id"] == 2)
-        .expect("a reply to the request");
-
-    assert_eq!(reply["error"]["code"], -32602, "{reply}");
-    assert!(reply.get("result").is_none(), "{reply}");
 }
 
 /// `exit` ends the loop, and the messages after it are not read — the client has said it is done.

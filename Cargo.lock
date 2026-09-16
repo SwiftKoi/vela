@@ -2122,6 +2122,7 @@ dependencies = [
  "vela-hir",
  "vela-span",
  "vela-syntax",
+ "vela-types",
  "vela-ui",
 ]
 

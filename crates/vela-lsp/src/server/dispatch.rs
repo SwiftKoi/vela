@@ -59,6 +59,10 @@ impl Server {
                 let locations = self.locations(message, true);
                 self.respond(output, id, locations)?;
             }
+            "textDocument/hover" => {
+                let hover = self.hover(message);
+                self.respond(output, id, hover)?;
+            }
             "textDocument/rename" => {
                 let new_name = string_at(message, &["params", "newName"]);
                 // Checked here rather than left to the checker afterwards: a rename that writes a name

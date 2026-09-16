@@ -71,8 +71,17 @@ would move the reference to another module. A declaration's own name is still *r
 first line (the tree records `label start:` as one span), which is text arithmetic and is pinned by a
 test over every `DefKind`; recording name spans in the tree is the better fix and the next one.
 
-Hover and completion stay out of the capabilities until they answer: both need the type and the scope
-at an offset, which is a question `vela-types` has to answer rather than something this crate can infer.
+**Hover answers, from two sources.** The symbol index says what kind of thing a name is and where it is
+declared; the checker says what type it has, which is the only way to answer for a local whose type
+nobody wrote down (`var total = spend(saved, title)`). That second source is `vela_types::at`, and it is
+a *mode of the checker's own walk* rather than a second traversal: the scope rules — a `var` is visible
+from where it is written to the end of the body — are exactly what would drift, and a hover that called
+a name unknown where the checker accepts it would contradict the diagnostics in the same window. The
+innermost expression containing the offset wins, so a caret on `r` in `r.name` says `Route` and a caret
+inside `name` says `str`.
+
+Completion is the last of the five, and it needs the names in scope at an offset — the same question
+hover just learned to ask, with a different answer.
 
 Building this found a bug worth recording, because it is the class the parity criterion exists for.
 Documents arrive as URIs, and the first version named them relative to the *project* root — so a

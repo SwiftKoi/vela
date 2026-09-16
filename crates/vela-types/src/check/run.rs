@@ -12,11 +12,7 @@ use crate::ty::Ty;
 /// Checks every body in a module against its declarations.
 #[must_use]
 pub fn check(tree: &Program, env: &Env) -> Vec<Diagnostic> {
-    let mut checker = Checker {
-        env,
-        scope: Scope::default(),
-        diagnostics: Vec::new(),
-    };
+    let mut checker = Checker::new(env, Scope::default());
 
     for item in &tree.items {
         match item {
@@ -59,11 +55,7 @@ pub fn check(tree: &Program, env: &Env) -> Vec<Diagnostic> {
 /// report each one twice.
 #[must_use]
 pub fn type_of(env: &Env, scope: &Scope, expr: &Expr) -> Ty {
-    let mut checker = Checker {
-        env,
-        scope: scope.snapshot(),
-        diagnostics: Vec::new(),
-    };
+    let mut checker = Checker::new(env, scope.snapshot());
     checker.expr(expr)
 }
 
@@ -75,9 +67,31 @@ pub(crate) struct Checker<'a> {
     pub(crate) scope: Scope,
     /// Problems found so far.
     pub(crate) diagnostics: Vec<Diagnostic>,
+    /// The offset a caller asked about, when one did (`check::at`).
+    ///
+    /// A mode of this same walk rather than a second one: the scope rules are the part that would drift
+    /// if a second walk re-derived them, and a hover that disagrees with the diagnostics is worse than
+    /// no hover at all.
+    pub(crate) ask: Option<u32>,
+    /// The narrowest span that has answered so far.
+    pub(crate) best: Option<Span>,
+    /// What was found there.
+    pub(crate) answer: Option<crate::check::at::Found>,
 }
 
-impl Checker<'_> {
+impl<'a> Checker<'a> {
+    /// A checker for one module, which checks rather than answers.
+    pub(crate) fn new(env: &'a Env, scope: Scope) -> Self {
+        Self {
+            env,
+            scope,
+            diagnostics: Vec::new(),
+            ask: None,
+            best: None,
+            answer: None,
+        }
+    }
+
     /// Records a problem.
     pub(crate) fn report(&mut self, diagnostic: Diagnostic) {
         self.diagnostics.push(diagnostic);

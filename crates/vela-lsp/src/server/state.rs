@@ -80,12 +80,14 @@ impl Server {
                 // Stated rather than left to the default, because it is a claim about every range this
                 // server ever sends (`crate::position`).
                 "positionEncoding": "utf-16",
-                // Where a name is declared, and every place it is written, for the names the symbol
-                // index knows. Hover, completion, and rename stay absent until they answer, because an
-                // advertised capability is one an editor calls.
+                // What the symbol index and the checker can answer: where a name is declared, every
+                // place it is written, a rename of it, and what it is. Completion stays absent until it
+                // answers — an advertised capability is one an editor calls, and one that answers
+                // nothing reads as broken rather than as missing.
                 "definitionProvider": true,
                 "referencesProvider": true,
                 "renameProvider": true,
+                "hoverProvider": true,
             },
             "serverInfo": { "name": "vela-lsp", "version": env!("CARGO_PKG_VERSION") },
         })
