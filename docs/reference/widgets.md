@@ -26,7 +26,7 @@ A `*` marks a prop a screen has to give. A prop that takes *a label or screen* i
 
 ### `box`
 
-It is a container. Takes exactly one child.
+It is a container, and takes exactly one child.
 
 Adds:
 
@@ -37,7 +37,7 @@ Adds:
 
 ### `row`
 
-It is a container. Takes children.
+It is a container, and takes children.
 
 Adds:
 
@@ -49,7 +49,7 @@ Adds:
 
 ### `column`
 
-It is a container. Takes children.
+It is a container, and takes children.
 
 Adds:
 
@@ -61,13 +61,13 @@ Adds:
 
 ### `stack`
 
-It is a container. Takes children.
+It is a container, and takes children.
 
 Adds no props of its own.
 
 ### `flow`
 
-It is a container. Takes children.
+It is a container, and takes children.
 
 Adds:
 
@@ -79,7 +79,7 @@ Adds:
 
 ### `grid`
 
-It is a container. Takes children.
+It is a container, and takes children.
 
 Adds:
 
@@ -91,31 +91,31 @@ Adds:
 
 ### `absolute`
 
-It is a container. Takes exactly one child.
+It is a container, and takes exactly one child.
 
 Adds no props of its own.
 
 ### `text`
 
-It is draws, and holds nothing.
+It draws, and holds nothing.
 
 Adds no props of its own.
 
 ### `image`
 
-It is draws, and holds nothing.
+It draws, and holds nothing.
 
 Adds no props of its own.
 
 ### `spacer`
 
-It is draws, and holds nothing.
+It draws, and holds nothing.
 
 Adds no props of its own.
 
 ### `button`
 
-It is can be focused. Takes exactly one child.
+It can be focused, and takes exactly one child.
 
 Adds:
 
@@ -130,7 +130,7 @@ Adds:
 
 ### `bar`
 
-It is can be focused. Takes children.
+It can be focused, and takes children.
 
 Adds:
 
@@ -143,7 +143,7 @@ Adds:
 
 ### `input`
 
-It is can be focused. Takes children.
+It can be focused, and takes children.
 
 Adds:
 

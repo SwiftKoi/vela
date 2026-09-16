@@ -76,11 +76,33 @@ impl Widget {
 
     /// Every prop, shared first, in declaration order.
     #[must_use]
-    pub fn props(&self) -> Vec<&'static PropDecl> {
+    pub fn props(&self) -> Vec<&PropDecl> {
         self.common
             .iter()
             .chain(self.own.iter().flat_map(|group| group.iter()))
             .collect()
+    }
+
+    /// One sentence: what this widget is, and what it takes.
+    ///
+    /// The same sentence `vela doc` prints and a hover shows, so the reference and the editor cannot
+    /// describe a widget differently. It lives here rather than in either of them because the schema
+    /// is what knows the answer, and the docs' promise is that there is one place a prop or a widget
+    /// is defined.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        let mut sentence = match self.category {
+            Category::Container => String::from("It is a container"),
+            Category::Leaf => String::from("It draws, and holds nothing"),
+            Category::Interactive => String::from("It can be focused"),
+        };
+        if self.single_child {
+            sentence.push_str(", and takes exactly one child");
+        } else if self.category.accepts_children() {
+            sentence.push_str(", and takes children");
+        }
+        sentence.push('.');
+        sentence
     }
 }
 

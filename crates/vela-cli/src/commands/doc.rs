@@ -156,21 +156,9 @@ fn widgets(out: &mut dyn Write) {
 
     let _ = writeln!(out, "## Widgets\n");
     for widget in &widgets {
-        let category = match widget.category {
-            vela_ui::widgets::Category::Container => "a container",
-            vela_ui::widgets::Category::Leaf => "draws, and holds nothing",
-            vela_ui::widgets::Category::Interactive => "can be focused",
-        };
-        let shape = if widget.single_child {
-            " Takes exactly one child."
-        } else if widget.category.accepts_children() {
-            " Takes children."
-        } else {
-            ""
-        };
-
         let _ = writeln!(out, "### `{}`\n", widget.name);
-        let _ = writeln!(out, "It is {category}.{shape}\n");
+        // The schema's own sentence, which a hover shows too — one definition, two readers.
+        let _ = writeln!(out, "{}\n", widget.summary());
 
         let own: Vec<&PropDecl> = widget.own.iter().flat_map(|group| group.iter()).collect();
         if own.is_empty() {
@@ -200,12 +188,9 @@ fn actions(out: &mut dyn Write) {
         let Some(action) = registry.get(name) else {
             continue;
         };
-        let args: Vec<String> = action
-            .arg_names()
-            .iter()
-            .map(|arg| (*arg).to_string())
-            .collect();
-        let _ = writeln!(out, "## `{}({})`\n", action.name, args.join(", "));
+        // The signature is the schema's, and is also the anchor a hover's link is built from, so the
+        // heading here and the link there cannot disagree.
+        let _ = writeln!(out, "## `{}`\n", action.signature());
         let _ = writeln!(out, "{}\n", sentence(action.doc));
 
         if action.args.is_empty() {
