@@ -217,7 +217,7 @@ Capabilities:
 `vela test --update` re-blesses goldens; CI fails on any unblessed change, so a golden diff
 is always reviewed.
 
-> **Implemented so far (M10).** `vela test` runs a project's `test` items headless, and `--a11y`
+> **Implemented (M10).** `vela test` runs a project's `test` items headless, and `--a11y`
 > adds the M7 sweep beside them (*"every screen passes the `--a11y` focus-order sweep"*) — the two are
 > different subjects with different verdicts, which is why the sweep stays a flag.
 >
@@ -252,6 +252,28 @@ no equivalent.
 - Time-travel: because rollback is snapshot-and-replay, the debugger can step *backwards*
   across commands. This is free from the runtime's design, not extra machinery.
 
+> **Implemented (M11).** `vela debug` serves DAP over stdio (`--port` listens on
+> `127.0.0.1` instead), and `vela-debug` implements the list above: label breakpoints
+> (`setFunctionBreakpoints`) and line breakpoints (`setBreakpoints`), `next`/`stepIn`/`stepOut`/
+> `stepBack`, `stackTrace`/`scopes`/`variables` over the frame's slots and `World`, and `evaluate`.
+> The stop policy — which site a breakpoint matches, what a step means across a frame — lives in
+> the debugger; the machine stays a pull interface (`RUNTIME.md §9`).
+>
+> **Not yet.** `reverseContinue` (the ring goes back
+> a command at a time but does not record where breakpoints were), conditional and hit-count
+> breakpoints, log points, `setVariable`, and restart. A client is not told about them, so it does
+> not offer them, and asking anyway gets a failure with a message.
+>
+> **Note.** `evaluate` answers names with values. Any other expression is *checked* with the real type
+> checker and answered with its type (`int (checked; only names are evaluated)`), or with the
+> checker's own `Exxx` if it does not check. Compiling a non-name expression into the running story
+> would need the machine to call a function with arguments, which it cannot do yet; a half
+> evaluator that sometimes invents a value is worse than one that says what it knows.
+>
+> **Not yet.** `Header::FLAG_DEBUG` is clear
+> (`BYTECODE.md §5`), so the machine reports no span or slot name and `setBreakpoints` answers
+> `verified: false`. Label breakpoints and instruction-level stepping still work.
+
 ## 7. Analysis (`vela analyze`)
 
 Turns the compile-time story graph into human decisions.
@@ -270,7 +292,7 @@ Turns the compile-time story graph into human decisions.
 Output is deterministic and diffable, so `vela analyze --format json` can be tracked as a
 metric over time in CI — "our dead-end count went up by 3 this week."
 
-> **Implemented so far (M10).** `vela analyze [path] [--format text|json|dot]` reports the story graph:
+> **Implemented (M10).** `vela analyze [path] [--format text|json|dot]` reports the story graph:
 > every label in every module as one graph, with the edges resolved by the compiler's own resolver, and
 > whether a run from the manifest's entry can reach each one. The JSON is the documented surface
 > (`tests/golden/analyze/` is its golden), `dot` draws it for `dot -Tsvg`, and `text` is one line per
@@ -281,7 +303,7 @@ metric over time in CI — "our dead-end count went up by 3 this week."
 > one question, so `reached` is a *graph* fact computed from the same resolver, and the diagnostics stay
 > `vela check`'s to report with spans and advice.
 >
-> **Not yet:** unused assets (`W7001`, which does not exist), per-scene load sizes, localization coverage,
+> **Not yet.** unused assets (`W7001`, which does not exist), per-scene load sizes, localization coverage,
 > and variable reachability. Each needs something the project does not have yet — an asset manifest that
 > survives a check, a text pipeline, a liveness pass over `default`s — and the omission is named in the
 > source rather than left as a section that silently never appears.
@@ -299,7 +321,7 @@ expressions (`$` statement blocks → best-effort function extraction, flagged).
 **Reported, not guessed:** anything outside that set produces a report entry with
 `file:line`, the original text, and the reason. The rule is simple:
 
-> **Never silently mistranslate.** A wrong automatic translation is worse than an explicit
+> **Note.** Never silently mistranslate. A wrong automatic translation is worse than an explicit
 > "port this by hand", because it fails later and in a save file.
 
 The report is itself a work item list, and `--strict` turns any unsupported construct into a
@@ -312,7 +334,7 @@ widget prop schemas, effect signatures, diagnostic registry, action registry, an
 script APIs. Because it reads the same schemas the compiler uses, generated docs cannot drift
 from behavior. This is also what keeps the LSP completion list and the docs identical.
 
-> **Implemented so far (M10).** `vela doc [widgets|actions|diagnostics]` prints the reference on standard
+> **Implemented (M10).** `vela doc [widgets|actions|diagnostics]` prints the reference on standard
 > output, and `vela doc --out docs/reference` writes it — one file per page, which is the only place in
 > this tool that writes anything, because a reference page is an artifact whose whole point is landing
 > where a reader finds it. The committed pages are under `docs/reference/`.
@@ -323,9 +345,21 @@ from behavior. This is also what keeps the LSP completion list and the docs iden
 > asserts that printing a page and writing it agree, since a reader piping the command into a file should
 > get the same page a build script does.
 >
-> **Not generated:** effect signatures, because an `effect` is declared by the *project* — reference for
+> **Not yet.** effect signatures, because an `effect` is declared by the *project* — reference for
 > one project's effects is that project's code, not engine documentation — and public script APIs, because
 > the engine's callable surface is the builtins and those are not a schema.
+>
+> **Implemented (M11).** A widget or an action is not declared anywhere a name is, so
+> neither the symbol index nor the checker knows it; hover answers it from `vela-ui`'s registries, with
+> the sentence `vela doc` prints. `Widget::summary` and `ActionDecl::signature` exist so that sentence has
+> one spelling rather than two, and the heading on the page is built from the same signature the hover
+> quotes. The context is the same rule completion uses — a widget only at the start of a screen's line, an
+> action only after the keyword — so a hover cannot call a prop's value a widget.
+>
+> When the workspace has generated the pages (`vela doc --out docs/reference`), the hover also links to
+> the section, with the anchor a markdown renderer would compute from the heading. When it has not, the
+> sentence stands alone: a link to a file that is not there is worse than no link, because an editor
+> offers to open it and then fails.
 
 ## 10. Open questions
 

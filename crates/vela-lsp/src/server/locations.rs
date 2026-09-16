@@ -88,7 +88,7 @@ impl Server {
             return Value::Null;
         };
 
-        let Some(hover) = crate::hover::at(&mut self.session, file, offset) else {
+        let Some(hover) = crate::hover::at(&mut self.session, file, offset, &self.reference) else {
             return Value::Null;
         };
 

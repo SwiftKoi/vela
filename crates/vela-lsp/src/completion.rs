@@ -148,7 +148,11 @@ fn labels_of(session: &mut Session, module: &ModuleName) -> Vec<String> {
 /// Two questions, and both are needed: inside a screen, because that is where the widget vocabulary
 /// applies; and at the start of a line, because inside an `if` condition within that screen the answer
 /// is an expression, not a widget.
-fn widgets_wanted(session: &Session, file: FileId, tree: &Program, offset: u32) -> bool {
+///
+/// Shared with hover, which asks the same question about a word the cursor is *on*: a hover that called
+/// `text` a widget inside an expression would contradict the completion list that does not offer one
+/// there.
+pub(crate) fn widgets_wanted(session: &Session, file: FileId, tree: &Program, offset: u32) -> bool {
     let inside_a_screen = tree.items.iter().any(|item| match item {
         Item::Screen(screen) => contains(screen.span, offset),
         _ => false,

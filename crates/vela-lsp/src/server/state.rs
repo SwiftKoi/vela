@@ -7,6 +7,7 @@ use std::io::{BufRead, Write};
 use serde_json::{Value, json};
 use vela_compile::Session;
 
+use crate::docs::Reference;
 use crate::transport;
 use crate::uri;
 
@@ -26,6 +27,8 @@ pub struct Server {
     pub(super) root: String,
     /// The directory file *names* are relative to: the root's `src`, when it has one.
     pub(super) source: String,
+    /// Where the workspace's generated reference is, for hover to link into.
+    pub(super) reference: Reference,
     /// Open documents: URI to the name the session knows the file by.
     pub(super) open: BTreeMap<String, String>,
 }
@@ -37,12 +40,14 @@ impl Server {
         let root = root.into();
         let session = load(&root);
         let source = source_root(&root);
+        let reference = Reference::new(&root);
 
         Self {
             load: Box::new(load),
             session,
             root,
             source,
+            reference,
             open: BTreeMap::new(),
         }
     }
@@ -115,6 +120,7 @@ impl Server {
         {
             self.session = (self.load)(&root);
             self.source = source_root(&root);
+            self.reference = Reference::new(&root);
             self.root = root;
             self.open.clear();
         }

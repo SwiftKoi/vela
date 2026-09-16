@@ -1,9 +1,11 @@
 //! What to say about a position.
 //!
-//! Two sources, asked in the order a reader would: the symbol index (what kind of thing is this name,
-//! and where is it declared) and then the checker (what type does this have). The first answers for the
-//! names a module declares — a label, a `default`, a screen — and the second for everything inside a
-//! body, including the local whose type nobody wrote down.
+//! Three sources, asked in the order a reader would. The symbol index answers for the names a module
+//! declares — a label, a `default`, a screen — and says where each is declared. The checker answers for
+//! everything inside a body, including the local whose type nobody wrote down. And the widget and action
+//! *vocabulary* answers last, for the words a screen uses that are not declared anywhere: `text` at the
+//! start of a line, `close_screen` after `action`. That third one is the generated reference's schema
+//! (`TOOLING.md §9`), so a hover and the reference page describe a widget with the same sentence.
 //!
 //! Markdown rather than plain text, because that is what an editor renders: names go in code spans and
 //! the kind in bold, so `trust: int` and a label's qualified path read the way a reader writes them.
@@ -11,7 +13,10 @@
 use vela_compile::Session;
 use vela_hir::ModuleName;
 use vela_span::{FileId, Span};
+use vela_syntax::Program;
 
+use crate::completion;
+use crate::docs::{self, Reference};
 use crate::symbols::{self, Named};
 
 /// What an editor should show, and what it should underline.
@@ -24,7 +29,12 @@ pub struct Hover {
 }
 
 /// What is at an offset, or `None` when nothing is.
-pub fn at(session: &mut Session, file: FileId, offset: u32) -> Option<Hover> {
+pub fn at(
+    session: &mut Session,
+    file: FileId,
+    offset: u32,
+    reference: &Reference,
+) -> Option<Hover> {
     if let Some(found) = symbols::at(session, file, offset) {
         let markdown = named(session, &found.named);
         let range = (found.span.file() == file).then_some(found.span);
@@ -36,15 +46,67 @@ pub fn at(session: &mut Session, file: FileId, offset: u32) -> Option<Hover> {
     // last edit already paid for.
     let parsed = session.parse(file);
     let compiled = session.mir(file);
-    let found = vela_types::at(&parsed.program, &compiled.env, offset)?;
+    if let Some(found) = vela_types::at(&parsed.program, &compiled.env, offset) {
+        return Some(Hover {
+            markdown: match found {
+                vela_types::Found::Name { name, ty } => format!("**local** `{name}: {ty}`"),
+                vela_types::Found::Expression { ty } => format!("`{ty}`"),
+            },
+            range: None,
+        });
+    }
+
+    // Neither the index nor the checker knows this word, which is what a screen's vocabulary looks
+    // like: `text` and `close_screen` are not declared anywhere a name is.
+    vocabulary(session, file, offset, &parsed.program, reference)
+}
+
+/// A widget or an action, from the schema the reference page is generated from.
+fn vocabulary(
+    session: &Session,
+    file: FileId,
+    offset: u32,
+    tree: &Program,
+    reference: &Reference,
+) -> Option<Hover> {
+    let (word, start, end) = docs::word_at(session.sources().get(file)?.text(), offset)?;
+    let entry = docs::lookup(word)?;
+
+    // Only where the word can mean what it says. A screen's line begins with a widget and nothing else
+    // can, and an action follows the word `action` — the same two questions completion asks, so a hover
+    // and a completion list cannot disagree about what a position is for. Without this, a variable
+    // named `text` would be called a widget.
+    //
+    // The question is asked of the word's *start*, not of the caret: a hover sits in the middle of a
+    // word (`col|umn`), and the completion list it is agreeing with is asked for at the line's start.
+    let here = if entry.kind == "widget" {
+        completion::widgets_wanted(session, file, tree, start)
+    } else {
+        action_context(session.sources().get(file)?.text(), start)
+    };
+    if !here {
+        return None;
+    }
+
+    let mut markdown = format!(
+        "**{}** `{}` — {}",
+        entry.kind, entry.signature, entry.summary
+    );
+    if let Some(link) = reference.link(entry.page, &entry.signature) {
+        markdown.push_str(&format!("\n\n[{}]({link})", entry.title));
+    }
 
     Some(Hover {
-        markdown: match found {
-            vela_types::Found::Name { name, ty } => format!("**local** `{name}: {ty}`"),
-            vela_types::Found::Expression { ty } => format!("`{ty}`"),
-        },
-        range: None,
+        markdown,
+        range: Some(Span::new(file, start, end)),
     })
+}
+
+/// Whether a word follows the keyword that introduces an action.
+fn action_context(text: &str, start: u32) -> bool {
+    let before = text.get(..start as usize).unwrap_or(text);
+    let line = before.rsplit('\n').next().unwrap_or(before).trim_end();
+    line == "action" || line.ends_with(" action")
 }
 
 /// Markdown describing a name the index knows.
