@@ -61,5 +61,5 @@ pub use screens::{Laid, ScreenSet};
 pub use styles::{check_inheritance, check_screen_styles, resolve};
 pub use theme::{Palette, Rgb, check_contrast, palette};
 pub use tokens::check_magic_colours;
-pub use tree::{Kind, Node, Paint, Size};
+pub use tree::{Kind, Node, Paint, Size, State};
 pub use widgets::{Category, Widget, WidgetRegistry};

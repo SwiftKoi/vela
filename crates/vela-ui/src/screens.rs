@@ -185,6 +185,11 @@ impl ScreenSet {
     }
 
     /// Lays out and paints a screen into `draw`, returning whether it was found.
+    ///
+    /// No focus cursor: this draws a screen as it stands, which is what a still frame wants. A caller
+    /// with a cursor — a runtime the player is navigating — paints a [`Laid`] through
+    /// [`paint::paint`], which takes the focused hotspot's index so the node under it draws in its
+    /// `selected` state (`SCREENS.md §5`).
     pub fn draw(
         &self,
         name: &str,
@@ -197,7 +202,7 @@ impl ScreenSet {
         let Some(laid) = self.lay(name, args, size, text, font) else {
             return false;
         };
-        paint::paint(&laid.node, &laid.frame, text, font, draw);
+        paint::paint(&laid.node, &laid.frame, text, font, draw, None);
         true
     }
 }

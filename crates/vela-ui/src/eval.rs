@@ -15,6 +15,7 @@ use vela_syntax::{BinOp, Expr, ScreenDecl, StrPart, StyleDecl, UnOp};
 use crate::actions::Action;
 use crate::props::Anchor;
 use crate::theme::Palette;
+use crate::tree::{Paint, State};
 use crate::widgets::WidgetRegistry;
 
 /// A value a screen argument can hold.
@@ -296,36 +297,41 @@ fn hex_color(value: i64) -> Option<Color> {
     ))
 }
 
-/// A style's text colour, through its inheritance chain.
-pub(crate) fn style_color(name: &str, ctx: &Ctx) -> Option<Color> {
-    let mut color = None;
+/// What a style draws with, in every state it names, through its inheritance chain.
+///
+/// A setting's key is a state applied to a property (`State::split`): `color` and `idle_color` are the
+/// values themselves, `hover_color` is what `hover` overrides. An unknown key is ignored rather than
+/// reported — a setting body is `key = value` (`LANGUAGE.md §7`) and the language does not fix which
+/// keys exist, which is also why a style can name a property the painter does not read yet.
+pub(crate) fn style_paint(name: &str, ctx: &Ctx) -> Paint {
+    let mut paint = Paint::default();
     for style in chain(name, ctx.styles) {
         for setting in &style.settings {
-            if setting.key != "color" {
-                continue;
-            }
-            if let Some(resolved) = color_of(&setting.value, ctx) {
-                color = Some(resolved);
+            let (state, key) = State::split(&setting.key);
+            let target = paint.state_mut(state);
+            match key {
+                "color" => set_colour(&mut target.color, &setting.value, ctx),
+                "background" => set_colour(&mut target.background, &setting.value, ctx),
+                "size" => set_size(&mut target.size, &setting.value),
+                _ => {}
             }
         }
     }
-    color
+    paint
 }
 
-/// A style's text size, through its inheritance chain.
-pub(crate) fn style_size(name: &str, styles: &[StyleDecl]) -> Option<f32> {
-    let mut size = None;
-    for style in chain(name, styles) {
-        for setting in &style.settings {
-            if setting.key != "size" {
-                continue;
-            }
-            if let Some(number) = number(&setting.value) {
-                size = Some(number);
-            }
-        }
+/// Resolves a colour expression into a slot, leaving it alone when it does not resolve.
+fn set_colour(slot: &mut Option<Color>, expr: &Expr, ctx: &Ctx) {
+    if let Some(colour) = color_of(expr, ctx) {
+        *slot = Some(colour);
     }
-    size
+}
+
+/// Resolves a numeric expression into a slot, leaving it alone when it does not resolve.
+fn set_size(slot: &mut Option<f32>, expr: &Expr) {
+    if let Some(size) = number(expr) {
+        *slot = Some(size);
+    }
 }
 
 /// A style and its ancestors, base first.

@@ -117,6 +117,69 @@ fn an_undeclared_screen_paints_nothing() {
     assert!(draw.is_empty());
 }
 
+/// A style's per-state value is what the *focused* control draws.
+///
+/// This is also what pins the focus numbering: the painter counts action-bearing nodes in tree order,
+/// and `focus::hotspots` produces the list a caller moves the cursor over. Two walks that disagreed
+/// would recolour the wrong button, so the second button is the one focused here.
+#[test]
+fn the_focused_control_draws_its_selected_colour() {
+    let source = "\
+theme dusk:
+    color off = 0x101010
+    color on = 0xff0000
+
+style item:
+    color = theme.off
+    selected_color = theme.on
+
+screen menu:
+    column:
+        button:
+            text \"One\" style = item
+            action quit()
+        button:
+            text \"Two\" style = item
+            action quit()
+";
+    let off = Color::rgb(0x10, 0x10, 0x10);
+    let on = Color::rgb(0xff, 0x00, 0x00);
+
+    let screens = set(source);
+    let mut text = engine();
+    let laid = screens
+        .lay("menu", &Args::new(), (1280, 720), &mut text, "sans")
+        .expect("the menu is declared");
+    assert_eq!(laid.hotspots.len(), 2, "one hotspot per button");
+
+    let mut plain = DrawList::new();
+    vela_ui::paint(&laid.node, &laid.frame, &mut text, "sans", &mut plain, None);
+    assert!(plain.glyph_count() > 0, "the buttons drew no text");
+    assert!(
+        plain.glyphs().all(|glyph| glyph.color == off),
+        "a menu with no focus cursor drew a selected colour"
+    );
+
+    let mut focused = DrawList::new();
+    vela_ui::paint(
+        &laid.node,
+        &laid.frame,
+        &mut text,
+        "sans",
+        &mut focused,
+        Some(1),
+    );
+    let colours: Vec<Color> = focused.glyphs().map(|glyph| glyph.color).collect();
+    assert!(
+        colours.contains(&on),
+        "the focused button's text kept its idle colour"
+    );
+    assert!(
+        colours.contains(&off),
+        "the unfocused button changed colour as well"
+    );
+}
+
 /// Building the same screen twice produces the same draw list, byte for byte.
 #[test]
 fn painting_is_deterministic() {

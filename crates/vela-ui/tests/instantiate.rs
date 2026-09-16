@@ -4,10 +4,11 @@
 //! so these are about what tree a given body and arguments produce, not about pixels. Pixels
 //! are `paint.rs`'s question.
 
+use vela_render::Color;
 use vela_span::FileId;
 use vela_syntax::parse;
 use vela_text::{Font, TextEngine};
-use vela_ui::{Action, Args, Kind, Node, ScreenSet, Value};
+use vela_ui::{Action, Args, Kind, Node, ScreenSet, State, Value};
 
 /// The bundled face, so text measures to something real.
 fn engine() -> TextEngine {
@@ -221,6 +222,117 @@ screen menu:
         Some("quit"),
         "the action did not survive the composition"
     );
+}
+
+/// A `style` carries a value per interaction state (`SCREENS.md §5`).
+///
+/// The state is named by a prefix on the setting's key, so one body describes how a control looks at
+/// rest and under the focus cursor. `idle` is not a fourth value: it names the value a setting has on
+/// its own, which is why `color` and `idle_color` are one setting.
+#[test]
+fn a_style_resolves_a_value_per_interaction_state() {
+    let source = "\
+theme dusk:
+    color off = 0x101010
+    color on = 0xff0000
+    color dim = 0x333333
+
+style item:
+    color = theme.off
+    hover_color = theme.on
+    selected_color = theme.on
+    insensitive_color = theme.dim
+
+screen s:
+    text \"x\" style = item
+";
+    let paint = styled_paint(source);
+
+    assert_eq!(paint.color, Some(Color::rgb(0x10, 0x10, 0x10)), "the value");
+    assert_eq!(
+        paint.in_state(State::Hover).color,
+        Some(Color::rgb(0xff, 0, 0))
+    );
+    assert_eq!(
+        paint.in_state(State::Selected).color,
+        Some(Color::rgb(0xff, 0, 0))
+    );
+    assert_eq!(
+        paint.in_state(State::Insensitive).color,
+        Some(Color::rgb(0x33, 0x33, 0x33))
+    );
+    assert_eq!(
+        paint.in_state(State::Idle).color,
+        paint.color,
+        "idle is the value itself, not a state to store"
+    );
+}
+
+/// `idle_color` and `color` are one setting, and the later one wins — the rule a setting body already
+/// has (`LANGUAGE.md §7`).
+#[test]
+fn idle_color_is_the_value_itself() {
+    let paint = styled_paint(
+        "theme dusk:\n    color a = 0x111111\n    color b = 0x222222\n\nstyle item:\n    color = theme.a\n    idle_color = theme.b\n\nscreen s:\n    text \"x\" style = item\n",
+    );
+    assert_eq!(paint.color, Some(Color::rgb(0x22, 0x22, 0x22)));
+    assert!(paint.over(State::Idle).is_none(), "idle stores nothing");
+}
+
+/// A derived style keeps what it does not mention, including a state its base set.
+#[test]
+fn a_derived_style_overrides_only_what_it_names() {
+    let paint = styled_paint(
+        "theme dusk:\n    color off = 0x101010\n    color on = 0xff0000\n\nstyle base:\n    color = theme.off\n    hover_color = theme.on\n\nstyle derived from base:\n    selected_color = theme.on\n\nscreen s:\n    text \"x\" style = derived\n",
+    );
+    assert_eq!(
+        paint.color,
+        Some(Color::rgb(0x10, 0x10, 0x10)),
+        "the base's value"
+    );
+    assert_eq!(
+        paint.in_state(State::Hover).color,
+        Some(Color::rgb(0xff, 0, 0)),
+        "the base's hover value was lost"
+    );
+    assert_eq!(
+        paint.in_state(State::Selected).color,
+        Some(Color::rgb(0xff, 0, 0))
+    );
+}
+
+/// A state that changes one thing keeps the value of everything else: an override is a *diff*.
+#[test]
+fn a_state_override_is_a_diff_not_a_replacement() {
+    let paint = styled_paint(
+        "theme dusk:\n    color off = 0x101010\n    color on = 0xff0000\n\nstyle item:\n    color = theme.off\n    background = theme.off\n    hover_color = theme.on\n\nscreen s:\n    text \"x\" style = item\n",
+    );
+    let hover = paint.in_state(State::Hover);
+    assert_eq!(hover.color, Some(Color::rgb(0xff, 0, 0)));
+    assert_eq!(
+        hover.background,
+        Some(Color::rgb(0x10, 0x10, 0x10)),
+        "the hover state dropped the background it did not mention"
+    );
+}
+
+/// The paint of the one text leaf a fixture declares.
+fn styled_paint(source: &str) -> vela_ui::Paint {
+    let parsed = parse(FileId::from_raw(0), source);
+    assert!(
+        parsed.diagnostics.is_empty(),
+        "the fixture must parse: {:?}",
+        parsed
+            .diagnostics
+            .iter()
+            .map(|d| d.message.clone())
+            .collect::<Vec<_>>()
+    );
+    let mut text = engine();
+    let root = ScreenSet::from_items(&parsed.program.items)
+        .build("s", &Args::new(), &mut text, "sans", 1280.0)
+        .expect("the screen is declared");
+    root.children[0].paint.clone()
 }
 
 /// A grid's `columns` prop decides its kind, since the kind is where it is kept.

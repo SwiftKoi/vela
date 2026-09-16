@@ -367,9 +367,22 @@ impl Stack {
     /// The highlight is the runtime's, not the screen's: focus has to be *visible* for the
     /// screen to be usable without sight of a pointer, and a screen that drew its own focus
     /// ring would be a screen that can forget to.
+    ///
+    /// Only the topmost screen is given the focus cursor, because only the topmost one can be
+    /// navigated — a screen underneath draws as it stands, and its `selected` values stay unseen
+    /// until it is the one on top (`SCREENS.md §5`).
     pub fn paint(&self, text: &mut TextEngine, font: &str, draw: &mut DrawList) {
-        for overlay in &self.overlays {
-            vela_ui::paint(&overlay.laid.node, &overlay.laid.frame, text, font, draw);
+        let top = self.overlays.len().saturating_sub(1);
+        for (index, overlay) in self.overlays.iter().enumerate() {
+            let focused = (index == top).then_some(overlay.focus);
+            vela_ui::paint(
+                &overlay.laid.node,
+                &overlay.laid.frame,
+                text,
+                font,
+                draw,
+                focused,
+            );
         }
         if let Some(rect) = self.focus_rect() {
             draw.push_rect(RectQuad {

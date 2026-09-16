@@ -9,5 +9,6 @@
 
 mod build;
 mod compose;
+mod props;
 
 pub use build::build;

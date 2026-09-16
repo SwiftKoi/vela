@@ -95,19 +95,132 @@ impl Size {
     pub const ZERO: Self = Self::new(0.0, 0.0);
 }
 
+/// An interaction state a node can draw in (`SCREENS.md §5`).
+///
+/// A *style* carries a value per state — `hover_color` is `hover` applied to `color` (see
+/// [`State::split`]) — and the runtime picks one when it paints.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Hash)]
+pub enum State {
+    /// Nothing is happening to the node: the value it has on its own.
+    ///
+    /// This is what Ren'Py's `idle_*` also means, which is why the two spellings are one setting.
+    #[default]
+    Idle,
+    /// The pointer is over it.
+    Hover,
+    /// It is the one being navigated to — the focused control (`§10`).
+    Selected,
+    /// It cannot be used: its `enable_if` does not hold.
+    Insensitive,
+}
+
+impl State {
+    /// The state a style setting's key names, and the key without that prefix.
+    ///
+    /// `hover_color` is the colour for `hover`, and a key with no prefix is `Idle`. `idle_color` and
+    /// `color` are therefore the same setting, which is deliberate: `idle` is not a fourth value to
+    /// store but the *name* of the one a prop has when nothing else applies.
+    ///
+    /// One definition, so the resolver and anything that reads a key agree about what it means —
+    /// the same reason a widget's props have a single schema.
+    #[must_use]
+    pub fn split(key: &str) -> (Self, &str) {
+        for (prefix, state) in [
+            ("hover_", Self::Hover),
+            ("selected_", Self::Selected),
+            ("insensitive_", Self::Insensitive),
+            ("idle_", Self::Idle),
+        ] {
+            if let Some(rest) = key.strip_prefix(prefix) {
+                return (state, rest);
+            }
+        }
+        (Self::Idle, key)
+    }
+}
+
 /// What a node draws with, resolved when the screen is instantiated.
 ///
 /// Separate from [`Props`] on purpose: the layout solver reads `props`, the painter reads
 /// `paint`, and a colour cannot influence a rectangle. Folding the two together would put a
 /// value the solver must never read into the struct it reads from.
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
+///
+/// The fields here are the *idle* values; each state's overrides are kept beside them rather than
+/// merged in, because a node's state changes while its layout does not. Instantiation cannot pick
+/// one: the focus cursor moves every frame, and a tree that had folded `selected` in would have to
+/// be rebuilt to recolour a button.
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct Paint {
-    /// A fill colour behind this node, from a `background` prop.
+    /// A fill colour behind this node, from a `background` prop or setting.
     pub background: Option<Color>,
     /// A text colour, from the node's `style`.
     pub color: Option<Color>,
     /// A text size in pixels, from the node's `style`.
     pub size: Option<f32>,
+    /// What the pointer being over it changes.
+    pub hover: Option<Box<Paint>>,
+    /// What being the focused control changes.
+    pub selected: Option<Box<Paint>>,
+    /// What being unusable changes.
+    pub insensitive: Option<Box<Paint>>,
+}
+
+impl Paint {
+    /// This paint with a state's values applied, field by field.
+    ///
+    /// Field by field rather than wholesale: a state that sets only `color` keeps the idle
+    /// `background`, because an override is a *diff* and not a replacement. And the result carries no
+    /// overrides of its own, so resolving is not recursive and a painter cannot loop.
+    #[must_use]
+    pub fn in_state(&self, state: State) -> Self {
+        let Some(overridden) = self.over(state) else {
+            return self.clone();
+        };
+        Self {
+            background: overridden.background.or(self.background),
+            color: overridden.color.or(self.color),
+            size: overridden.size.or(self.size),
+            hover: None,
+            selected: None,
+            insensitive: None,
+        }
+    }
+
+    /// The override for one state, if the style wrote any.
+    ///
+    /// `Idle` has none: it is the values themselves.
+    #[must_use]
+    pub fn over(&self, state: State) -> Option<&Self> {
+        match state {
+            State::Idle => None,
+            State::Hover => self.hover.as_deref(),
+            State::Selected => self.selected.as_deref(),
+            State::Insensitive => self.insensitive.as_deref(),
+        }
+    }
+
+    /// The values for one state, created empty when nothing has written them yet.
+    ///
+    /// For a resolver filling a paint in from a style's settings, which may name a state before any
+    /// other setting has touched it. `Idle` is the paint itself, so a resolver never allocates for the
+    /// common case.
+    pub(crate) fn state_mut(&mut self, state: State) -> &mut Self {
+        match state {
+            State::Idle => self,
+            State::Hover => self
+                .hover
+                .get_or_insert_with(|| Box::new(Self::default()))
+                .as_mut(),
+            State::Selected => self
+                .selected
+                .get_or_insert_with(|| Box::new(Self::default()))
+                .as_mut(),
+            State::Insensitive => self
+                .insensitive
+                .get_or_insert_with(|| Box::new(Self::default()))
+                .as_mut(),
+        }
+    }
 }
 
 /// One node.

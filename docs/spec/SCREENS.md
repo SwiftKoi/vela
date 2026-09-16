@@ -222,6 +222,38 @@ Rules:
 - **Contrast checking**: a foreground/background pair below a WCAG threshold is `W4009`, with
   the computed ratio in the message. Accessibility as a lint, not a manual audit.
 
+### 5.1 Interaction states
+
+A style may give a property a value per interaction state, by prefixing the setting's key:
+
+```vela
+style item:
+    color             = theme.fg
+    hover_color       = theme.accent
+    selected_color    = theme.accent
+    insensitive_color = theme.dim
+```
+
+The states are `hover`, `selected`, `idle`, and `insensitive`. **`idle` names the value a setting has
+on its own**, so `idle_color` and `color` are one setting and the later line wins — which is what
+Ren'Py's `idle_*` also means, and why there is no fifth field to store.
+
+An override is a **diff**, not a replacement: a state that sets only `color` keeps the value's
+`background`. The override is resolved through the style's inheritance chain like any other setting, so
+a derived style changes the states it names and keeps the rest.
+
+**`selected` is the focused control, and it belongs to everything that control draws** — the words
+inside a focused button change with it, because they are part of that button (§10). The other two are
+stored and resolvable but nothing selects them yet: `hover` needs a pointer, which the host does not
+deliver (§11 resolves device events to semantic actions rather than coordinates), and `insensitive`
+needs `enable_if` evaluated, which no phase does. A state nothing can select is a state nothing draws.
+
+> **Implemented (M12.1).** A `style`'s settings carry a value per state, resolved through its chain and
+> chosen at paint time from the focus cursor. `crates/vela-ui/tests/instantiate.rs` pins the resolution
+> — including that `idle_color` and `color` are one setting and that an override is a diff — and
+> `tests/paint.rs` pins that the focused control's subtree is the one that changes, which is also what
+> holds the painter's focus numbering to the one `focus::hotspots` produces.
+
 ## 6. Animation
 
 Animation is declarative over state, which is what makes it deterministic and skippable.

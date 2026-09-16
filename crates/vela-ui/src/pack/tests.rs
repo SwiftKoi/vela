@@ -172,6 +172,7 @@ theme dusk:
 
 style body from text:
     color = theme.fg
+    hover_color = theme.bg
 
 screen wrapper:
     column:
@@ -188,6 +189,26 @@ screen dialogue(name: str?, line):
 ";
     let parsed = vela_syntax::parse(FileId::from_raw(0), source);
     ScreenPack::compile("main", &parsed.program.items)
+}
+
+/// A style's per-state setting survives by its *key*, prefix and all.
+///
+/// The codec carries a setting as a key and a value, so a state prefix needs no tag of its own — which
+/// is the point of storing a state in the name rather than in a field of the format.
+#[test]
+fn a_state_setting_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let pack = ScreenPack::from_bytes(&bytes).expect("a pack decodes");
+
+    let keys: Vec<&str> = pack
+        .set
+        .styles
+        .iter()
+        .flat_map(|style| style.settings.iter())
+        .map(|setting| setting.key.as_str())
+        .collect();
+    assert!(keys.contains(&"color"), "{keys:?}");
+    assert!(keys.contains(&"hover_color"), "{keys:?}");
 }
 
 /// `use` and `transclude` survive the codec, and land as themselves rather than as widgets.
