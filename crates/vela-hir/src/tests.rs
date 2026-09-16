@@ -444,3 +444,5 @@ fn the_note_lists_the_modules_labels() {
     assert!(note.contains("clearing"), "{note}");
     assert!(note.contains("river"), "{note}");
 }
+
+mod test_items;

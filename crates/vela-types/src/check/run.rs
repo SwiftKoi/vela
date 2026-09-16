@@ -2,7 +2,7 @@
 
 use vela_diag::Diagnostic;
 use vela_span::Span;
-use vela_syntax::{Expr, Item, Program};
+use vela_syntax::{DirectiveKind, Expr, Item, Program};
 
 use crate::env::{Env, Scope};
 use crate::error;
@@ -35,6 +35,27 @@ pub fn check(tree: &Program, env: &Env) -> Vec<Diagnostic> {
                 if decl.ret.is_some() && !exits {
                     let ret = decl.ret.as_ref().map_or(Ty::Unit, |ty| lower(ty, env));
                     checker.report(error::missing_return(&decl.name, decl.span, &ret));
+                }
+            }
+            // A test's assertions are expressions like any other, and typing them is what makes a test
+            // that could never pass a diagnostic rather than a mystery. The world a test asserts about
+            // is the module's own declarations — its `default`s — which is exactly the environment the
+            // other bodies are checked against.
+            Item::Test(decl) => {
+                checker.scope = Scope::default();
+                for directive in &decl.directives {
+                    match &directive.kind {
+                        DirectiveKind::Expect { expr } => {
+                            let ty = checker.expr(expr);
+                            checker.expect(&Ty::Bool, &ty, expr.span());
+                        }
+                        // The runner matches this against a menu option's text, so it has to be text.
+                        DirectiveKind::Choose { text } => {
+                            let ty = checker.expr(text);
+                            checker.expect(&Ty::Str, &ty, text.span());
+                        }
+                        _ => {}
+                    }
                 }
             }
             _ => {}

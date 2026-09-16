@@ -124,6 +124,14 @@ thing to a spec for this milestone, and four of its tools are worth copying rath
 - `testcase` blocks (`run`, `click`, `type`, `assert`) — a shape worth matching in `vela-test` so it
   reads as familiar to anyone who has written one, even though the runner is ours.
 
+**The test surface is in, and the runner is next.** `TOOLING.md §5` puts tests in `.vela` files beside
+the story, so `test` items parse, print as canonical, and are typed: an `expect` that is not a `bool` is
+`E3007`, a `choose` that is not text is the same, a `run from` resolves like any other reference
+(`E5003`, or `E2002` for a module the file did not import), and an unknown directive is one diagnostic
+naming the line. `test` is a keyword; `run`, `advance`, `choose`, `expect`, and `cover` are contextual
+names, so a story keeps all five as labels, variables, and functions — `LANGUAGE.md §7.6` records the
+trade, which `LANGUAGE.md §7.0` has four bug reports about making the other way.
+
 **Work items.**
 1. Formatter with the rules in `TOOLING.md §3`; `--check` and `--diff`.
 2. LSP server over the query database; the capability list in `TOOLING.md §4`.
@@ -169,8 +177,9 @@ that otherwise answers honestly.
       canonical files; idempotence and re-parsing are pinned by `vela-syntax/tests/format_roundtrip.rs`)
 - [ ] `vela test` runs a suite headless in CI and fails a deliberately broken story
 - [ ] `vela analyze --format json` output is deterministic across runs (diffed in CI)
-- [ ] A newcomer can navigate the fixture using only LSP features (documented walkthrough)
-- [ ] **Demo:** the LSP walkthrough in the README, plus `vela test && vela analyze`
+- [x] A newcomer can navigate the fixture using only LSP features (documented walkthrough:
+      `docs/guides/lsp-walkthrough.md`, every step of it a test)
+- [ ] **Demo:** `vela test && vela analyze` (the LSP walkthrough is in the README)
 
 **Risks.** LSP correctness depends entirely on the M2 query database being right. Mitigation:
 the parity test makes any divergence between editor and CLI a hard failure.

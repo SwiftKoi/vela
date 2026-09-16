@@ -515,9 +515,16 @@ A `test` is not story content: it neither defines a name nor adds a node to the 
 > (`tests/golden/parse/item_test.vela` is in the corpus every formatting gate covers), and an unknown
 > directive or cover word is reported once, with the line it is on.
 >
-> **Not yet.** Everything that *runs* one. The HIR does not record a `TestDecl`, so nothing types an
-> `expect`, nothing resolves a `run from` as a reference, and `vela build` and `vela test` both ignore
-> the item — the runner is the next thing in this milestone.
+> An `expect` and a `choose` are typed by the checker — `expect trust` where `trust` is an `int` is
+> `E3007`, because an assertion that cannot hold should be a diagnostic rather than a failing run — and
+> a `run from` is resolved like any other reference: `E5003` for a label that does not exist, `E2002`
+> for a module the file did not import. The reference is collected *beside* the story graph rather than
+> in it, because a test does not run during the story and an edge into a label would be a claim about
+> what the story does.
+>
+> **Not yet.** Everything that *runs* one: evaluating an assertion against the world, matching a
+> `choose` against a menu, `cover`, and golden frames. `vela build` ignores the item, so a bundle
+> carries no tests. That runner is the next thing in this milestone.
 
 ## 8. Diagnostics
 

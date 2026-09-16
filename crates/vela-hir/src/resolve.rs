@@ -70,6 +70,14 @@ pub fn resolve(module: &Module, modules: &impl Modules) -> Vec<Diagnostic> {
         }
     }
 
+    // A test's `run from` names a label the same way a `jump` does, and a test that starts at a label
+    // that does not exist is a test that has never been run — so it is resolved, and reported, here.
+    for target in &module.test_targets {
+        if let Some(diagnostic) = resolve_target(module, modules, target) {
+            diagnostics.push(diagnostic);
+        }
+    }
+
     diagnostics
 }
 
