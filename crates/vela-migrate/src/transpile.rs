@@ -16,13 +16,25 @@
 
 mod decl;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::expr;
 use crate::report::Report;
 use crate::rpy::{Kind, Node};
 
 use decl::{default, define};
+
+/// What a file needs to know about the *project* it is part of.
+///
+/// Two things. Labels that had to be renamed to escape a collision (`project::collisions`), and the
+/// images Ren'Py defined automatically from file names (`project::image_name`) — which the story's
+/// `scene`/`show` names have to be rewritten to match, or the picture never appears.
+pub struct Names<'a> {
+    /// A label's Ren'Py name, to the name it took in Vela.
+    pub renames: &'a BTreeMap<String, String>,
+    /// The dotted image names in the migrated project.
+    pub images: &'a BTreeSet<String>,
+}
 
 /// How far one level of nesting is indented.
 const STEP: usize = 4;
@@ -37,14 +49,9 @@ const HEADER: &str = "# Migrated from Ren'Py by `vela migrate`. The report besid
 /// `project::collisions` — and it is applied here, where a label is declared, and to every
 /// `jump`/`call` that names one.
 #[must_use]
-pub fn file(
-    nodes: &[Node],
-    name: &str,
-    report: &mut Report,
-    renames: &BTreeMap<String, String>,
-) -> String {
+pub fn file(nodes: &[Node], name: &str, report: &mut Report, names: &Names<'_>) -> String {
     let mut out = String::from(HEADER);
-    block(nodes, 0, name, report, &mut out, renames);
+    block(nodes, 0, name, report, &mut out, names);
     out
 }
 
@@ -55,10 +62,10 @@ pub(super) fn block(
     file: &str,
     report: &mut Report,
     out: &mut String,
-    renames: &BTreeMap<String, String>,
+    names: &Names<'_>,
 ) {
     for node in nodes {
-        statement(node, depth, file, report, out, renames);
+        statement(node, depth, file, report, out, names);
     }
 }
 
@@ -69,7 +76,7 @@ fn statement(
     file: &str,
     report: &mut Report,
     out: &mut String,
-    renames: &BTreeMap<String, String>,
+    names: &Names<'_>,
 ) {
     let pad = indent(depth);
 
@@ -77,30 +84,32 @@ fn statement(
         Kind::Blank => out.push('\n'),
         Kind::Comment(text) => out.push_str(&format!("{pad}#{text}\n")),
         Kind::Label(name) => {
-            out.push_str(&format!("{pad}label {}:\n", renamed(name, renames)));
-            block(&node.children, depth + 1, file, report, out, renames);
+            out.push_str(&format!("{pad}label {}:\n", renamed(name, names.renames)));
+            block(&node.children, depth + 1, file, report, out, names);
         }
         Kind::Say {
             speaker,
             text,
             transition,
         } => say(speaker, text, transition.as_deref(), &pad, out),
-        Kind::Menu => menu(node, depth, file, report, out, renames),
+        Kind::Menu => menu(node, depth, file, report, out, names),
         Kind::If(condition) | Kind::Elif(condition) => {
             let keyword = if matches!(node.kind, Kind::If(_)) {
                 "if"
             } else {
                 "elif"
             };
-            branch(keyword, condition, node, depth, file, report, out, renames);
+            branch(keyword, condition, node, depth, file, report, out, names);
         }
         Kind::Else => {
             out.push_str(&format!("{pad}else:\n"));
-            block(&node.children, depth + 1, file, report, out, renames);
+            block(&node.children, depth + 1, file, report, out, names);
         }
-        Kind::Jump(_) | Kind::Call(_) => transfer(node, &pad, report, file, out, renames),
+        Kind::Jump(_) | Kind::Call(_) => transfer(node, &pad, report, file, out, names),
         Kind::Return => out.push_str(&format!("{pad}return\n")),
-        Kind::Scene(_) | Kind::Show(_) | Kind::Hide(_) => stage(node, &pad, out),
+        Kind::Scene(_) | Kind::Show(_) | Kind::Hide(_) => {
+            stage(node, depth, file, report, out, names);
+        }
         Kind::With(transition) => out.push_str(&format!("{pad}with {}\n", transition.trim())),
         Kind::Play(_) | Kind::Stop(_) | Kind::Queue(_) => audio_line(node, &pad, file, report, out),
         Kind::Pause(seconds) => pause(seconds, &pad, node, file, report, out),
@@ -148,7 +157,7 @@ fn menu(
     file: &str,
     report: &mut Report,
     out: &mut String,
-    renames: &BTreeMap<String, String>,
+    names: &Names<'_>,
 ) {
     let pad = indent(depth);
     let caption = node.children.iter().position(|child| {
@@ -188,11 +197,11 @@ fn menu(
                     file,
                     report,
                     out,
-                    renames,
+                    names,
                 );
             }
             // A `set` and friends inside a menu body are Vela statements in their own right.
-            _ => statement(child, depth + 1, file, report, out, renames),
+            _ => statement(child, depth + 1, file, report, out, names),
         }
     }
 }
@@ -207,7 +216,7 @@ fn choice(
     file: &str,
     report: &mut Report,
     out: &mut String,
-    renames: &BTreeMap<String, String>,
+    names: &Names<'_>,
 ) {
     let guard = condition.map_or(String::new(), |cond| match expr::expression(cond) {
         Ok(cond) => format!(" if {cond}"),
@@ -217,7 +226,7 @@ fn choice(
         }
     });
     out.push_str(&format!("{}{text}{guard}:\n", indent(depth + 1)));
-    block(&node.children, depth + 2, file, report, out, renames);
+    block(&node.children, depth + 2, file, report, out, names);
 }
 
 /// `if` / `elif`.
@@ -233,7 +242,7 @@ fn branch(
     file: &str,
     report: &mut Report,
     out: &mut String,
-    renames: &BTreeMap<String, String>,
+    names: &Names<'_>,
 ) {
     let pad = indent(depth);
     match expr::expression(condition) {
@@ -243,7 +252,7 @@ fn branch(
             out.push_str(&format!("{pad}{keyword} true:\n"));
         }
     }
-    block(&node.children, depth + 1, file, report, out, renames);
+    block(&node.children, depth + 1, file, report, out, names);
 }
 
 /// `jump` / `call`, through the rename map.
@@ -253,7 +262,7 @@ fn transfer(
     report: &mut Report,
     file: &str,
     out: &mut String,
-    renames: &BTreeMap<String, String>,
+    names: &Names<'_>,
 ) {
     let (keyword, target) = match &node.kind {
         Kind::Jump(target) => ("jump", target),
@@ -278,22 +287,60 @@ fn transfer(
 
     out.push_str(&format!(
         "{pad}{keyword} {}\n",
-        renamed(target.trim(), renames)
+        renamed(target.trim(), names.renames)
     ));
 }
 
 /// `scene` / `show` / `hide`.
 ///
-/// Passed through: Ren'Py's `scene bg lecturehall` is an image reference and an attribute list,
-/// which is exactly Vela's `scene` statement — the shape was copied from it deliberately.
-fn stage(node: &Node, pad: &str, out: &mut String) {
+/// Ren'Py names an image with a *tag and attributes* — `show sylvie green normal` — and Vela names
+/// it with a dotted path: `sylvie.green.normal`. The migration reproduces Ren'Py's automatic image
+/// definitions and rewrites the reference to match, which is what makes the picture appear at all —
+/// an attribute Vela does not know about stages nothing.
+///
+/// A reference that names no image in the project is left as it is and reported. The honest reason
+/// differs by case, and both are worth a person's eye: Ren'Py has built-in `black` and `white`
+/// images that Vela does not, and a misspelled name is a misspelled name.
+fn stage(
+    node: &Node,
+    depth: usize,
+    file: &str,
+    report: &mut Report,
+    out: &mut String,
+    names: &Names<'_>,
+) {
     let (keyword, rest) = match &node.kind {
         Kind::Scene(rest) => ("scene", rest),
         Kind::Show(rest) => ("show", rest),
         Kind::Hide(rest) => ("hide", rest),
         _ => return,
     };
-    out.push_str(&format!("{pad}{keyword} {}\n", rest.trim()));
+    let pad = indent(depth);
+
+    // `scene bg uni with fade` puts the transition on the line it stages on.
+    let (reference, transition) = match rest.split_once(" with ") {
+        Some((reference, transition)) => (reference.trim(), Some(transition.trim())),
+        None => (rest.trim(), None),
+    };
+    let with = transition.map_or(String::new(), |name| format!(" with {name}"));
+    let dotted = reference.split_whitespace().collect::<Vec<_>>().join(".");
+
+    if names.images.contains(&dotted) {
+        out.push_str(&format!("{pad}{keyword} {dotted}{with}\n"));
+        return;
+    }
+
+    report.push(
+        file,
+        node.line,
+        &node.text,
+        format!(
+            "`{reference}` names no image in this project. Ren'Py defines an image from every image \
+             file's name, so this is either a name with no file — Ren'Py's built-in `black` and \
+             `white` have no Vela equivalent — or a typo. Nothing is staged by it"
+        ),
+    );
+    out.push_str(&format!("{pad}{keyword} {reference}{with}\n"));
 }
 
 /// `play` / `stop` / `queue`, checked against Vela's shape rather than passed through.

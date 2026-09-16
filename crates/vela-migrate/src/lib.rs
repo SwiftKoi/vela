@@ -23,6 +23,7 @@
 //!                                 └──► Report (file:line + original + reason)
 //! ```
 
+mod assets;
 mod error;
 mod expr;
 mod project;
@@ -33,8 +34,9 @@ mod transpile;
 #[cfg(test)]
 mod tests;
 
+pub use assets::{Asset, Image};
 pub use error::MigrateError;
 pub use expr::{expression, literal_type, split_assignment, without_translation_call};
-pub use project::{Asset, Project, Source, project};
+pub use project::{Project, Source, project};
 pub use report::{Entry, Report};
 pub use rpy::{Kind, Node, read};

@@ -11,6 +11,9 @@ rank = 2
 
 [dependencies]
 png = "0.18.1"
+# Ren'Py projects ship JPEG backgrounds, and a migration that cannot take one is a migration
+# that loses the picture. Pure Rust, no C toolchain — the same reason `png` is here.
+jpeg-decoder = "0.3"
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

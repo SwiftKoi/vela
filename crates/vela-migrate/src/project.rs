@@ -18,6 +18,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crate::assets::{Asset, Image, declarations, media, partition, report_inventory};
 use crate::error::MigrateError;
 use crate::report::Report;
 use crate::rpy::{self, Kind};
@@ -31,15 +32,6 @@ pub struct Source {
     pub text: String,
 }
 
-/// One media file the project has, and what the migration did with it.
-#[derive(Clone, Debug)]
-pub struct Asset {
-    /// The path, relative to `game/`.
-    pub path: String,
-    /// What kind of thing it is, from its extension.
-    pub kind: &'static str,
-}
-
 /// A migrated project, before anything is written.
 #[derive(Debug)]
 pub struct Project {
@@ -49,7 +41,9 @@ pub struct Project {
     pub entry: String,
     /// The files to write.
     pub files: Vec<Source>,
-    /// The media found, in sorted order.
+    /// The images to copy, in sorted order.
+    pub images: Vec<Image>,
+    /// The media the migration did not copy, in sorted order.
     pub assets: Vec<Asset>,
     /// Everything that was not translated.
     pub report: Report,
@@ -79,25 +73,65 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
     scripts.sort();
     assets.sort_by(|left, right| left.path.cmp(&right.path));
 
-    let mut files = Vec::new();
-    let mut stories = Vec::new();
-    for path in &scripts {
-        let Some(story) = story_file(&game, path, &mut report)? else {
-            continue;
-        };
-        stories.push(story);
-    }
+    let (images, inventory) = partition(assets, &game);
+    report_inventory(&inventory, &mut report);
 
+    let stories = read_stories(&game, &scripts, &mut report)?;
+    let files = translate(&stories, &images, &mut report);
+
+    let name = name_of(&game).unwrap_or_else(|| {
+        root.file_name().map_or_else(
+            || "migrated".to_string(),
+            |name| name.to_string_lossy().to_string(),
+        )
+    });
+    let entry = entry_of(&files).unwrap_or_else(|| "main.start".to_string());
+
+    Ok(Project {
+        name,
+        entry,
+        files,
+        images,
+        assets: inventory,
+        report,
+    })
+}
+
+/// Reads every script, keeping the ones that hold story.
+fn read_stories(
+    game: &Path,
+    scripts: &[PathBuf],
+    report: &mut Report,
+) -> Result<Vec<Story>, MigrateError> {
+    let mut stories = Vec::new();
+    for path in scripts {
+        if let Some(story) = story_file(game, path, report)? {
+            stories.push(story);
+        }
+    }
+    Ok(stories)
+}
+
+/// Turns every story into a Vela file, and adds the images' declarations.
+///
+/// Canonical by construction: the migration emits what the formatter would, so a migrated project
+/// diffs cleanly, `vela fmt --check` has nothing to say about it, and the shape of the output is
+/// this project's one shape rather than the one Ren'Py happened to use.
+fn translate(stories: &[Story], images: &[Image], report: &mut Report) -> Vec<Source> {
     // Ren'Py keeps a label and a `default` in separate namespaces — `label book` and
     // `default book` are both ordinary — and Vela does not (`E2003`). So a label that collides
     // with a value is renamed, deterministically and with a report entry, rather than left to
     // fail the check on the other side.
-    let renames = collisions(&stories, &mut report);
-    for story in &stories {
-        // Canonical by construction: the migration emits what the formatter would, so a migrated
-        // project diffs cleanly, `vela fmt --check` has nothing to say about it, and the shape of
-        // the output is this project's one shape rather than the one Ren'Py happened to use.
-        let text = crate::transpile::file(&story.nodes, &story.relative, &mut report, &renames);
+    let renames = collisions(stories, report);
+    let known: BTreeSet<String> = images.iter().map(|image| image.name.clone()).collect();
+    let names = crate::transpile::Names {
+        renames: &renames,
+        images: &known,
+    };
+
+    let mut files = Vec::new();
+    for story in stories {
+        let text = crate::transpile::file(&story.nodes, &story.relative, report, &names);
         let text = match vela_syntax::format(vela_span::FileId::from_raw(0), &text) {
             Ok(formatted) => formatted,
             Err(_) => {
@@ -117,21 +151,13 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
         });
     }
 
-    let name = name_of(&game).unwrap_or_else(|| {
-        root.file_name().map_or_else(
-            || "migrated".to_string(),
-            |name| name.to_string_lossy().to_string(),
-        )
-    });
-    let entry = entry_of(&files).unwrap_or_else(|| "main.start".to_string());
-
-    Ok(Project {
-        name,
-        entry,
-        files,
-        assets,
-        report,
-    })
+    if !images.is_empty() {
+        files.push(Source {
+            path: "src/images.vela".to_string(),
+            text: declarations(images),
+        });
+    }
+    files
 }
 
 /// Everything under `dir`, split into scripts and media.
@@ -190,17 +216,6 @@ fn collect(
         }
     }
     Ok(())
-}
-
-/// What kind of media an extension is, if it is one.
-fn media(extension: &str) -> Option<&'static str> {
-    Some(match extension {
-        "png" | "jpg" | "jpeg" | "webp" | "ktx2" => "image",
-        "opus" | "ogg" | "mp3" | "wav" => "audio",
-        "ttf" | "otf" => "font",
-        "webm" | "mp4" => "video",
-        _ => return None,
-    })
 }
 
 /// One story file, read and parsed.
@@ -371,6 +386,16 @@ impl Project {
             }
             write_file(&path, &file.text)?;
         }
+        for image in &self.images {
+            let path = out.join(&image.to);
+            if let Some(parent) = path.parent() {
+                create(parent)?;
+            }
+            std::fs::copy(&image.from, &path).map_err(|source| MigrateError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        }
         write_file(&out.join("MIGRATION.md"), &self.notes())?;
         Ok(())
     }
@@ -412,15 +437,24 @@ impl Project {
         }
 
         text.push_str("\n## Assets\n\n");
-        if self.assets.is_empty() {
-            text.push_str("None found.\n");
+        if self.images.is_empty() {
+            text.push_str("No images were found.\n");
         } else {
             text.push_str(
-                "Not copied. An asset in Vela is only meaningful once something declares it — \
-                 `image bg.room = @\"art/room.png\"` — and Ren'Py declares its images \
-                 *automatically* from filenames, so reproducing them is its own piece of work. \
-                 Note also that `vela check` **imports** everything under `assets/`, so a file no \
-                 importer claims is an error rather than a warning.\n\n",
+                "Copied into `assets/`, with an `image` declaration each in `src/images.vela`. \
+                 Ren'Py defines these automatically from the file names and Vela does not, so the \
+                 migration writes them out — and the story's `scene`/`show` names are rewritten to \
+                 match.\n\n",
+            );
+            for image in &self.images {
+                text.push_str(&format!("- `{}` → `{}`\n", image.to, image.name));
+            }
+        }
+        if !self.assets.is_empty() {
+            text.push_str(
+                "\nNot copied. `vela check` **imports** everything under `assets/`, so a file no \
+                 importer claims is an error rather than a warning, and the GUI skin belongs to \
+                 Ren'Py's screens rather than to Vela's.\n\n",
             );
             for asset in &self.assets {
                 text.push_str(&format!("- `{}` ({})\n", asset.path, asset.kind));

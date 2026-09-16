@@ -73,6 +73,78 @@ pub fn decode_png(bytes: &[u8]) -> Result<Image, AssetError> {
     })
 }
 
+/// Decodes an image to `RGBA8`, whichever format it is.
+///
+/// The format is decided by the file's **magic bytes**, not by its name — the same rule the
+/// importer registry selects an importer by (`BUILD_AND_ASSETS.md §3.1`), so a `.png` that holds
+/// JPEG bytes is decoded as what it is rather than refused for what it says it is.
+///
+/// This is the entry point the *runtime* wants: `importers/texture.rs` answers the build's question
+/// (what does this source become in a bundle) and this answers the presenter's (what are the
+/// pixels), and a caller that has bytes in hand should not have to know which of the two it is
+/// holding.
+///
+/// # Errors
+///
+/// Fails if the bytes are not an image this build decodes, or the image is malformed.
+pub fn decode(bytes: &[u8]) -> Result<Image, AssetError> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return decode_png(bytes);
+    }
+    if bytes.starts_with(b"\xff\xd8\xff") {
+        return decode_jpeg(bytes);
+    }
+    Err(AssetError::Codec(
+        "not an image this build reads (PNG and JPEG)".to_string(),
+    ))
+}
+
+/// Decodes a JPEG to `RGBA8`.
+///
+/// # Errors
+///
+/// Fails on a malformed file, and on a CMYK one: `jpeg-decoder` decodes those to four channels
+/// that are not RGBA, and guessing an inverted conversion would produce a picture that is
+/// *wrong* rather than missing.
+pub fn decode_jpeg(bytes: &[u8]) -> Result<Image, AssetError> {
+    let mut decoder = jpeg_decoder::Decoder::new(Cursor::new(bytes));
+    let pixels = decoder
+        .decode()
+        .map_err(|error| AssetError::Codec(format!("not a JPEG: {error}")))?;
+    let info = decoder
+        .info()
+        .ok_or_else(|| AssetError::Codec("the file has no frame header".to_string()))?;
+
+    let (width, height) = (u32::from(info.width), u32::from(info.height));
+    let count = width as usize * height as usize;
+    let mut rgba = Vec::with_capacity(count * 4);
+
+    match info.pixel_format {
+        jpeg_decoder::PixelFormat::L8 => {
+            for &grey in pixels.iter().take(count) {
+                rgba.extend_from_slice(&[grey, grey, grey, 255]);
+            }
+        }
+        jpeg_decoder::PixelFormat::RGB24 => {
+            for rgb in pixels.chunks_exact(3).take(count) {
+                rgba.extend_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
+            }
+        }
+        other => {
+            return Err(AssetError::Codec(format!(
+                "a {other:?} JPEG: this build decodes greyscale and RGB, and a CMYK file needs a \
+                 conversion it does not have"
+            )));
+        }
+    }
+
+    Ok(Image {
+        width,
+        height,
+        rgba,
+    })
+}
+
 /// Turns whatever the decoder produced into `RGBA8`.
 ///
 /// `EXPAND` leaves greyscale without alpha as one component per pixel and greyscale with alpha

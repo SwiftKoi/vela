@@ -4,15 +4,27 @@
 //! file and the line, because the milestone's third exit criterion is that no construct is ever
 //! silently mistranslated. So half of these tests are about output and half are about refusals.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Report;
 
 /// Migrates one file, returning the Vela text and the report.
 fn migrate(source: &str) -> (String, Report) {
+    migrate_with(source, &[])
+}
+
+/// Migrates one file against a set of image names, the way `project` does.
+fn migrate_with(source: &str, images: &[&str]) -> (String, Report) {
+    let renames = BTreeMap::new();
+    let images: BTreeSet<String> = images.iter().map(|name| (*name).to_string()).collect();
+    let names = crate::transpile::Names {
+        renames: &renames,
+        images: &images,
+    };
+
     let nodes = crate::read(source);
     let mut report = Report::new();
-    let text = crate::transpile::file(&nodes, "game.rpy", &mut report, &BTreeMap::new());
+    let text = crate::transpile::file(&nodes, "game.rpy", &mut report, &names);
     (text, report)
 }
 
@@ -64,13 +76,14 @@ label start:
 label later:
     return
 ";
-    let (text, report) = migrate(source);
+    // The images the story stages, as the project's own declarations would name them.
+    let (text, report) = migrate_with(source, &["bg.lecturehall", "sylvie.green.normal"]);
 
     assert!(text.contains("label start:\n"), "{text}");
-    assert!(text.contains("    scene bg lecturehall\n"), "{text}");
+    assert!(text.contains("    scene bg.lecturehall\n"), "{text}");
     assert!(text.contains("    with fade\n"), "{text}");
     assert!(text.contains("    \"It rained.\"\n"), "{text}");
-    assert!(text.contains("    show sylvie green normal\n"), "{text}");
+    assert!(text.contains("    show sylvie.green.normal\n"), "{text}");
     assert!(text.contains("    s \"Hi there!\"\n"), "{text}");
     assert!(text.contains("    jump later\n"), "{text}");
     assert!(text.contains("label later:\n"), "{text}");
@@ -242,5 +255,35 @@ label waited:
         first.1.render(),
         second.1.render(),
         "the report should not vary between runs"
+    );
+}
+
+/// Ren'Py names an image with a tag and attributes; Vela names it with a dotted path, and the
+/// migration rewrites the reference to the name it declared — an attribute Vela does not know
+/// about stages nothing, so leaving it would migrate the story and lose the picture.
+#[test]
+fn an_image_reference_is_rewritten_to_its_dotted_name() {
+    let source =
+        "label start:\n    scene bg lecturehall\n    show sylvie green normal\n    return\n";
+    let (text, report) = migrate_with(source, &["bg.lecturehall", "sylvie.green.normal"]);
+
+    assert!(text.contains("    scene bg.lecturehall\n"), "{text}");
+    assert!(text.contains("    show sylvie.green.normal\n"), "{text}");
+    assert!(report.is_empty(), "{}", report.render());
+}
+
+/// A reference nothing declares is left alone and reported: it is either a name with no file — Ren'Py
+/// has built-in `black` and `white` images that Vela does not — or a typo, and both want a person.
+#[test]
+fn an_image_reference_that_names_nothing_is_reported() {
+    let source = "label start:\n    scene black\n    return\n";
+    let (text, report) = migrate_with(source, &["bg.lecturehall"]);
+
+    assert!(text.contains("    scene black\n"), "{text}");
+    assert_eq!(report.len(), 1);
+    assert!(
+        report.render().contains("names no image"),
+        "{}",
+        report.render()
     );
 }

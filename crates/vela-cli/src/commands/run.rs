@@ -222,9 +222,8 @@ fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<(String, u32, u32
             let file = assets.join(value);
             match std::fs::read(&file)
                 .map_err(|error| error.to_string())
-                .and_then(|bytes| {
-                    vela_assets::decode_png(&bytes).map_err(|error| error.to_string())
-                }) {
+                .and_then(|bytes| vela_assets::decode(&bytes).map_err(|error| error.to_string()))
+            {
                 Ok(image) => images.push((name, image.width, image.height, image.rgba)),
                 Err(error) => {
                     let _ = writeln!(out, "image {name}: {error}");
