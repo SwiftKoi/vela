@@ -63,7 +63,7 @@ impl Command for Run {
         let project = collect(&target)?;
         // `entry` is `module.label`, and after linking that *is* the label's name: the whole
         // program is one module whose labels are qualified.
-        let (module, entry) = compile_project(&project, args, out)?;
+        let (module, entry, _) = compile_project(&project, args, out)?;
 
         // The screens the presenter may draw. Compiled here rather than in the compiler, for
         // the rank reason `commands::ui` records: the CLI is the lowest layer that can see both
@@ -111,15 +111,19 @@ impl Command for Run {
 /// the program and not just its entry file: a story split across files is one program by the time
 /// anything runs it (`LANGUAGE.md §6`).
 ///
+/// The sources come back with it because a second caller needs them: `vela debug` maps a
+/// module's spans — which carry file ids — back to the files they came from, and the only map
+/// that answers that is the one the compiler used.
+///
 /// # Errors
 ///
 /// Fails if there is no entry point, the project has errors, the modules cannot be linked, the
 /// entry label is not in the linked program, or the result does not verify.
-fn compile_project(
+pub(crate) fn compile_project(
     project: &Project,
     args: &[String],
     out: &mut dyn Write,
-) -> Result<(vela_bytecode::Module, String), Error> {
+) -> Result<(vela_bytecode::Module, String, vela_span::SourceMap), Error> {
     let entry = flag_value(args, "--start")
         .map(ToString::to_string)
         .or_else(|| {
@@ -172,7 +176,7 @@ fn compile_project(
             "the compiled module does not verify".to_string(),
         ));
     }
-    Ok((module, entry))
+    Ok((module, entry, session.sources().clone()))
 }
 
 /// Whether a run should open a window rather than print its commands.
@@ -320,6 +324,7 @@ pub(crate) fn positional(args: &[String]) -> Option<&str> {
             || arg == "--size"
             || arg == "--frame"
             || arg == "--screen"
+            || arg == "--port"
         {
             index += 2;
             continue;

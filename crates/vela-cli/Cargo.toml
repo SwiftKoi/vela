@@ -31,6 +31,7 @@ vela-replay.workspace = true
 vela-assets.workspace = true
 vela-host.workspace = true
 vela-lsp.workspace = true
+vela-debug.workspace = true
 vela-test.workspace = true
 vela-migrate.workspace = true
 vela-render = { version = "0.1.0", path = "../vela-render" }
