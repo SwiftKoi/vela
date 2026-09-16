@@ -3,7 +3,7 @@
 use vela_diag::{Diagnostic, Severity};
 use vela_span::{FileId, Span};
 
-use crate::module::Instr;
+use crate::module::{Header, Instr};
 use crate::op::{OPS, Op, Operand, OperandKind};
 
 /// A span for a diagnostic that never gets rendered.
@@ -40,6 +40,71 @@ fn mnemonics_are_unique() {
         assert!(!seen.contains(&spec.name), "`{}` is used twice", spec.name);
         seen.push(spec.name);
     }
+}
+
+/// A release build carries no debug info, and the container says so (`BYTECODE.md §5`).
+///
+/// The flag is what a debugger reads before promising a line breakpoint, so it has to be true of
+/// the *encoded* module and not merely of the one in memory: a flag that did not survive the
+/// container would make a released game look debuggable to the one reader that matters.
+#[test]
+fn a_release_module_says_it_has_no_debug_info() {
+    assert!(Header::new(true).has_debug());
+    assert!(!Header::new(false).has_debug());
+    assert_eq!(Header::new(false).flags & Header::FLAG_DEBUG, 0);
+
+    let Some((release, debug)) = one_corpus_module() else {
+        return;
+    };
+
+    assert!(
+        !release.header.has_debug(),
+        "a `--release` module carries no flag"
+    );
+    assert!(!release.debug.present, "and no debug info to point at");
+
+    let decoded = crate::decode(&crate::encode(&debug)).expect("it decodes");
+    assert!(
+        decoded.header.has_debug(),
+        "a debug module still says so after a round trip"
+    );
+
+    let decoded = crate::decode(&crate::encode(&release)).expect("it decodes");
+    assert!(
+        !decoded.header.has_debug(),
+        "and a release module stays released across the container"
+    );
+}
+
+/// One corpus entry, compiled both ways: `(release, debug)`.
+fn one_corpus_module() -> Option<(crate::Module, crate::Module)> {
+    let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/mir");
+    let entry = std::fs::read_dir(corpus)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "vela"))?;
+
+    let text = std::fs::read_to_string(&entry).ok()?;
+    let name = entry
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let mut sources = vela_span::SourceMap::new();
+    let id = sources.add(name.as_str(), &text);
+    let parsed = vela_syntax::parse(id, &text);
+    let (env, _) = vela_types::Env::build(&parsed.program);
+    let lowered = vela_mir::lower(
+        &vela_hir::ModuleName::new(name.as_str()),
+        &parsed.program,
+        &env,
+    );
+
+    Some((
+        crate::compile(&lowered.module, false),
+        crate::compile(&lowered.module, true),
+    ))
 }
 
 /// The operand kind byte is what makes a corrupted opcode a rejected module rather than a

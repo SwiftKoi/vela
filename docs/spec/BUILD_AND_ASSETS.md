@@ -20,14 +20,14 @@ The two halves are independent and cacheable. A change to a script does **not** 
 assets; a change to one asset does not recompile scripts. This split is what makes builds
 incremental at all.
 
-> **Implemented so far (M9).** `vela build` runs both halves: every module under `src/` compiles,
+> **Implemented (M9).** `vela build` runs both halves: every module under `src/` compiles,
 > the modules are **linked into one program** (`LANGUAGE.md §6.1`), and that program is written as
 > a single `dist/scripts/<entry-module>.velac`; every file under `assets/` imports to
 > `dist/manifest.json` with its artifacts beside it under `dist/assets/`. `--out <dir>` moves the
 > destination, and a project with no `assets/` builds an empty manifest rather than failing — the
 > one-line script has to stay buildable.
 >
-> **One script, however many files.** The story graph crosses module boundaries by construction — a
+> **Note.** One script, however many files. The story graph crosses module boundaries by construction — a
 > `jump` into another chapter is the reason to split a project at all — so the image the VM runs
 > has one label table with every label under its qualified name. What that costs: a patch that
 > touches any module replaces the whole script file, where a per-module layout would have replaced
@@ -41,7 +41,7 @@ incremental at all.
 >
 > Debug information is left out of the bundle, as `RUNTIME.md §9` requires of a release build.
 >
-> **A bundle runs.** `vela run <bundle-dir>` and `vela_vm::Session::load` take a built directory
+> **Implemented (M9).** `vela run <bundle-dir>` and `vela_vm::Session::load` take a built directory
 > straight to the VM: the entry point comes from the manifest, the module from `scripts/`, and no
 > `.vela` file is read — so a distribution is something a player starts rather than an artifact
 > nothing consumes (`RUNTIME.md §8`, §8 below). `crates/vela-cli/src/tests/bundle_tests.rs`
@@ -90,7 +90,7 @@ Properties:
   project — which is why all three are absent from a bare `import_tree` and omitted from the
   file while they are.
 
-> **Implemented so far (M9).** `vela_assets::Manifest` holds that shape. `size` and `variants`
+> **Implemented (M9).** `vela_assets::Manifest` holds that shape. `size` and `variants`
 > exist but are empty until targets do, and are *omitted from the JSON while they are* — so a
 > manifest written today is byte-identical to one written after they start being filled in.
 >
@@ -126,7 +126,7 @@ actually a JPEG is handled, or reported clearly).
 | Data | TOML, JSON, CSV | typed value blob, validated against a declared schema |
 | Script | `.vela` | bytecode (handled by `vela-compile`, but via the same registry) |
 
-> **Implemented so far (M9).** `ImporterRegistry` selects by magic bytes first and extension
+> **Implemented (M9).** `ImporterRegistry` selects by magic bytes first and extension
 > second, as above, and two importers ship:
 >
 > * **data** — JSON, TOML, and CSV → canonical JSON, compact with keys sorted, so two files
@@ -186,7 +186,7 @@ Target selection changes: (a) which artifact variants are packed, (b) the shader
 game logic — the VM, World, and bytecode are target-independent by construction, which is
 what the layer rules in `REPO_LAYOUT.md §1` protect.
 
-> **Implemented so far (M9).** `vela build --target win,mac,linux,web` writes one self-contained
+> **Implemented (M9).** `vela build --target win,mac,linux,web` writes one self-contained
 > bundle per target — `dist/linux/`, `dist/web/`, … — each with the same scripts and assets and
 > its own `target.json` descriptor and **launcher**. The script tree is identical across targets
 > *because the story is target-independent by construction*; what differs is the descriptor and
@@ -228,7 +228,7 @@ Web is a first-class target, not a port (`VISION.md §3.4`).
 - **Size**: the wasm engine core is size-gated in CI (a budget that must be *lowered*, never
   raised, without an explicit decision) so the web target stays a viable instant demo.
 
-> **Implemented so far (M9).** The precondition holds and is *checked*, and the engine now runs
+> **Implemented (M9).** The precondition holds and is *checked*, and the engine now runs
 > there. `crates/vela-web` is the browser entry point: a `Player` a page constructs from a
 > `.velac` and drives with `step` / `line` / `choose`. `tools/wasm-smoke.sh` builds it, drives the
 > **web bundle** (`--target web`) in a JavaScript runtime — entry point and module from the
@@ -249,7 +249,7 @@ Web is a first-class target, not a port (`VISION.md §3.4`).
 > The module is 287 KB and size-gated in CI (gate 9), against a ceiling that is meant to be
 > **lowered** and raised only with a reason.
 >
-> **Still to come: drawing in the browser.** A bundle that plays in a browser *window* needs the
+> **Not yet.** A bundle that plays in a browser *window* needs the
 > renderer on `wgpu`'s web backends and a canvas, and `--serve` to look at it. Until then the
 > `index.html` launcher plays in text — a real engine rather than a demonstration of one, but not
 > yet something a player would recognise as a game.
@@ -275,7 +275,7 @@ vela build --release --patch-from ./dist/1.4.0 --patch-out ./dist/1.4.1-patch
 - **Acceptance bar** (`VISION.md §5`): a text-only change must produce a patch under 5% of the
   full bundle size. This is a CI benchmark, enforced on a fixture project.
 
-> **Implemented so far (M9).** `vela build --patch-from <previous> --patch-out <dir>` computes
+> **Implemented (M9).** `vela build --patch-from <previous> --patch-out <dir>` computes
 > the difference between two bundles and writes `patch.json` plus the changed blobs under
 > `blobs/`, each named by its own digest so two changed files with the same content cost one.
 > `vela patch apply <patch> <bundle>` puts them on top of the build the patch was computed from.
@@ -289,14 +289,14 @@ vela build --release --patch-from ./dist/1.4.0 --patch-out ./dist/1.4.1-patch
 > assets produces a patch of a few hundred bytes, which is the changed script and nothing else.
 > It runs under `cargo test`, so it is gate 5 rather than a gate of its own.
 >
-> **The script is one file, so a text change now costs the whole program.** Linking (§1) produces
+> **Note.** The script is one file, so a text change now costs the whole program. Linking (§1) produces
 > one image, and the bar is met on the fixture because assets dominate a 600 KB bundle — but a
 > large story loses patch granularity that a per-module layout had. Two ways back, and neither is
 > free: sub-file chunks over the image (below), or shipping per-module images and linking them at
 > load — which is a *runtime* module table, the format decision `LINKING` deliberately did not take
 > (`vela-mir::link`). Worth deciding with a real project rather than on a fixture.
 >
-> **Not yet: sub-file chunks.** A changed file ships whole, so a one-byte edit to a large
+> **Not yet.** A changed file ships whole, so a one-byte edit to a large
 > texture costs the texture, and so does a one-line edit to the program. The bar is met at this
 > granularity because a text change alters a
 > script and nothing else; diffing file *contents* is what the next level of this needs. The
@@ -313,7 +313,7 @@ content-addressed packing. `vela build --verify-reproducible` builds twice and d
 CI on the fixture project. A reproducible build is what makes a delta patch meaningful and a
 release auditable.
 
-> **Implemented so far (M9).** `vela build --verify-reproducible` builds the project a second
+> **Implemented (M9).** `vela build --verify-reproducible` builds the project a second
 > time into a directory of its own — a fresh session and a fresh import, not a copy of the
 > first — and compares the two trees file by file, so a failure names what differed instead of
 > saying the bundles are unequal. It is gate 6 in CI (`REPO_LAYOUT.md §6`), run on the standard
@@ -336,7 +336,7 @@ release auditable.
 - Store integrations (Steam, itch.io) are packaging hooks plus a metadata file. They are not
   built into the engine — this keeps us out of the store-specific-code business.
 
-> **Implemented so far (M9).** `vela build --target <t>` writes a launcher beside each target's
+> **Implemented (M9).** `vela build --target <t>` writes a launcher beside each target's
 > bundle: `launch.sh` on `mac` and `linux`, `launch.cmd` on `win`, `index.html` on `web`. A
 > desktop launcher runs the engine on the bundle directory, preferring a runtime copied beside
 > it and falling back to `vela` on `PATH` — the release step that embeds the engine is the thin
@@ -371,7 +371,7 @@ release auditable.
 | `E7202` | Save is from a newer engine version |
 | `E7301` | Attempt to demote an error diagnostic to a warning |
 
-> **Implemented so far (M9).** `E7001` is both specified here and *produced*: `vela check`
+> **Implemented (M9).** `E7001` is both specified here and *produced*: `vela check`
 > reports every `@"path"` that names nothing in the manifest, at the literal's span
 > (`LANGUAGE.md §7.5`). The manifest it checks against is imported on the spot rather than read
 > from `dist/`, so the answer is about the assets as they are.

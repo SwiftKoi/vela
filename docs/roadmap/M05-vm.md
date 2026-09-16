@@ -6,7 +6,7 @@
 
 **Crates.** `vela-vm`, `vela-world`, plus the first mock host in `vela-vm/src/effects/`.
 
-**Work items.**
+## Work items
 1. `Vm`, `Frame`, step loop and `Step` outcomes exactly as `RUNTIME.md §1`.
 2. `World` with `defaults`, `rng`, `clock`, `scene`, `audio`, `call_stack` (`RUNTIME.md §2`).
 3. Core effects: `rand.*`, `time.now`, `input.choose`, `input.wait_click`; the capability
@@ -18,7 +18,7 @@
 6. Replay equality test: record → replay → assert byte-identical `World` + command stream.
 7. `vela run --headless` printing the command stream.
 
-**Exit criteria.**
+## Exit criteria
 - [x] `examples/hello` runs headless to `Halt` and prints each say and menu command
 - [x] Replay equality test green on a multi-branch fixture, **including a `rand` path** —
       replay is green, and so is the `rand` path: the generator lives in `World`, so an
@@ -31,7 +31,11 @@
       the platform clock
 - [x] **Demo:** `vela run --headless --start main.start examples/hello`
 
-**Status.** Complete. 254 tests, 7/7 `xtask` checks, clippy clean.
+## Status
+
+Complete. 254 tests, 7/7 `xtask` checks, clippy clean.
+
+## Found during implementation
 
 **The language could not call an effect, and now can.** `RUNTIME.md §3` lists `rand.*`,
 `time.now`, and `input.*` with the capability table behind them, and M5 asks for the core

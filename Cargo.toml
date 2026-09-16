@@ -39,6 +39,7 @@ vela-vm = { path = "crates/vela-vm" }
 vela-replay = { path = "crates/vela-replay" }
 vela-ui = { path = "crates/vela-ui" }
 vela-lsp = { path = "crates/vela-lsp" }
+vela-debug = { path = "crates/vela-debug" }
 vela-migrate = { path = "crates/vela-migrate" }
 vela-test = { path = "crates/vela-test" }
 vela-plugin = { path = "crates/vela-plugin" }

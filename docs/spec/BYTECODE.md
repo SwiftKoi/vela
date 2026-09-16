@@ -1,6 +1,6 @@
 # Bytecode Specification
 
-Status: **draft, normative for M3–M4.**
+Status: **draft, normative for M3–M4, extended by M11's debug-info flag (§5).**
 
 This document defines the compilation contract between the front end (`vela-hir`,
 `vela-types`) and the runtime (`vela-vm`). It has two layers: **MIR**, a typed mid-level IR
@@ -27,7 +27,7 @@ MIR is a **control-flow graph of basic blocks** over **typed slots**. It is not 
 are mutable and named `_0.._n` — because slot-based IR produces smaller bytecode and far
 simpler verifier rules, and we do not need the optimization power of SSA for a story engine.
 
-> **Revised during M3.**  The structures below are what the language actually needed to be
+> **Revised (M3).**  The structures below are what the language actually needed to be
 > lowered into. The first draft could not express several constructs in `LANGUAGE.md §3`;
 > each addition is marked *added in M3* and is covered by the golden corpus
 > (`tests/golden/mir/`) and by `every_mir_form_appears_in_the_corpus`.
@@ -133,7 +133,7 @@ The pass pipeline is a registry (`CONVENTIONS.md §4.5`). Initial set, in order:
 | `inline_small` | Inline `fn` bodies under a size threshold | Avoids call overhead in per-frame logic |
 | `cmd_fuse` | Drop a `Cmd` the next one overwrites | One yield site per command |
 
-> **Corrected during M3.**  The first draft listed `dead_block` *before* `branch_simplify`,
+> **Revised (M3).**  The first draft listed `dead_block` *before* `branch_simplify`,
 > which is backwards: folding a decided branch is exactly what *creates* unreachable blocks.
 > Running the cleanup first meant the blocks it exists to remove were still there afterwards,
 > and rule 8 of §4 ("unreachable code must be removed, not merely present") failed on any

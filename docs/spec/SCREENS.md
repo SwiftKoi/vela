@@ -1,6 +1,6 @@
 # Screen System Specification
 
-Status: **draft, normative for M7.**
+Status: **draft, normative for M7, extended by M8's hot reload and M9's screen pack.**
 
 Screens are Vela's declarative UI. Ren'Py's screen language is a genuine strength, but it
 inherits the same problem as the rest of the script layer: it is dynamically evaluated, so a
@@ -36,7 +36,7 @@ Screens are **pure functions of their arguments and bound state**. They produce 
 they never mutate `World` during layout. Mutation happens through *actions* only (§7), which
 keeps rendering one-directional and testable.
 
-> **Runtime note (M8).** A screen is not yet a command, and there is no `show screen` statement.
+> **Not yet.** A screen is not yet a command, and there is no `show screen` statement.
 > The presenter draws a screen *named for the command it is presenting*: a `Say` goes through a
 > screen called `dialogue` when the project declares one — called positionally with
 > `(speaker, line)`, and with `none` for a narrator — and falls back to the built-in dialogue
@@ -119,7 +119,7 @@ different questions, and a node often wants one without the other.
 box can be recoloured independently. A literal (`background = 0x203040`) is allowed but
 `W4008`-linted, for the reason §5 gives.
 
-> **`at` and transforms.** The transform grammar is M13's, so no screen can express one yet.
+> **Note.** `at` and transforms. The transform grammar is M13's, so no screen can express one yet.
 > Until it can, `at <anchor>` is read as an anchor — `box at bottom` puts the box at the bottom
 > of its layer — rather than being silently dropped. When transforms land, an anchor-shaped
 > value should keep working and a transform-shaped one should take over.
@@ -140,7 +140,7 @@ Styles are typed, cascading, and materialized into tokens — no stringly-typed 
 > screens are implemented; the language proper only fixes that a declaration body is
 > `key = value` lines (`LANGUAGE.md §7`).
 >
-> **M7 status: settled, in favour of this syntax.** The type word in `color bg = ...` is
+> **Revised (M7).** The type word in `color bg = ...` is
 > not decoration — it is what tells a palette that `bg` is a colour while `sm` in
 > `space sm = 4` is a length. The parser does not record how a number was written, so both
 > arrive as the same kind of value; the type word is the only thing that distinguishes
@@ -310,7 +310,7 @@ Editing a screen inside `vela run` recompiles it and **diffs the widget tree**:
 Because screens are pure functions of arguments plus bound state, rebuild is safe by
 construction — there is no hidden mutation to lose. This is the payoff for §2's purity rule.
 
-> **Implemented so far (M8).** `vela run` polls the project's sources on the host's idle tick
+> **Implemented (M8).** `vela run` polls the project's sources on the host's idle tick
 > (five a second) and, on a change, recompiles every screen and swaps them into the running
 > window; the story is untouched. A file that no longer parses keeps the **last good** screens
 > and says so — an author mid-edit should not see a blank window.
@@ -372,7 +372,7 @@ actually arrives broken — a truncated transfer and a half-written file. It is 
   that tree rather than a widget IR that would need a second evaluator kept in step with this one.
 - **Not the story.** Only the interface is packed; the prose lives in `.velac` and nowhere else.
 
-> **Implemented so far (M9).** `vela_ui::ScreenPack` is the artifact: `vela build` compiles the
+> **Implemented (M9).** `vela_ui::ScreenPack` is the artifact: `vela build` compiles the
 > declarations into it and writes one `screens/<module>.velspk` per module that declares UI, and
 > `vela run <bundle>` decodes them with no parse. A pack from a version this build does not know is
 > refused rather than half-read. `crates/vela-ui/tests/pack.rs` pins the round trip and the

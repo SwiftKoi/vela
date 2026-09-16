@@ -81,9 +81,12 @@ pub fn resolve_labels(module: &mut Module) -> Result<(), ResolveError> { ... }
 | Kind | Where | Purpose |
 | --- | --- | --- |
 | Unit | `crates/*/src/tests/` | One behavior per test; fast, no I/O |
-| Integration | `tests/` at root | Cross-crate behavior (compile → run → assert) |
-| Golden | `tests/golden/` | Diagnostics, bytecode disassembly, rendered frames |
-| Story | `tests/stories/` | End-to-end through `vela-test` |
+| Integration | `crates/*/tests/` | Cross-crate behavior (compile → run → assert) |
+| Golden | `tests/golden/` | Diagnostics and parses (`parse/diag_e####_*`), MIR, containers (`velac/`), assets, saves, analysis |
+| Story | a `test` item in a `.vela` file beside the story | End-to-end through `vela test` (`TOOLING.md §5`) |
+
+There is no `tests/stories/`: a story test lives in the language, beside the state it asserts about,
+so the same file is a story and its own test suite.
 
 Rules:
 - **Fix a bug by first adding the test that reproduces it.** The test lands in the same PR.
@@ -104,40 +107,53 @@ registry, don't patch around it. This matrix is the contract that keeps
 
 | # | File | Change |
 | --- | --- | --- |
-| 1 | `vela-syntax/src/lex/token.rs` | Add any new keyword to the keyword table |
-| 2 | `vela-syntax/src/parse/stmt/pause.rs` | **New file.** Parse rule, < 100 lines |
-| 3 | `vela-syntax/src/parse/stmt/mod.rs` | Register the rule in the statement table |
-| 4 | `vela-syntax/src/types.rs` | Add the CST node variant |
-| 5 | `vela-hir/src/stmt/pause.rs` | **New file.** Lowering to HIR |
-| 6 | `vela-types/src/check/stmt.rs` | Type rule (scalar-typed argument) — registry entry, no new file if the family exists |
-| 7 | `vela-mir/src/lower/stmt/pause.rs` | **New file.** Lower to MIR (emits a `Pause` effect) |
-| 8 | `vela-vm/src/effects/pause.rs` | **New file.** Effect handler, registered in `EffectRegistry` |
-| 9 | `tests/golden/parse/pause.vela` + `.expected` | Parse golden |
-| 10 | `tests/golden/diag/E####_pause_bad_arg.*` | Diagnostic golden |
-| 11 | `tests/stories/pause.vn` | Story test executing the statement |
+| 1 | `vela-syntax/src/lex/token.rs` | The keyword, if the statement has one |
+| 2 | `vela-syntax/src/parse/stmt/<family>.rs` | The parse rule, in the family it belongs to: `say.rs`, `flow.rs`, `scene.rs` |
+| 3 | `vela-syntax/src/parse/stmt/dispatch.rs` | One line in the statement table |
+| 4 | `vela-syntax/src/tree/stmt.rs` | The CST node variant |
+| 5 | `vela-types/src/check/stmt.rs` | The type rule — one arm, no new file |
+| 6 | `vela-mir/src/lower/stmt.rs` | Lower it to MIR — one arm |
+| 7 | `tests/golden/parse/<name>.vela` + `.expected` | Parse golden |
+| 8 | `tests/golden/parse/diag_e####_<name>.{vela,expected}` | Diagnostic golden, if it adds a code |
+| 9 | a `test` item where the statement is used | A story test executing it (`TOOLING.md §5`) |
 
-Steps 3, 6, 8 are **registry insertions**, not core edits. Steps 2, 5, 7, 8 are new small
-files. No file that already existed grows past budget.
+**There is no HIR step.** `vela-hir` resolves names and builds the story graph; it does not lower
+statements, and `vela_mir::lower` reads the syntax tree plus the type environment directly. Steps 3
+and 5–6 are insertions into a table or a match; step 2 is a new file only when the statement starts a
+new *family*.
 
 ### 4.2 Add a UI widget
 
 | # | File | Change |
 | --- | --- | --- |
-| 1 | `vela-ui/src/widgets/<name>.rs` | **New file.** `measure`, `layout`, `paint`, prop schema |
-| 2 | `vela-ui/src/widgets/mod.rs` | One `register!` line |
-| 3 | `vela-ui/src/style/props.rs` | Add props to the shared prop table (if new props are needed) |
-| 4 | `docs/spec/SCREENS.md` | Document props + an example |
-| 5 | `tests/golden/ui/<name>.vela` + rendered frame | Layout golden |
+| 1 | `vela-ui/src/widgets/builtin.rs` | One `Widget` entry in `ALL`: name, category, prop schema |
+| 2 | `vela-ui/src/widgets/schema.rs` | Only if it takes props no other widget has |
+| 3 | `vela-ui/src/layout/containers.rs` | Only if it is a container the solver has to measure |
+| 4 | `docs/spec/SCREENS.md` | Document the props and an example |
+| 5 | `crates/vela-ui/tests/` | A layout test, and a golden frame if it draws |
+
+Step 1 is the whole registration: `WidgetRegistry::builtin` reads `builtin::ALL`, so there is no
+second list to keep in step. A widget's one-line description is `Widget::summary`, which `vela doc`
+and hover both render (`TOOLING.md §9`).
 
 ### 4.3 Add an effect (host capability)
 
+Effects are a **`match` in `crates/vela-vm/src/ops.rs`**, not a registry: three exist
+(`rand.int`, `rand.float`, `time.now`), all of them answerable from `World`, and a table for three
+rows would be indirection with nothing behind it. Anything the match does not name is
+`Fault::CapabilityDenied`, which is the honest answer rather than a default.
+
 | # | File | Change |
 | --- | --- | --- |
-| 1 | `vela-vm/src/effects/<name>.rs` | **New file.** Signature + result type |
-| 2 | `vela-vm/src/effects/registry.rs` | One table entry, declaring required capability |
-| 3 | `vela-host/src/caps/<name>.rs` | Trait impl slot for native; mock in `vela-test` |
-| 4 | `vela-test/src/mocks/<name>.rs` | **New file.** Deterministic mock |
-| 5 | `tests/stories/<name>.vn` | Story test asserting the effect is invoked with expected args |
+| 1 | `crates/vela-vm/src/ops.rs` | One arm in `effect`, matching the name and its arguments |
+| 2 | `vela-host/` and the `Host` trait | The real implementation, when the effect needs the outside world |
+| 3 | a `test` item using the effect | A story test asserting it is invoked with the arguments it was given |
+
+**This row is the matrix's known debt, stated rather than hidden.** `RUNTIME.md §3`'s capability
+table lists `input`, `audio`, `fs`, and `debug`, and none of them is implemented: the host has a
+window, input, and a clock, and the VM is handed injected state. The first effect that needs a host
+is the point at which this becomes a registry in `vela-vm`, with the capability declared against each
+entry — and this table is updated in the same commit.
 
 ### 4.4 Add an asset importer
 
@@ -164,9 +180,11 @@ MIR passes live with MIR (they are a layer-1 concern); `vela-compile` only orche
 | 3 | `tests/golden/mir/<name>.vela` + `.expected` | Pretty-print golden showing the pass effect |
 | 4 | differential test entry | The pass must preserve observable behavior (`BYTECODE.md §2.1`) |
 
-Adding a **lint** is the same shape but lives in `vela-compile/src/lints/` with its registry
-in `vela-compile/src/lints/mod.rs`; a lint additionally requires a diagnostic code and a test
-referencing it (`check-diag-codes`).
+**Lints are not a registry.** There is no `vela-compile/src/lints/`: a lint is produced by the phase
+that owns the question — `W4002` and `W4003` by `vela-hir::reach`, the coverage and completeness
+warnings by `vela-types`, `W4011` by the formatter — and reaches the user through the diagnostic
+model like any other finding. A lint therefore needs a registered code and a test that references it
+(`check-diag-codes`), and nothing else.
 
 ### 4.6 Add a bytecode instruction (the deliberate exception)
 
@@ -174,28 +192,38 @@ referencing it (`check-diag-codes`).
 | --- | --- | --- |
 | 1 | `vela-bytecode/src/op.rs` | One `OpSpec` table entry (name, operand kinds, stack effect) |
 | 2 | `vela-bytecode/src/verify.rs` | Verifier rule for the new stack effect |
-| 3 | `vela-vm/src/interp.rs` | One handler arm **or** a handler struct registered in the op-handler table |
-| 4 | `vela-mir/src/lower/*` | Emit it (only if some construct needs it) |
-| 5 | `tests/golden/bytecode/*` | Disassembly golden + a verifier rejection test |
+| 3 | `vela-vm/src/exec.rs` or `control.rs` | One arm: `exec` for a data instruction, `control` for one that moves control |
+| 4 | `vela-mir/src/lower/*` | Emit it, only if some construct needs it |
+| 5 | `crates/vela-bytecode/tests/rejection.rs` | A module the verifier must reject for its rule |
 
-Adding an instruction must not require touching `vela-vm`'s scheduling loop, only its
-handler table.
+Adding an instruction must not require touching `vela-vm`'s step loop, only its dispatch. The
+instruction set is the one place a plugin cannot extend (`ARCHITECTURE.md §5`), which is why this row
+naming files in three crates is the deliberate exception rather than a violation.
 
 ### 4.7 Add a CLI subcommand
 
 | # | File | Change |
 | --- | --- | --- |
 | 1 | `vela-cli/src/commands/<name>.rs` | **New file.** Implements the `Command` trait |
-| 2 | `vela-cli/src/commands/registry.rs` | One entry: name, help, arg schema |
-| 3 | integration test in `tests/cli/` | Assert exit code + stdout contract |
+| 2 | `vela-cli/src/commands/mod.rs` | Declare the module and re-export the type |
+| 3 | `vela-cli/src/registry.rs` | One `register` line |
+| 4 | `crates/vela-cli/src/tests/` | The exit code and the stdout contract |
+
+Step 3 is the registration that `--help` reads, so a command cannot be missing from it. The
+integration tests live in the crate rather than at the workspace root because they call `run_code`
+directly; the ones that need a real process are under `crates/vela-cli/tests/`.
 
 ### 4.8 Add a platform backend
 
 | # | File | Change |
 | --- | --- | --- |
-| 1 | `vela-host/src/backends/<name>/` | **New dir.** Implements `Host`, `Clock`, `Input`, `Fs` |
-| 2 | `vela-host/src/backends/mod.rs` | Feature-gated registration |
-| 3 | `xtask` adapter check | Confirm the backend does not leak into lower layers |
+| 1 | `vela-host/src/<backend>.rs` | The backend: window, input, and a clock, behind the crate's traits |
+| 2 | `vela-host/src/lib.rs` | Feature-gated selection of it |
+| 3 | `xtask check-layers` | Confirm it does not leak into a lower layer |
+
+`window.rs` is the only backend today, and it is one file rather than a directory because one
+platform is one case. A second is a module beside it and a line in `lib.rs`; the layer rule is what
+keeps either out of the compiler and the VM, and it is checked rather than trusted.
 
 ### 4.9 Add a save migration
 
@@ -230,21 +258,51 @@ agent) applies, and the checklist `ROADMAP.md` milestones reference.
 
 ## 6. Commit and review
 
-**Branching and merging.** `main` is always green and is never committed to directly. Work
-happens on **one branch per implementation step** — `m1` for the whole first milestone, or
-`<type>/<slug>` otherwise. A step is what lands as one squash commit; work items are commits
-inside it, not branches. Name the branch for the step and leave the name alone: renaming
-mid-flight severs the link to the commit it was cut from. Open the pull request when the work
-is complete, not while it is being assembled. Every pull request
-lands as a single squashed commit, so `main` reads as one commit per work item and intermediate
-commits never need to be green. CI runs on a pull request targeting `main` and on a push to
-`main`; pushing to a feature branch with no pull request does not run it. See
-`docs/adr/0001-branching-and-ci.md`.
+**One branch per implementation step.** A step is whatever lands as a single squash commit —
+usually a whole milestone, sometimes something smaller. Work items are commits *inside* it, not
+branches: splitting a step across branches buys nothing, because the merge is a squash either way.
+`main` is always green and is never committed to directly.
+
+| Name | Use |
+| --- | --- |
+| `m<N>` | A milestone step — `m1` for the whole front end. Traceable to `docs/roadmap/`. |
+| `<type>/<slug>` | A step that is not a milestone: `chore/…`, `fix/…`, `docs/…`. |
+
+**Name a branch for the step, and do not rename it.** A branch named after a sub-part goes stale the
+moment the step grows past that part, and renaming mid-flight severs the link to the commit the
+branch was cut from. Open the pull request **when the work is complete**, not while it is being
+assembled.
+
+**CI runs in exactly three cases** (`.github/workflows/ci.yml`):
+
+- a push to `main` — verifies the commit that actually landed;
+- a pull request **targeting `main`** — the merge gate;
+- manual dispatch — test a branch without opening a pull request.
+
+Pushing to a feature branch with no pull request does not start CI, so building a branch costs
+nothing and the run happens once, on the final state. Superseded pull-request runs are cancelled
+(`cancel-in-progress`, grouped by ref); a `main` run never is, so a broken merge cannot hide behind
+a follow-up push.
+
+**Every pull request lands as one squashed commit.** Intermediate commits never reach `main`, so
+they need neither CI nor greenness — which is what makes the CI rule affordable — and `main` reads
+as one commit per work item, which is the history to scan and to `git bisect` through. The
+pull-request run tests the branch's contents; the post-merge run tests the *squashed* commit, which
+is a new object, so the second run is not redundant.
+
+*Rejected:* CI on every branch push (it would cover states that never merge, since pull requests are
+opened when the work is done); merge commits (they clutter `main` with every in-progress commit);
+rebase merge (the same, and it makes each intermediate commit something that must be individually
+green — the opposite of the rule above); CI only on push to `main` (that makes `main` the first place
+a change is tested, which inverts the purpose of architecture guards).
 
 - Conventional commits: `feat(vela-vm): deterministic RNG advanced only by rand effect`.
 - Scope is the crate. One logical change per commit; one milestone work item per PR.
 - **Spec-first rule:** if implementing a feature reveals the spec was wrong, fix the spec
   first, then the code, in the same PR. The specs are the contract, and a contract that
   drifts from reality is worse than none.
+- **Documents are updated the way `docs/README.md` says.** It is short, and it is the one place
+  that says what a status note looks like, what a milestone file's sections are, and which pages
+  are generated rather than written.
 - A PR may not raise the exemption count from `check-exemptions` without justification in the
   description.

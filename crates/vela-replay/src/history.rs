@@ -18,7 +18,7 @@
 use std::collections::VecDeque;
 
 use vela_bytecode::Module;
-use vela_vm::{Fault, Session, Snapshot, Step};
+use vela_vm::{DebugLocal, Fault, FrameInfo, Session, Site, Snapshot, Step};
 use vela_world::{Command, Input, World};
 
 /// How often a snapshot is taken, per `RUNTIME.md §7.2`.
@@ -146,6 +146,49 @@ impl Timeline {
         let step = self.session.answer(input);
         self.record(&step);
         step
+    }
+
+    /// Executes exactly one instruction, for a debugger stopping between instructions.
+    ///
+    /// The command count only moves when a `Yield` does (`record`), so stepping through a single
+    /// command leaves the rollback positions where they were rather than inventing one per
+    /// instruction.
+    pub fn step(&mut self) -> Step {
+        let step = self.session.step();
+        self.record(&step);
+        step
+    }
+
+    /// Answers the command on screen and executes exactly one instruction.
+    pub fn resume_step(&mut self, input: Input) -> Step {
+        self.answers.push(input.clone());
+        let step = self.session.resume_step(input);
+        self.record(&step);
+        step
+    }
+
+    /// Where the machine is, for a debugger.
+    #[must_use]
+    pub fn site(&self) -> Option<Site> {
+        self.session.site()
+    }
+
+    /// The call stack, outermost frame first.
+    #[must_use]
+    pub fn call_stack(&self) -> Vec<FrameInfo> {
+        self.session.call_stack()
+    }
+
+    /// The running frame's slots that hold a value, by name.
+    #[must_use]
+    pub fn locals(&self) -> Vec<DebugLocal> {
+        self.session.locals()
+    }
+
+    /// One frame's slots that hold a value, by name, zero being the outermost.
+    #[must_use]
+    pub fn locals_at(&self, frame: usize) -> Vec<DebugLocal> {
+        self.session.locals_at(frame)
     }
 
     /// Rolls back to `target`, replaying from the nearest snapshot.

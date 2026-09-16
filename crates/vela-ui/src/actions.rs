@@ -76,6 +76,15 @@ impl ActionDecl {
     pub fn arg_names(&self) -> Vec<&'static str> {
         self.args.iter().map(|arg| arg.name).collect()
     }
+
+    /// The call as a screen writes it: `jump(label)`.
+    ///
+    /// One spelling, used by the reference page's heading, by hover, and by the anchor a link into
+    /// either is built from — so a link an editor produces lands on the heading it was written for.
+    #[must_use]
+    pub fn signature(&self) -> String {
+        format!("{}({})", self.name, self.arg_names().join(", "))
+    }
 }
 
 /// An argument that is a bare identifier.

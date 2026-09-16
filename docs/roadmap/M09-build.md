@@ -6,7 +6,7 @@
 
 **Crates.** `vela-assets`, `vela-cli` build/pack commands.
 
-**Work items.**
+## Work items
 1. Importer registry + the texture/audio/font/data importers (`BUILD_AND_ASSETS.md §3.1`).
 2. Transformer pipeline; **font subsetting** from scripts + translations.
 3. Content-addressed manifest, variant-aware (`BUILD_AND_ASSETS.md §2`).
@@ -23,7 +23,7 @@ Item 8 was implied by §8's "assets + bytecode + launcher" but was not a work it
 item 5 reads as platform plumbing, so the launcher went missing and every run recompiled from
 source. Naming it is the point: `vela build` already produced a bundle nothing consumed.
 
-**Exit criteria.**
+## Exit criteria
 - [ ] `examples/standard` builds and runs on all four targets from one command — the build is
       item 5 and the running is items 5 and 8; see the progress note for what is verified where
 - [x] Reproducible build: two builds are byte-identical
@@ -36,12 +36,18 @@ source. Naming it is the point: `vela build` already produced a bundle nothing c
       engine runs and plays the same story as the native build (`tools/wasm-smoke.sh`); what is
       missing is `--target web` laying the bundle out, `--serve`, and drawing it
 
-**Risks.** Target-specific code leaking into core is the main threat to the layer rules.
-Mitigation: `check-layers`'s adapter rule runs on every target driver PR.
+**Verification note.** Exit criterion 1 — *"builds and runs on all four targets from one
+command"* — cannot be checked on the development machine: there is no macOS here, and
+`x86_64-pc-windows-gnu` is not a running Windows. Until this work it was covered by no CI job
+either, which is how a bundle that only *built* passed for a bundle that *ran*. It is now covered
+by two: the `platforms` matrix builds each native target's bundle with `--target` and **runs it
+from `dist/`**, diffing the command stream against a source run; gate 9 plays the web bundle in
+wasm. The criterion is therefore ticked by those jobs going green, not by prose here — and it was
+*not* ticked on the machine this was written on.
 
----
+## Status
 
-**Progress.** Work items 1, 3, 5, and 8 have landed, along with `E7001` from item 4 and most of
+Work items 1, 3, 5, and 8 have landed, along with `E7001` from item 4 and most of
 item 7.
 
 - `Manifest`, `Asset`, `Artifact`, `Variant` — content-addressed, canonically ordered, with
@@ -94,7 +100,9 @@ item 7.
   engine faults in one sitting — see M04's and M05's own notes — which is the argument for the
   example being broad: the corpus is MIR-shaped and the examples are what a story actually does.
 
-Not yet, and in the order they are needed:
+## Still open
+
+The work items that have not landed, in the order they are needed:
 
 - Cross-module **values and types**: `forest.helper(2)` is `E2005` because checking is per-module
   and has no signature to check the call against — M02's open half. Until that lands, a project
@@ -126,16 +134,7 @@ Not yet, and in the order they are needed:
   reason its note gives: it needs the renderer on `wgpu`'s web backends and a canvas.
 - Sub-file chunks in a patch: a changed file ships whole.
 
-**Verification note.** Exit criterion 1 — *"builds and runs on all four targets from one
-command"* — cannot be checked on the development machine: there is no macOS here, and
-`x86_64-pc-windows-gnu` is not a running Windows. Until this work it was covered by no CI job
-either, which is how a bundle that only *built* passed for a bundle that *ran*. It is now covered
-by two: the `platforms` matrix builds each native target's bundle with `--target` and **runs it
-from `dist/`**, diffing the command stream against a source run; gate 9 plays the web bundle in
-wasm. The criterion is therefore ticked by those jobs going green, not by prose here — and it was
-*not* ticked on the machine this was written on.
+## Risks
 
-The browser demo (exit criterion 6) is still open and still not checkable here: it needs the
-renderer on `wgpu`'s web backends and a canvas, and there is no `wasm32-unknown-unknown` target,
-bundler, or browser on the development machine. CI has no browser either; gate 9 runs the engine
-in Node, which exercises the command boundary rather than the canvas.
+Target-specific code leaking into core is the main threat to the layer rules.
+Mitigation: `check-layers`'s adapter rule runs on every target driver PR.

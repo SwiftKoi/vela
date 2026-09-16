@@ -6,7 +6,7 @@
 
 **Crates.** `vela-render`, `vela-text`, `vela-host` (window/input backends).
 
-**Work items.**
+## Work items
 1. `wgpu` device/swapchain setup; a render graph with insertable stages (`ARCHITECTURE.md §5`).
 2. `vela-text`: shaping, line breaking, bidi-ready layout, glyph atlas, change-driven cache
    invalidation (`ARCHITECTURE.md §8`).
@@ -15,21 +15,20 @@
 5. Shader backend selection per target (DX12/Metal/Vulkan).
 6. Frame-latency and startup benchmarks in CI (budgets, so regressions are visible).
 
-**Exit criteria.**
+## Exit criteria
 - [x] `examples/hello` shows dialogue in a window and advances on input
 - [x] Text layout golden: a fixed string lays out byte-identically across the CI matrix
 - [x] Startup budget met on the benchmark fixture
 - [x] No core file exceeds budget; new render stages were added without touching the graph core
 - [x] **Demo:** `vela run examples/hello`
 
-**Risks.** Text rendering is a deep rabbit hole. Mitigation: scope to what a VN needs —
-shaping, wrapping, emphasis; rich inline runs are deferred and gated on real samples at M7.
+## Status
 
----
+Complete. 285 tests, 7/7 `xtask` checks, clippy clean, budgets measured.
 
-**Status.** Complete. 285 tests, 7/7 `xtask` checks, clippy clean, budgets measured.
+## Found during implementation
 
-## What the milestone actually cost
+### What the milestone actually cost
 
 Almost all of it was spent on one question — *can this be verified without a display* — and
 the answer shaped the design rather than being worked around.
@@ -45,7 +44,7 @@ The same question, one level down, produced the harness: `tools/drive.sh` runs t
 `xvfb-run`, sends real XTEST input through `xdotool`, and reads the *story's own output* to
 tell whether a keypress landed, since nobody can see the window.
 
-## The bug worth remembering
+### The bug worth remembering
 
 Every rectangle rendered as a **bowtie** — two triangles sharing the left edge instead of the
 anti-diagonal, leaving the right wedge uncovered. I dumped the vertices and indices, they were
@@ -56,7 +55,7 @@ It was correct and wrong. **I verified the code matched my intent instead of ver
 intent was right.** What found it was printing the frame as an ASCII map of exact pixels,
 where a bowtie is numbered rows rather than a shape someone has to squint at.
 
-## The environment bug worth remembering more
+### The environment bug worth remembering more
 
 A window kept appearing on the operator's desktop during automated runs while the app
 faithfully reported `display=:99`. The cause was `WAYLAND_DISPLAY` in the environment:
@@ -72,3 +71,8 @@ Worse than the miss: twice in that hunt I presented a *broken check* as a findin
 "found no windows" as "cannot connect". Both failed for the wrong reason and both read as
 evidence. The lesson is already in the roadmap in another form; this is what it looks like
 when it costs a day.
+
+## Risks
+
+Text rendering is a deep rabbit hole. Mitigation: scope to what a VN needs —
+shaping, wrapping, emphasis; rich inline runs are deferred and gated on real samples at M7.

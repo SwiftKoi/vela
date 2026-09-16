@@ -41,7 +41,7 @@ mod verify;
 
 pub use asm::compile;
 pub use codec::{DecodeError, decode, encode, known_commands};
-pub use disasm::{disassemble, disassemble_commands};
+pub use disasm::{disassemble, disassemble_commands, render_type};
 pub use module::{
     ABI, ByteConst, ByteTy, CommandSchema, ConstId, ConstPool, DebugInfo, DefaultDef, EffectSchema,
     EnumDef, FORMAT, FieldSchema, FuncDef, Header, Instr, LocalDef, Module, StringId, StringTable,

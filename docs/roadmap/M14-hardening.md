@@ -21,7 +21,7 @@
 - **An `after_load` hook** is written up in `M12-migration.md`, since a content fix is a
   migration-shaped thing even when it is not a schema change.
 
-**Work items.**
+## Work items
 1. Performance pass against the budgets: startup, per-command, snapshot, frame time, wasm size.
 2. Reproducibility and cross-platform determinism matrices finalised (three architectures).
 3. Fuzz campaigns: random inputs replayed; verifier fuzzing; malformed `.velac` handling.
@@ -42,5 +42,13 @@
 - [ ] A text-only patch is < 5% of the bundle
 - [ ] **Demo:** the release candidate, plus the full gate suite green
 
-**Risks.** "Hardening" is where scope quietly expands. Mitigation: this milestone has no new
+## Status
+
+Not started. The four items under *Recorded, not yet scheduled* above are things this milestone will
+be asked about and no other milestone owns; they are written down so they are not rediscovered as
+new.
+
+## Risks
+
+"Hardening" is where scope quietly expands. Mitigation: this milestone has no new
 features — any new feature is deferred to post-1.0, and the backlog is where it goes.

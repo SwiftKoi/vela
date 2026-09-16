@@ -1,6 +1,6 @@
 name: CI
 
-# CI runs in exactly three cases (docs/adr/0001-branching-and-ci.md):
+# CI runs in exactly three cases (docs/engineering/CONVENTIONS.md §6):
 #   1. a push to `main`            — post-merge verification
 #   2. a pull request targeting `main` — the merge gate
 #   3. manual dispatch             — test a branch without opening a pull request

@@ -153,6 +153,42 @@ pub(super) fn cross_module() -> Server {
     })
 }
 
+/// A screen, whose vocabulary is not declared anywhere a name is.
+///
+/// `text` appears three times on purpose: twice on the line that starts with it — once as the widget
+/// and once as a prop's value — and once as a nested widget. Only the ones a widget may begin are the
+/// widget, which is the distinction hover has to make and completion already does.
+pub(super) const SCREEN: &str = "\
+screen pause:
+    column gap = 8:
+        text \"Resume\" style = text
+        button:
+            text \"Quit\"
+            action close_screen()
+";
+
+/// The line and 0-based column of the `n`th occurrence of `needle`.
+///
+/// Positions worked out by hand go stale the moment a fixture is edited, and the failure then reads as
+/// a broken hover rather than a moved word.
+pub(super) fn position_of(text: &str, needle: &str, n: usize) -> (u32, u32) {
+    let mut start = 0;
+    let mut seen = 0;
+    loop {
+        let index = text[start..]
+            .find(needle)
+            .expect("the fixture contains the needle")
+            + start;
+        if seen == n {
+            let line = text[..index].matches('\n').count() as u32;
+            let column = index - text[..index].rfind('\n').map_or(0, |at| at + 1);
+            return (line, column as u32);
+        }
+        seen += 1;
+        start = index + 1;
+    }
+}
+
 /// A request about a position, framed the way an editor sends one.
 pub(super) fn about_position(id: u32, method: &str, uri: &str, line: u32, character: u32) -> Value {
     request(

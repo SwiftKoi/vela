@@ -14,6 +14,7 @@
 
 pub mod completion;
 pub mod diagnostics;
+pub mod docs;
 pub mod hover;
 pub mod position;
 pub mod symbols;

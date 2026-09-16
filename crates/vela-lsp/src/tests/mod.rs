@@ -2,6 +2,7 @@
 
 mod capability_tests;
 mod completion_tests;
+mod docs_tests;
 mod position_tests;
 mod server_tests;
 mod symbols_tests;

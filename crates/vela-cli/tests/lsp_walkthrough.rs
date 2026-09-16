@@ -280,6 +280,30 @@ fn step_4_completion_offers_reachable_labels() {
     );
 }
 
+/// Step 6: the screen vocabulary is answered from the same schema the reference is generated from.
+///
+/// `column` and `close_screen` are not declared anywhere a name is, so neither the index nor the checker
+/// knows them — they come from `vela-ui`'s registries, which is what makes this the third source and
+/// what keeps the hover and `docs/reference/` saying the same sentence.
+#[test]
+fn step_6_the_screen_vocabulary_answers_from_the_schema() {
+    let files = workspace();
+    let main = &files[0].text;
+    let messages = answers(vec![
+        at(2, "textDocument/hover", 0, main, "column gap", 1),
+        at(3, "textDocument/hover", 0, main, "action close_screen", 10),
+    ]);
+
+    assert_eq!(
+        reply(&messages, 2)["result"]["contents"]["value"],
+        "**widget** `column` — It is a container, and takes children."
+    );
+    assert_eq!(
+        reply(&messages, 3)["result"]["contents"]["value"],
+        "**action** `close_screen()` — Dismiss the screen this action is in."
+    );
+}
+
 /// Step 5: a rename edits every file the name is written in, which is what makes it safe.
 #[test]
 fn step_5_the_rename_touches_both_files() {

@@ -19,7 +19,7 @@ pub struct LineCol {
 
 /// One source file: its display name and its full text, plus a line index for cheap
 /// offset-to-position lookups.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceFile {
     name: String,
     text: String,
@@ -113,7 +113,11 @@ impl SourceFile {
 }
 
 /// Owns every file loaded in a session and hands out dense [`FileId`]s.
-#[derive(Debug, Default)]
+///
+/// Cloning one copies the text of every file. A caller that needs the map to outlive the
+/// session that built it — a debugger holding the sources its spans point into — clones once
+/// and keeps it, rather than reaching back into a session it cannot borrow from.
+#[derive(Clone, Debug, Default)]
 pub struct SourceMap {
     files: Vec<SourceFile>,
 }

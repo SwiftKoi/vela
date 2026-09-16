@@ -117,6 +117,39 @@ Rename `back_from_street` to `returned_from_street`. The edit touches two files:
 is clean and the story still links, which is the point — a rename that leaves a reference behind would
 be a compile error in a file you were not looking at.
 
+## 6. What is this widget?
+
+In `src/main.vela`, inside a `screen`, hover the name a line begins with:
+
+```
+**widget** `column` — It is a container, and takes children.
+```
+
+`column` is not declared anywhere a name is — the symbol index has never heard of it, and the checker
+never types it — so this comes from a third source: the widget and action registries in `vela-ui`, the
+same schemas `vela doc` renders. Hover an action the same way:
+
+```
+**action** `close_screen()` — Dismiss the screen this action is in.
+```
+
+Only where the word can mean what it says. `text` as a prop's value on that same line is a value, not a
+widget, which is the rule the completion list already uses — and it is why a variable named `text`
+still hovers as a variable.
+
+If the project has generated the reference — `vela doc --out docs/reference`, one line in a build
+script — the hover also links to that widget's section:
+
+```
+**widget** `column` — It is a container, and takes children.
+
+[Widget reference](file:///…/docs/reference/widgets.md#column)
+```
+
+Without the page there is deliberately no link: a link to a file that is not there is one an editor
+offers to open and then fails on. `examples/standard` has not generated one, which is why the answers
+above stop at the sentence; the link itself is asserted in `crates/vela-lsp/src/tests/docs_tests.rs`.
+
 ## What is not here yet
 
 These are gaps rather than bugs. The first two are the rest of `docs/spec/TOOLING.md §4`'s capability

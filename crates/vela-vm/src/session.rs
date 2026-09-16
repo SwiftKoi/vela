@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use vela_bytecode::Module;
 use vela_world::{Command, Input, Value, World};
 
+use crate::debug::{DebugLocal, FrameInfo, Site};
 use crate::fault::Fault;
 use crate::machine::{Step, Vm};
 use crate::state::VmState;
@@ -133,6 +134,56 @@ impl Session {
         let step = self.vm.resume(&mut self.world, value);
         self.record(&step);
         step
+    }
+
+    /// Executes exactly one instruction.
+    ///
+    /// The debugger's step primitive: where [`Session::advance`] runs to the next command, this
+    /// stops as soon as one instruction has run, so a caller can pause on a line, a label, or a
+    /// single step and look around before deciding to run on.
+    pub fn step(&mut self) -> Step {
+        if self.finished {
+            return Step::Halt;
+        }
+        let step = self.vm.step(&mut self.world);
+        self.record(&step);
+        step
+    }
+
+    /// Answers the pending suspension and executes exactly one instruction.
+    ///
+    /// The answer is recorded, exactly as [`Session::answer`] records it, so a debugged run is
+    /// still a reproducible one.
+    pub fn resume_step(&mut self, input: Input) -> Step {
+        let value = input.resolve();
+        self.log.push(input);
+        let step = self.vm.resume_step(&mut self.world, value);
+        self.record(&step);
+        step
+    }
+
+    /// Where the machine is, for a debugger.
+    #[must_use]
+    pub fn site(&self) -> Option<Site> {
+        self.vm.site()
+    }
+
+    /// The call stack, outermost frame first.
+    #[must_use]
+    pub fn call_stack(&self) -> Vec<FrameInfo> {
+        self.vm.call_stack()
+    }
+
+    /// The running frame's slots that hold a value, by name.
+    #[must_use]
+    pub fn locals(&self) -> Vec<DebugLocal> {
+        self.vm.locals()
+    }
+
+    /// One frame's slots that hold a value, by name, zero being the outermost.
+    #[must_use]
+    pub fn locals_at(&self, frame: usize) -> Vec<DebugLocal> {
+        self.vm.locals_at(frame)
     }
 
     /// Notices what a step left behind.

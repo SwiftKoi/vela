@@ -18,9 +18,10 @@ These rules apply to every milestone. They are not repeated in the milestone fil
 1. **One implementation step = one branch = one PR.** A step is usually a whole milestone,
    not an individual work item — work items are commits *inside* it. Sized to the Definition
    of Done in `docs/engineering/CONVENTIONS.md §5`; if a step does not fit, split it. Branch
-   naming, when CI runs, and the squash-merge rule are in `docs/adr/0001-branching-and-ci.md`.
+   naming, when CI runs, and the squash-merge rule are in `docs/engineering/CONVENTIONS.md §6`.
 2. **Spec-first.** If implementing something shows the spec is wrong, fix the spec in the
-   same PR. `docs/` is the contract; drift is a defect.
+   same PR. `docs/` is the contract; drift is a defect. `docs/README.md` says what lives where
+   and how each kind of document is updated — including the milestone skeleton below.
 3. **Always runnable.** Every milestone ends with a command a human can execute and observe.
    A milestone that produces only internal code and no observable behavior is mis-scoped —
    fold it into its neighbor.
