@@ -108,7 +108,7 @@ impl Server {
     }
 
     /// The document a request is about, and the offset in it.
-    fn position_of(&mut self, message: &Value) -> Option<(FileId, u32)> {
+    pub(super) fn position_of(&mut self, message: &Value) -> Option<(FileId, u32)> {
         let uri = self.request_uri(message)?;
         let name = self.open.get(&uri).cloned()?;
         let file = self.session.file_named(&name)?;

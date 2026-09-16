@@ -23,6 +23,7 @@
 //! lifecycle, the dispatch of a message, the documents and their diagnostics, the two index queries, and
 //! the shape of a reply.
 
+mod completions;
 mod dispatch;
 mod documents;
 mod locations;

@@ -260,3 +260,75 @@ fn a_rename_to_something_that_is_not_a_name_is_refused() {
     assert_eq!(reply["error"]["code"], -32602, "{reply}");
     assert!(reply.get("result").is_none(), "{reply}");
 }
+
+/// Completion answers over the protocol as a list of labels with details, which is what an editor
+/// renders beside each one.
+///
+/// Checked here rather than only against `completion::at` because the shape is the contract: a list of
+/// bare strings would satisfy a unit test and show an editor a popup with nothing to say about any of
+/// its entries.
+#[test]
+fn completion_answers_over_the_protocol() {
+    let messages = replies(&[
+        request(1, "initialize", json!({})),
+        opened(),
+        // Line 2 is `    var s = "n is [n]"`, and column 4 is the start of it: `n` was declared on the
+        // line above and is in scope, which is the whole point of asking the checker.
+        about_position(2, "textDocument/completion", "file:///game/main.vela", 2, 4),
+    ]);
+
+    let result = &messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request")["result"];
+
+    assert_eq!(result["isIncomplete"], false);
+    let items = result["items"].as_array().expect("a list of items");
+    let item = |label: &str| {
+        items
+            .iter()
+            .find(|item| item["label"] == label)
+            .unwrap_or_else(|| panic!("`{label}` is offered: {items:?}"))
+    };
+
+    assert_eq!(item("n")["detail"], "int", "a local, with its type");
+    assert_eq!(item("start")["detail"], "label", "and a declared label");
+}
+
+/// The widgets a screen line may begin with come back through the protocol too, because that list is
+/// the one an author cannot write from memory.
+#[test]
+fn completion_offers_widgets_inside_a_screen() {
+    let source = "screen pause:\n    text \"hi\"\n";
+    let messages = replies(&[
+        request(1, "initialize", json!({})),
+        notice(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": "file:///game/screens.vela", "text": source } }),
+        ),
+        about_position(
+            2,
+            "textDocument/completion",
+            "file:///game/screens.vela",
+            1,
+            0,
+        ),
+    ]);
+
+    let items = messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request")["result"]["items"]
+        .as_array()
+        .expect("a list of items")
+        .clone();
+
+    assert!(
+        items.iter().any(|item| item["label"] == "column"),
+        "the widget vocabulary: {items:?}"
+    );
+    assert!(
+        items.iter().all(|item| item["detail"] == "widget"),
+        "and nothing else, because a screen line cannot begin with anything else: {items:?}"
+    );
+}

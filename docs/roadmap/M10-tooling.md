@@ -80,8 +80,27 @@ a name unknown where the checker accepts it would contradict the diagnostics in 
 innermost expression containing the offset wins, so a caret on `r` in `r.name` says `Route` and a caret
 inside `name` says `str`.
 
-Completion is the last of the five, and it needs the names in scope at an offset — the same question
-hover just learned to ask, with a different answer.
+**Completion answers from three lists, chosen by position and not by prefix.** At the start of a line
+inside a `screen`: the widgets, because that is the only thing that can begin such a line. After `jump`
+or `call`: labels — this module's, and the imported ones qualified the way a reference has to be written.
+Everywhere else: the names in scope, by the checker's rule, plus the names the module declares.
+
+The middle one is the design decision worth keeping. Offering *every* label in a project would pass a
+naive test and be exactly the flat namespace `LANGUAGE.md §6` exists to avoid, so the test asserts that
+a label in a module nothing imports is **not** offered. The first one is decided by two questions, both
+needed: inside a screen, and at the start of a line — because inside that screen's `if` condition the
+answer is an expression rather than a widget.
+
+The scope itself is `vela_types::scope_at`, the same walk as `at` with the other question: it snapshots
+the scope before *and* after each statement, because a cursor can be inside a statement (which sees the
+scope before it — a `var` is not in scope in its own initialiser) or after it (which sees what the
+statement left behind). One snapshot per statement misses every name declared on the line above the
+cursor, which is the case that matters most.
+
+Still missing from `TOOLING.md §4`, and each needing the vocabulary of whatever precedes the cursor
+rather than the scope: props after a widget name, enum variants after a `.`, and screen actions. A gap
+rather than a lie: `completionProvider` declares no trigger characters, because `.` would otherwise
+promise a member list this server does not have.
 
 Building this found a bug worth recording, because it is the class the parity criterion exists for.
 Documents arrive as URIs, and the first version named them relative to the *project* root — so a

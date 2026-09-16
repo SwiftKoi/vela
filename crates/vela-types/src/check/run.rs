@@ -77,6 +77,10 @@ pub(crate) struct Checker<'a> {
     pub(crate) best: Option<Span>,
     /// What was found there.
     pub(crate) answer: Option<crate::check::at::Found>,
+    /// The offset a caller asked what could be typed at, when one did (`check::scope_at`).
+    pub(crate) collect: Option<u32>,
+    /// The scope as of that offset.
+    pub(crate) names: Vec<(String, Ty)>,
 }
 
 impl<'a> Checker<'a> {
@@ -89,6 +93,8 @@ impl<'a> Checker<'a> {
             ask: None,
             best: None,
             answer: None,
+            collect: None,
+            names: Vec::new(),
         }
     }
 

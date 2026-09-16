@@ -109,3 +109,50 @@ fn the_innermost_expression_wins() {
 fn a_declaration_outside_a_body_has_no_type_answer() {
     assert_eq!(found("saved: int = 0"), None);
 }
+
+/// The names a completion may offer at an offset: everything a body has introduced *so far*.
+///
+/// "So far" is the whole point. A list that included a `var` declared further down would offer a name
+/// the checker has not introduced yet, and the author's first lesson would be that the list lies.
+#[test]
+fn the_scope_at_an_offset_holds_what_was_declared_before_it() {
+    let names = scope_at_offset(offset_of("var total = spend"));
+
+    let listed: Vec<&str> = names.iter().map(|(name, _)| name.as_str()).collect();
+    assert!(listed.contains(&"r"), "declared earlier: {listed:?}");
+    assert!(listed.contains(&"title"), "declared earlier: {listed:?}");
+    assert!(
+        !listed.contains(&"total"),
+        "not declared yet where it is being written: {listed:?}"
+    );
+}
+
+/// A parameter is in scope from the start of the body, and a local of the *same* name as a later
+/// statement is not there yet.
+#[test]
+fn a_parameter_is_in_scope_and_carries_its_type() {
+    let names = scope_at_offset(offset_of("return bonus"));
+
+    let bonus = names.iter().find(|(name, _)| name == "bonus");
+    assert_eq!(bonus.map(|(_, ty)| ty.to_string()).as_deref(), Some("int"));
+    let trust = names.iter().find(|(name, _)| name == "trust");
+    assert_eq!(trust.map(|(_, ty)| ty.to_string()).as_deref(), Some("int"));
+}
+
+/// Names come back in a fixed order, so an editor's list does not reshuffle between keystrokes.
+#[test]
+fn the_scope_is_ordered_by_name() {
+    let names = scope_at_offset(offset_of("return bonus"));
+    let listed: Vec<&str> = names.iter().map(|(name, _)| name.as_str()).collect();
+    let mut sorted = listed.clone();
+    sorted.sort_unstable();
+
+    assert_eq!(listed, sorted, "{listed:?}");
+}
+
+/// What is in scope at an offset.
+fn scope_at_offset(offset: u32) -> Vec<(String, crate::Ty)> {
+    let parsed = parse(FileId::from_raw(0), SOURCE);
+    let (env, _) = Env::build(&parsed.program);
+    crate::scope_at(&parsed.program, &env, offset)
+}

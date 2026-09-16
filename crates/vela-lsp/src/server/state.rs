@@ -81,13 +81,15 @@ impl Server {
                 // server ever sends (`crate::position`).
                 "positionEncoding": "utf-16",
                 // What the symbol index and the checker can answer: where a name is declared, every
-                // place it is written, a rename of it, and what it is. Completion stays absent until it
-                // answers — an advertised capability is one an editor calls, and one that answers
-                // nothing reads as broken rather than as missing.
+                // place it is written, a rename of it, what it is, and what could be typed next.
                 "definitionProvider": true,
                 "referencesProvider": true,
                 "renameProvider": true,
                 "hoverProvider": true,
+                // No trigger characters: a `.` after a name would normally mean "the members of this
+                // value", and that list is not built yet. Declaring it would make an editor ask for
+                // members and be told there are none, which reads as a bug rather than as a gap.
+                "completionProvider": {},
             },
             "serverInfo": { "name": "vela-lsp", "version": env!("CARGO_PKG_VERSION") },
         })

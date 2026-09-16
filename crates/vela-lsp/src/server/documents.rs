@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use vela_compile::Session;
 use vela_diag::{Diagnostic, Severity};
 
+use super::reply::string_at;
 use super::state::Server;
 use crate::diagnostics;
 use crate::position;
@@ -64,6 +65,47 @@ impl Server {
                 "params": { "uri": uri, "diagnostics": diagnostics },
             }),
         )
+    }
+    /// The three document-sync notifications: what a client tells the server about a file it is
+    /// editing.
+    ///
+    /// One method for all three because they are one job — keep the session's copy of a document
+    /// current, and republish what the editor should show — and because the routing table is a list of
+    /// methods, which is easier to read without three bodies in the middle of it.
+    pub(super) fn document_changed(
+        &mut self,
+        method: &str,
+        message: &Value,
+        output: &mut dyn Write,
+    ) -> std::io::Result<()> {
+        match method {
+            "textDocument/didOpen" => {
+                let document = &message["params"]["textDocument"];
+                let uri = document["uri"].as_str().unwrap_or("").to_string();
+                self.set_document(&uri, document["text"].as_str().unwrap_or(""));
+                self.publish(&uri, output)?;
+            }
+            "textDocument/didChange" => {
+                let uri = string_at(message, &["params", "textDocument", "uri"]);
+                // The last change wins under full sync, which is what `textDocumentSync: 1` promises.
+                let text = message["params"]["contentChanges"]
+                    .as_array()
+                    .and_then(|changes| changes.last())
+                    .and_then(|change| change["text"].as_str())
+                    .unwrap_or("");
+                self.set_document(&uri, text);
+                self.publish(&uri, output)?;
+            }
+            "textDocument/didClose" => {
+                let uri = string_at(message, &["params", "textDocument", "uri"]);
+                self.open.remove(&uri);
+                // A closed document has no diagnostics: an editor keeps the last set until it is told
+                // otherwise, and a red squiggle in a file nobody has open is a bug report about nothing.
+                self.publish_items(&uri, Vec::new(), output)?;
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 

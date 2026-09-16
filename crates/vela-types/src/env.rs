@@ -250,6 +250,19 @@ impl Scope {
         self.names.insert(name.into(), ty);
     }
 
+    /// Every name in scope, in order.
+    ///
+    /// For completion, which asks what could be typed here rather than what one name means. Ordered by
+    /// name, so two runs offer the same list in the same order — which is what keeps a completion popup
+    /// from reshuffling under the cursor.
+    #[must_use]
+    pub fn names(&self) -> Vec<(String, Ty)> {
+        self.names
+            .iter()
+            .map(|(name, ty)| (name.clone(), ty.clone()))
+            .collect()
+    }
+
     /// A copy, for saving before a nested scope.
     #[must_use]
     pub fn snapshot(&self) -> Self {

@@ -12,6 +12,7 @@
 //! assembles the two and hands them to a protocol — it decides nothing about what is wrong with a
 //! program, which is the only way an editor and CI can be guaranteed to agree.
 
+pub mod completion;
 pub mod diagnostics;
 pub mod hover;
 pub mod position;

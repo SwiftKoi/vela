@@ -50,6 +50,19 @@ impl Found {
     }
 }
 
+/// The names in scope at `offset`, with their types.
+///
+/// The completion question, and the *other* half of what a position means: `at` answers "what is this
+/// word", and this answers "what could be written here". Same walk, same scope rules — a second
+/// traversal would answer the second question with a scope the first one does not use, which is how an
+/// editor ends up offering a name the checker then rejects.
+#[must_use]
+pub fn scope_at(tree: &Program, env: &Env, offset: u32) -> Vec<(String, Ty)> {
+    let mut checker = Checker::new(env, Scope::default()).collecting(offset);
+    walk(&mut checker, tree);
+    checker.names
+}
+
 /// What the checker can say about `offset` in a module, if it says anything.
 ///
 /// Diagnostics are discarded, for the reason `type_of` gives: `check` has already reported them, and a
@@ -60,7 +73,15 @@ impl Found {
 #[must_use]
 pub fn at(tree: &Program, env: &Env, offset: u32) -> Option<Found> {
     let mut checker = Checker::new(env, Scope::default()).asking(offset);
+    walk(&mut checker, tree);
+    checker.answer
+}
 
+/// Walks every body in a module, which is what both questions above are asked of.
+///
+/// Shared rather than written twice: the two differ in what the checker is *recording*, not in which
+/// bodies it visits, and two loops would drift the first time an item grew a body.
+fn walk(checker: &mut Checker<'_>, tree: &Program) {
     for item in &tree.items {
         match item {
             Item::Label(decl) => {
@@ -70,7 +91,7 @@ pub fn at(tree: &Program, env: &Env, offset: u32) -> Option<Found> {
             Item::Function(decl) => {
                 checker.scope = Scope::default();
                 for param in &decl.params {
-                    let ty = crate::lower::lower(&param.ty, env);
+                    let ty = crate::lower::lower(&param.ty, checker.env);
                     // A parameter's own span, which the tree does record: hovering `trust` in
                     // `fn spend(trust: int)` says `trust: int`.
                     checker.note(
@@ -87,8 +108,6 @@ pub fn at(tree: &Program, env: &Env, offset: u32) -> Option<Found> {
             _ => {}
         }
     }
-
-    checker.answer
 }
 
 impl Checker<'_> {
@@ -96,6 +115,28 @@ impl Checker<'_> {
     pub(crate) fn asking(mut self, offset: u32) -> Self {
         self.ask = Some(offset);
         self
+    }
+
+    /// Starts collecting the scope at an offset instead of checking.
+    pub(crate) fn collecting(mut self, offset: u32) -> Self {
+        self.collect = Some(offset);
+        self
+    }
+
+    /// Remembers the scope as of a position the walk has reached.
+    ///
+    /// The last snapshot at or before the offset wins, which is what makes the answer "the scope there"
+    /// rather than "the scope somewhere": a `var` declared later is not offered, and one declared
+    /// earlier is. Snapshotting once at the end would answer for the wrong line, and a completion that
+    /// offers a name the checker has not introduced yet is how an author learns to distrust the list.
+    pub(crate) fn snapshot(&mut self, upto: u32) {
+        let Some(ask) = self.collect else {
+            return;
+        };
+        if upto > ask {
+            return;
+        }
+        self.names = self.scope.names();
     }
 
     /// Records what is at the offset, keeping the innermost answer.

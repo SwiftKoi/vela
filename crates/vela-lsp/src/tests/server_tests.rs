@@ -111,11 +111,16 @@ fn initialize_answers_with_the_capabilities_it_actually_has() {
     assert_eq!(capabilities["renameProvider"], true);
     assert_eq!(capabilities["hoverProvider"], true);
 
-    // And nothing it does not: an advertised capability is one an editor calls. Completion needs the
-    // names in scope at an offset, which is the next thing to build.
+    assert_eq!(capabilities["completionProvider"], json!({}));
+
+    // And no trigger characters on it: a `.` after a name would normally mean "the members of this
+    // value", and that list is not built yet. Declaring it would make an editor ask for members and be
+    // told there are none, which reads as a bug rather than as a gap.
     assert!(
-        capabilities.get("completionProvider").is_none(),
-        "`completionProvider` is advertised but not implemented"
+        capabilities["completionProvider"]
+            .get("triggerCharacters")
+            .is_none(),
+        "a trigger character promises an answer this server does not have yet"
     );
 }
 

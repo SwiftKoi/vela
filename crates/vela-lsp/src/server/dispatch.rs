@@ -25,29 +25,8 @@ impl Server {
             "initialized" => {}
             "shutdown" => self.respond(output, id, Value::Null)?,
             "exit" => return Ok(false),
-            "textDocument/didOpen" => {
-                let document = &message["params"]["textDocument"];
-                let uri = document["uri"].as_str().unwrap_or("").to_string();
-                self.set_document(&uri, document["text"].as_str().unwrap_or(""));
-                self.publish(&uri, output)?;
-            }
-            "textDocument/didChange" => {
-                let uri = string_at(message, &["params", "textDocument", "uri"]);
-                // The last change wins under full sync, which is what `textDocumentSync: 1` promises.
-                let text = message["params"]["contentChanges"]
-                    .as_array()
-                    .and_then(|changes| changes.last())
-                    .and_then(|change| change["text"].as_str())
-                    .unwrap_or("");
-                self.set_document(&uri, text);
-                self.publish(&uri, output)?;
-            }
-            "textDocument/didClose" => {
-                let uri = string_at(message, &["params", "textDocument", "uri"]);
-                self.open.remove(&uri);
-                // A closed document has no diagnostics: an editor keeps the last set until it is told
-                // otherwise, and a red squiggle in a file nobody has open is a bug report about nothing.
-                self.publish_items(&uri, Vec::new(), output)?;
+            "textDocument/didOpen" | "textDocument/didChange" | "textDocument/didClose" => {
+                self.document_changed(method, message, output)?;
             }
             // The two features that read the symbol index: where a name is declared, and every place it
             // is written. Same question, so one helper answers both.
@@ -58,6 +37,10 @@ impl Server {
             "textDocument/references" => {
                 let locations = self.locations(message, true);
                 self.respond(output, id, locations)?;
+            }
+            "textDocument/completion" => {
+                let items = self.completions(message);
+                self.respond(output, id, items)?;
             }
             "textDocument/hover" => {
                 let hover = self.hover(message);
