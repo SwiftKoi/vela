@@ -12,6 +12,7 @@ pub mod expr;
 mod program;
 mod screen;
 pub mod stmt;
+pub mod test;
 pub mod ty;
 
 pub use decl::{
@@ -27,4 +28,5 @@ pub use stmt::{
     JumpStmt, MatchArm, MatchStmt, MenuChoice, MenuStmt, Pattern, ReturnStmt, SayStmt, StageKind,
     StageStmt, Stmt, VarStmt, WaitEvent, WaitStmt, WhileStmt, WithStmt,
 };
+pub use test::{CoverMode, Directive, DirectiveKind, TestDecl};
 pub use ty::Type;

@@ -125,6 +125,10 @@ impl Collector {
             Item::Theme(decl) => {
                 self.define(&decl.name, DefKind::Theme, decl.span);
             }
+            // A test is not a definition and not story content: it names things rather than being one,
+            // and `vela-test` reads it from the tree. Its `run from` and `expect` are checked as
+            // references and expressions, which is what keeps a test from drifting out of the language.
+            Item::Test(_) => {}
             Item::Function(decl) => {
                 self.define(&decl.name, DefKind::Function, decl.span);
             }

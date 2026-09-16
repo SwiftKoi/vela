@@ -8,3 +8,4 @@ mod parse_tests;
 mod precedence_tests;
 mod screen_tests;
 mod string_tests;
+mod test_tests;

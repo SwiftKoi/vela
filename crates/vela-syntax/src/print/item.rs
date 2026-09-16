@@ -7,6 +7,7 @@ use vela_span::FileId;
 
 use crate::print::decl;
 use crate::print::expr;
+use crate::print::test;
 use crate::print::writer::Writer;
 use crate::tree::{ConstDecl, DefaultDecl, EffectDecl, Item, Program, Type, UseDecl};
 
@@ -104,6 +105,7 @@ fn item(writer: &mut Writer<'_>, item: &Item) {
         Item::Enum(decl) => decl::enum_(writer, decl),
         Item::Character(decl) => decl::character(writer, decl),
         Item::Style(decl) => decl::style(writer, decl),
+        Item::Test(decl) => test::test_(writer, decl),
         Item::Theme(decl) => decl::theme(writer, decl),
         Item::Screen(decl) => decl::screen(writer, decl),
         Item::Function(decl) => decl::function(writer, decl),
@@ -136,6 +138,7 @@ fn span_overshoots_text(item: &Item) -> bool {
             | Item::Enum(_)
             | Item::Character(_)
             | Item::Style(_)
+            | Item::Test(_)
             | Item::Theme(_)
             | Item::Screen(_)
             | Item::Function(_)

@@ -461,6 +461,64 @@ discover while writing a struct.
 > file the session knows about; until it is, there is nowhere honest to hang the diagnostic.
 > `vela build` does not run the check either, because it does not compile scripts yet.
 
+### 7.6 Tests
+
+A `test` item is a test, and it lives in the same files as the story it exercises (`TOOLING.md §5`)
+rather than in a format of its own:
+
+```vela
+test "picking the forest sets trust":
+    run from chapters.forest.clearing
+    choose "Explore"
+    advance 4
+    expect trust == 1
+    expect visited(chapters.forest.river)
+```
+
+One thing here is a keyword and five things are not.
+
+**`test` is reserved** — the parser has to know where a test begins, and no story has another use
+for a heading called `test`. It is an item like `label` or `screen`, so §7.0's rule applies to it
+unchanged: it is special at the start of a line, and a name everywhere else.
+
+**The directives are contextual.** `run`, `advance`, `choose`, `expect`, and `cover` are ordinary
+identifiers in the first position of a line inside a test, looked up by name — which means a story
+keeps every one of them as a label, a variable, or a function. That is not a coincidence: `expect`
+and `run` are exactly the words a story about expecting and running would use, and reserving them would
+cost the language's own subject matter to buy the parser a table lookup. §7.0's doc comment in the
+parser records four separate bugs from that trade being made the other way, which is why this one is
+made deliberately.
+
+Their arguments are parsed as the things they are, not as strings:
+
+- `run from <label>` carries a dotted path *and* that path's own span, the pair a `jump` target
+  carries, so a reference written in a test resolves the way every other reference resolves (`§6`) —
+  and a rename can edit it.
+- `expect` and `choose` take expressions rather than strings. That is what will let the checker type
+  them — an assertion that could never hold should be a diagnostic before it is a failing run — and
+  what lets a test name the menu text once and use it twice. Until the HIR records the directives,
+  nothing checks them: the tree holds a real expression, and the checker has not been given it yet.
+- `cover` takes `labels` or `variants`, and an unknown word is an error rather than a directive that
+  quietly covers nothing.
+
+```vela
+test "every route reaches an ending":
+    run
+    cover labels
+    cover variants
+```
+
+A `test` is not story content: it neither defines a name nor adds a node to the story graph, and
+`vela build` does not carry it into a bundle.
+
+> **Implemented so far (M10).** The item parses, formats, and prints as canonical
+> (`tests/golden/parse/item_test.vela` is in the corpus every formatting gate covers), and an unknown
+> directive or cover word is reported once, with the line it is on.
+>
+> **Not yet.** Everything that *runs* one. The HIR does not record a `TestDecl`, so nothing types an
+> `expect`, nothing resolves a `run from` as a reference, and `vela build` and `vela test` both ignore
+> the item — the runner is the next thing in this milestone.
+
 ## 8. Diagnostics
 
 Codes are permanent: never reused, never renumbered. Ranges are reserved by phase so a new
