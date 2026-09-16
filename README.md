@@ -116,6 +116,7 @@ cargo run -p vela-diag --example render_demo   # see a rendered diagnostic
 vela lsp examples/standard                     # the language server, on stdin and stdout
 vela test examples/standard                    # the suite, headless
 vela analyze examples/standard                 # the story graph, and what a run cannot reach
+vela doc widgets                               # reference Markdown, from the schemas
 ```
 
 `docs/guides/lsp-walkthrough.md` walks through the language server in an editor — hover, completion,

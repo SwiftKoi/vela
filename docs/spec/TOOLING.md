@@ -312,6 +312,21 @@ widget prop schemas, effect signatures, diagnostic registry, action registry, an
 script APIs. Because it reads the same schemas the compiler uses, generated docs cannot drift
 from behavior. This is also what keeps the LSP completion list and the docs identical.
 
+> **Implemented so far (M10).** `vela doc [widgets|actions|diagnostics]` prints the reference on standard
+> output, and `vela doc --out docs/reference` writes it — one file per page, which is the only place in
+> this tool that writes anything, because a reference page is an artifact whose whole point is landing
+> where a reader finds it. The committed pages are under `docs/reference/`.
+>
+> What makes the "cannot drift" claim real is a test rather than a promise:
+> `crates/vela-cli/tests/doc_golden.rs` regenerates every page and compares it with what is committed, so
+> adding a prop, an action, or a diagnostic code and forgetting the reference fails the suite. It also
+> asserts that printing a page and writing it agree, since a reader piping the command into a file should
+> get the same page a build script does.
+>
+> **Not generated:** effect signatures, because an `effect` is declared by the *project* — reference for
+> one project's effects is that project's code, not engine documentation — and public script APIs, because
+> the engine's callable surface is the builtins and those are not a schema.
+
 ## 10. Open questions
 
 1. **Editor beyond LSP** (post-1.0): the GUI editor (`VISION.md §3.6`) is deliberately not in

@@ -90,6 +90,15 @@ impl Code {
     }
 }
 
+/// Every registered code, in the order the registry file lists them.
+///
+/// The order is the file's, which is grouped by phase — lexical first, then syntactic, and on up — because
+/// that is the order a reference reads best in, and because a generator needs an answer that is stable
+/// across runs rather than "whatever the map happened to give".
+pub fn codes() -> impl Iterator<Item = Code> {
+    registry().entries.iter().map(|entry| Code(entry.code))
+}
+
 impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())

@@ -197,7 +197,8 @@ report".
 5. Golden frame rendering with tolerance.
 6. `vela analyze`: story graph (`dot`/`json`/`html`), dead labels/ends, unused assets, asset
    budget, variable reachability (`TOOLING.md §7`).
-7. `vela doc` generating widget/effect/action/diagnostic references from their schemas.
+7. `vela doc` generating widget/effect/action/diagnostic references from their schemas. [done for widgets,
+   actions, and diagnostics; effects and script APIs are not schemas — see `TOOLING.md §9`]
 
 **The walkthrough is a test, not a document.** All five features answer now, so
 `docs/guides/lsp-walkthrough.md` walks a newcomer through them over `examples/standard` — the real
@@ -231,17 +232,25 @@ that otherwise answers honestly.
       multi-module fixture
 - [x] `vela fmt --check` on the entire corpus is clean and idempotent (the `check-format` gate over 46
       canonical files; idempotence and re-parsing are pinned by `vela-syntax/tests/format_roundtrip.rs`)
-- [ ] `vela test` runs a suite headless in CI and fails a deliberately broken story
-- [ ] `vela analyze --format json` output is deterministic across runs (diffed in CI)
-- [x] `vela analyze --format json` is deterministic across runs, and tracked as a diffable golden
-      (`crates/vela-cli/tests/analyze_golden.rs` analyzes each case twice and compares with
-      `tests/golden/analyze/`)
-- [x] `vela test` runs a suite headless and fails a deliberately broken story (`crates/vela-cli`'s
-      `runner_tests.rs` breaks one three ways: a false assertion, a choice nothing offers, and a menu
-      the script never answers)
+- [x] `vela test` runs a suite headless in CI and fails a deliberately broken story (`crates/vela-cli`'s
+      `runner_tests.rs` breaks one three ways: a false assertion, a choice nothing offers, and a menu the
+      script never answers; `examples/standard`'s own suite covers all seven labels of a three-module story)
+- [x] `vela analyze --format json` output is deterministic across runs, and diffed in CI as a golden
+      (`crates/vela-cli/tests/analyze_golden.rs` analyzes each case twice — the two runs must be identical —
+      and compares with `tests/golden/analyze/`)
 - [x] A newcomer can navigate the fixture using only LSP features (documented walkthrough:
       `docs/guides/lsp-walkthrough.md`, every step of it a test)
-- [ ] **Demo:** `vela test && vela analyze` (the LSP walkthrough is in the README)
+- [x] **Demo:** `vela test examples/standard && vela analyze examples/standard` (both lines are in the
+      README, beside `vela lsp` and `vela doc`)
+
+**What M10 does not close.** Golden frames (`vela test --update`, `--seed`) and the locale sweep are named
+in `TOOLING.md §5` as not implemented, and `cover variants` needs the machine to record which enum variants a
+`match` chose, which nothing does — the runner reports a directive it cannot honour as a note rather than
+skipping it. `vela analyze` reports the graph and leaves `W4002`/`W4003` to `vela check`, and names unused
+assets, load sizes, localization coverage, and variable reachability as missing in its own source. `vela doc`
+generates widgets, actions, and diagnostics; effect signatures are a project's own declarations and public
+script APIs do not exist yet. Also still open from M9: builds and runs on all four targets, and `--target web
+--serve` played in a browser.
 
 **Risks.** LSP correctness depends entirely on the M2 query database being right. Mitigation:
 the parity test makes any divergence between editor and CLI a hard failure.
