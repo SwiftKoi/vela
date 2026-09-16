@@ -314,3 +314,31 @@ fn a_use_names_a_module() {
     let (file, _) = declaration(&mut session, &found.named).expect("the module is in the program");
     assert_eq!(file, forest_file);
 }
+
+/// References *from* a declaration reach into every module that names it.
+///
+/// The direction the walkthrough depends on: standing on `main.tally`, the two callers are in
+/// `chapters/forest.vela`, written as `call main.tally`. The other direction — from the reference to the
+/// declaration — is the one that is easy to get right by accident, because the file it starts from is
+/// the file the reference is in.
+#[test]
+fn references_from_a_declaration_reach_the_modules_that_use_it() {
+    let (mut session, main_file, forest_file) = project();
+    let named = Named::Definition {
+        module: vela_hir::ModuleName::new("main"),
+        name: "tally".to_string(),
+    };
+
+    let found = occurrences(&mut session, &named);
+    let files: Vec<u32> = found.iter().map(|(file, _)| file.as_raw()).collect();
+
+    assert!(
+        files.contains(&main_file.as_raw()),
+        "the declaration itself is a place the name is written: {files:?}"
+    );
+    assert!(
+        files.contains(&forest_file.as_raw()),
+        "and so is the module that calls it: {files:?}"
+    );
+    assert_eq!(found.len(), 3, "one declaration and two callers: {found:?}");
+}

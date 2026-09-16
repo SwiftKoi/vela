@@ -135,10 +135,38 @@ thing to a spec for this milestone, and four of its tools are worth copying rath
    budget, variable reachability (`TOOLING.md §7`).
 7. `vela doc` generating widget/effect/action/diagnostic references from their schemas.
 
+**The walkthrough is a test, not a document.** All five features answer now, so
+`docs/guides/lsp-walkthrough.md` walks a newcomer through them over `examples/standard` — the real
+example rather than a fixture — and every step of it is a test in
+`crates/vela-cli/tests/lsp_walkthrough.rs`: goto-definition from a `jump` into `chapters/street.vela`,
+hover naming the kind and the file, references from a declaration reaching the two qualified callers in
+the file that imports it, the completion list, and a rename editing both files. A document is the one
+artefact in a repository that cannot fail a test, so the guide can only drift by being edited in the same
+commit as the behaviour.
+
+Writing it down found one thing the feature did not do. Typing `jump ` and asking for completion offered
+*in-scope names*, because an unfinished transfer does not parse: there is no `Stmt::Jump` in the tree for
+the caret to sit in, which is exactly the moment the author is asking what can go there. The context is
+now decided from the text as well — the last word before the caret being `jump` or `call` — which is the
+one place in completion where the tree is not the best available answer, and the reason is that the file
+is half-written by definition.
+
+Probing the server by hand for the guide's numbers is worth doing again for the next feature: the guide's
+first draft claimed a list of four labels where the server answers nine, and a rename touching one file
+where it touches three. Both were wrong in the direction of *understating* the feature, which is a
+failure mode no unit test catches.
+
+Two gaps that the walkthrough records rather than hides. Completion after a `.` (enum variants, struct
+fields, module members), widget properties, and screen actions are still missing from `TOOLING.md §4`'s
+list; and hovering `directions` in the example says `list<?>` where `list<Direction>` is meant, because a
+struct constructor's type is not worked out inside a collection literal — a checker gap, in a feature
+that otherwise answers honestly.
+
 **Exit criteria.**
-- [ ] Hover, completion, goto-def, references, rename all work across module boundaries in a
+- [x] Hover, completion, goto-def, references, rename all work across module boundaries in a
       multi-module fixture
-- [ ] `vela fmt --check` on the entire corpus is clean and idempotent
+- [x] `vela fmt --check` on the entire corpus is clean and idempotent (the `check-format` gate over 46
+      canonical files; idempotence and re-parsing are pinned by `vela-syntax/tests/format_roundtrip.rs`)
 - [ ] `vela test` runs a suite headless in CI and fails a deliberately broken story
 - [ ] `vela analyze --format json` output is deterministic across runs (diffed in CI)
 - [ ] A newcomer can navigate the fixture using only LSP features (documented walkthrough)

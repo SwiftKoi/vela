@@ -159,7 +159,7 @@ fn widgets_wanted(session: &Session, file: FileId, tree: &Program, offset: u32) 
 /// Whether the cursor is in a `jump` or `call`'s target, where only a label can go.
 fn labels_wanted(session: &mut Session, file: FileId, offset: u32) -> bool {
     let parsed = session.parse(file);
-    let mut wanted = false;
+    let mut in_a_transfer = false;
     each_statement(&parsed.program, &mut |statement| {
         let (span, is_transfer) = match statement {
             vela_syntax::Stmt::Jump(jump) => (jump.span, true),
@@ -167,10 +167,21 @@ fn labels_wanted(session: &mut Session, file: FileId, offset: u32) -> bool {
             _ => (statement.span(), false),
         };
         if is_transfer && contains(span, offset) {
-            wanted = true;
+            in_a_transfer = true;
         }
     });
-    wanted
+    if in_a_transfer {
+        return true;
+    }
+
+    // And the text, for the case the tree cannot answer at all: `jump ` with nothing after it yet does
+    // not parse, and that is exactly the moment the author is asking what can go there. A completion
+    // that disappears while the target is being typed is worse than one that never appeared.
+    let source = session.sources().file(file);
+    let text = source.text();
+    let before = text.get(..offset as usize).unwrap_or(text);
+
+    matches!(before.split_whitespace().next_back(), Some("jump" | "call"))
 }
 
 /// Visits every statement in a program, including the ones inside bodies.

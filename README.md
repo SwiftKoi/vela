@@ -49,6 +49,7 @@ screens, and plugins without rewriting, the engine has failed regardless of what
 | [docs/spec/SCREENS.md](docs/spec/SCREENS.md) | Declarative UI, layout, styling, accessibility, hot reload |
 | [docs/spec/TOOLING.md](docs/spec/TOOLING.md) | CLI, diagnostics, LSP, formatter, debugger, test runner |
 | [docs/spec/BUILD_AND_ASSETS.md](docs/spec/BUILD_AND_ASSETS.md) | Asset pipeline, targets, web, delta patches, reproducibility |
+| [docs/guides/lsp-walkthrough.md](docs/guides/lsp-walkthrough.md) | The language server in an editor, step by step, over `examples/standard` |
 | [docs/adr/](docs/adr/README.md) | Decision records for choices that are expensive to reverse |
 | [ROADMAP.md](ROADMAP.md) | Milestones M0–M14, work items, exit criteria |
 
@@ -112,7 +113,13 @@ cargo xtask --list              # what the checks do
 cargo run --release -p xtask -- budget   # startup and frame time, against xtask/budgets.toml
 cargo run -p vela-cli -- --version
 cargo run -p vela-diag --example render_demo   # see a rendered diagnostic
+vela lsp examples/standard                     # the language server, on stdin and stdout
 ```
+
+`docs/guides/lsp-walkthrough.md` walks through the language server in an editor — hover, completion,
+goto-definition, references, and rename — over `examples/standard`. Each step of that guide is a test
+(`crates/vela-cli/tests/lsp_walkthrough.rs`) run against the real server and the real project, so the
+guide cannot describe something the server has stopped doing.
 
 Two harnesses are checked in, because later milestones reuse them:
 

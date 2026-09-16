@@ -157,3 +157,35 @@ fn a_position_without_context_offers_the_scope() {
         labels(&items)
     );
 }
+
+/// `jump ` with nothing after it yet does not parse, and that is when an editor asks what can go there.
+///
+/// The fixture is deliberately a file that does not compile: the author is halfway through writing a
+/// transfer, which is the state a completion list exists for.
+#[test]
+fn an_unfinished_transfer_still_offers_labels() {
+    let source = "use chapters.forest\n\nlabel start:\n    jump \n";
+    let mut session = Session::new();
+    session.set_file("main.vela", source);
+    session.set_file("chapters/forest.vela", FOREST);
+    let file = session
+        .file_named("main.vela")
+        .expect("`main.vela` is in the session");
+
+    let items = at(&mut session, file, offset_in(source, "jump ") + 5);
+    let listed = labels(&items);
+
+    assert!(
+        listed.contains(&"chapters.forest.clearing"),
+        "the module this file imports, qualified the way it has to be written: {listed:?}"
+    );
+    assert!(
+        listed.contains(&"start"),
+        "and this module's own labels: {listed:?}"
+    );
+}
+
+/// The offset of `needle` in `text`.
+fn offset_in(text: &str, needle: &str) -> u32 {
+    text.find(needle).expect("the fixture contains it") as u32
+}
