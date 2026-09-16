@@ -56,7 +56,7 @@ pub fn lookup(word: &str) -> Option<Entry> {
     Some(Entry {
         kind: "action",
         signature: action.signature(),
-        summary: action.doc.to_string(),
+        summary: action.summary(),
         page: "actions.md",
         title: "Action reference",
     })

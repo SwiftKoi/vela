@@ -6,7 +6,7 @@
 
 use vela_span::FileId;
 use vela_syntax::{Item, ScreenDecl, parse};
-use vela_ui::{WidgetRegistry, check_screen};
+use vela_ui::{ActionRegistry, WidgetRegistry, check_screen};
 
 /// Every `screen` a parsed fixture declares, as the checker wants them.
 fn screens_of(parsed: &vela_syntax::ParseResult) -> Vec<&ScreenDecl> {
@@ -38,15 +38,20 @@ fn diagnose(body: &str) -> Vec<(String, String)> {
     let Some(screen) = screens.first() else {
         panic!("expected a screen");
     };
-    check_screen(&screen.body, &WidgetRegistry::builtin(), &screens)
-        .into_iter()
-        .map(|d| {
-            (
-                d.code.as_str().to_string(),
-                d.help.unwrap_or_else(|| "<no help>".to_string()),
-            )
-        })
-        .collect()
+    check_screen(
+        &screen.body,
+        &WidgetRegistry::builtin(),
+        &screens,
+        &ActionRegistry::builtin(),
+    )
+    .into_iter()
+    .map(|d| {
+        (
+            d.code.as_str().to_string(),
+            d.help.unwrap_or_else(|| "<no help>".to_string()),
+        )
+    })
+    .collect()
 }
 
 /// A valid screen produces nothing. The checker's first job is not to cry wolf.
@@ -58,7 +63,12 @@ fn a_valid_screen_is_clean() {
     let Some(screen) = screens.first() else {
         panic!("expected a screen");
     };
-    let diagnostics = check_screen(&screen.body, &WidgetRegistry::builtin(), &screens);
+    let diagnostics = check_screen(
+        &screen.body,
+        &WidgetRegistry::builtin(),
+        &screens,
+        &ActionRegistry::builtin(),
+    );
     assert!(
         diagnostics.is_empty(),
         "{:?}",

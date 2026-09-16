@@ -7,7 +7,7 @@
 use vela_span::FileId;
 use vela_syntax::parse;
 use vela_text::{Font, TextEngine};
-use vela_ui::{Args, Kind, Node, ScreenSet, Value};
+use vela_ui::{Action, Args, Kind, Node, ScreenSet, Value};
 
 /// The bundled face, so text measures to something real.
 fn engine() -> TextEngine {
@@ -49,9 +49,14 @@ fn args(name: Option<&str>, line: &str) -> Args {
 
 /// The root of a built screen.
 fn built(source: &str, args: &Args) -> Node {
+    built_screen(source, "dialogue", args)
+}
+
+/// The root of a built screen, by name — for a fixture that is not the dialogue screen.
+fn built_screen(source: &str, name: &str, args: &Args) -> Node {
     let mut text = engine();
     set(source)
-        .build("dialogue", args, &mut text, "sans", 1280.0)
+        .build(name, args, &mut text, "sans", 1280.0)
         .expect("the screen is declared")
 }
 
@@ -159,6 +164,62 @@ fn an_undeclared_screen_builds_nothing() {
     assert!(
         set.build("settings", &Args::new(), &mut text, "sans", 1280.0)
             .is_none()
+    );
+}
+
+/// An action handed in as a parameter reaches the widget that holds it.
+///
+/// `SCREENS.md §7`: the caller supplies the answer, which is the whole point of a confirm screen.
+/// Before this, `action yes_action` produced no action at all — the screen drew, both buttons were
+/// inert, and no diagnostic said why.
+#[test]
+fn an_action_parameter_reaches_the_button() {
+    let source = "\
+screen confirm(message, yes_action, no_action):
+    column:
+        text message
+        button:
+            text \"Yes\"
+            action yes_action
+        button:
+            text \"No\"
+            action no_action
+";
+    let mut args = Args::new();
+    args.set("message", Value::Str("Leave?".to_string()));
+    args.set("yes_action", Value::Action(Action::new("quit", Vec::new())));
+    args.set(
+        "no_action",
+        Value::Action(Action::new("hide", vec!["confirm".to_string()])),
+    );
+
+    let root = built_screen(source, "confirm", &args);
+    let column = &root.children[0];
+    let name = |node: &Node| node.action.as_ref().map(|action| action.name.clone());
+    assert_eq!(name(&column.children[1]), Some("quit".to_string()));
+    assert_eq!(name(&column.children[2]), Some("hide".to_string()));
+}
+
+/// And an action a screen *passes on*: a `use` argument is a value like any other (`§2.1`).
+#[test]
+fn an_action_travels_through_a_use() {
+    let source = "\
+screen row(do):
+    button:
+        text \"Go\"
+        action do
+
+screen menu:
+    use row(quit())
+";
+    let root = built_screen(source, "menu", &Args::new());
+    assert_eq!(
+        root.children[0]
+            .action
+            .as_ref()
+            .map(|action| action.name.as_str()),
+        Some("quit"),
+        "the action did not survive the composition"
     );
 }
 

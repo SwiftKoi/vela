@@ -9,7 +9,9 @@ use vela_diag::Diagnostic;
 use vela_span::FileId;
 use vela_syntax::{Item, ScreenDecl, parse};
 use vela_text::{Font, TextEngine};
-use vela_ui::{Args, Kind, Node, ScreenSet, Value, WidgetRegistry, check_screen, deps_of};
+use vela_ui::{
+    ActionRegistry, Args, Kind, Node, ScreenSet, Value, WidgetRegistry, check_screen, deps_of,
+};
 
 /// The bundled face, so text measures to something real.
 fn engine() -> TextEngine {
@@ -48,9 +50,10 @@ fn diagnostics(source: &str) -> Vec<Diagnostic> {
     );
     let screens = screens_of(&parsed);
     let registry = WidgetRegistry::builtin();
+    let actions = ActionRegistry::builtin();
     let mut found: Vec<Diagnostic> = screens
         .iter()
-        .flat_map(|screen| check_screen(&screen.body, &registry, &screens))
+        .flat_map(|screen| check_screen(&screen.body, &registry, &screens, &actions))
         .collect();
     found.extend(vela_ui::compose::check_cycles(&screens));
     found

@@ -191,7 +191,9 @@ fn actions(out: &mut dyn Write) {
         // The signature is the schema's, and is also the anchor a hover's link is built from, so the
         // heading here and the link there cannot disagree.
         let _ = writeln!(out, "## `{}`\n", action.signature());
-        let _ = writeln!(out, "{}\n", sentence(action.doc));
+        // The same sentence a hover shows, so the two cannot describe one action differently — and
+        // it is where a reader learns that most of the vocabulary is declared rather than dispatched.
+        let _ = writeln!(out, "{}\n", sentence(&action.summary()));
 
         if action.args.is_empty() {
             continue;

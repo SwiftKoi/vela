@@ -29,6 +29,12 @@ pub enum Value {
     Num(f64),
     /// A boolean.
     Bool(bool),
+    /// An action: what a widget does when it is activated (`SCREENS.md §7`).
+    ///
+    /// An action is a *value* and not only a syntax, which is what lets a screen take one as a
+    /// parameter and hand it to a widget. Without that, `confirm(message, yes_action, no_action)`
+    /// cannot be written at all: the caller's answer is the content.
+    Action(Action),
     /// No value.
     None,
 }
@@ -41,6 +47,9 @@ impl Value {
             Self::Str(text) => text.clone(),
             Self::Bool(true) => "true".to_string(),
             Self::Bool(false) => "false".to_string(),
+            // An action as text is the call it was written as. Nothing draws one today, but a screen
+            // that interpolates an action should say what it is rather than render as blank.
+            Self::Action(action) => action.to_string(),
             Self::None => String::new(),
             // Not `{}`: a float's default formatting is locale-adjacent enough that the
             // determinism rules ban it, and a fixed precision is what a screen wants anyway.
@@ -57,6 +66,8 @@ impl Value {
             Self::Bool(value) => *value,
             Self::Str(text) => !text.is_empty(),
             Self::Num(number) => *number != 0.0,
+            // An action is something, so it is true — the same answer every non-`none` value gets.
+            Self::Action(_) => true,
         }
     }
 }
@@ -244,6 +255,10 @@ pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
         Expr::Bool { value, .. } => Value::Bool(*value),
         Expr::Int { value, .. } => Value::Num(*value as f64),
         Expr::Str { parts, .. } => Value::Str(parts_text(parts, values)),
+        // A call in a screen argument is an action (`SCREENS.md §7`). The vocabulary is words like
+        // `quit` and `open_screen`, and a call is how one becomes a value a screen can pass on — as
+        // the argument of a `use`, or into a parameter a widget then holds.
+        Expr::Call { .. } => action_of(expr).map_or(Value::None, Value::Action),
         _ => Value::None,
     }
 }

@@ -12,6 +12,7 @@
 use vela_syntax::{Expr, ScreenArg, ScreenLine, ScreenNode};
 
 use super::compose::Compose;
+use crate::actions::Action;
 use crate::eval::{
     Args, Ctx, Value, action_of, anchor_of, anchor_word, color_of, eval, name_of, number,
     style_color, style_size, text_of,
@@ -298,7 +299,7 @@ fn apply_line(
                     .children
                     .push(build_node(child, ctx, args, compose, text, font, max_width));
             } else {
-                apply_bare_prop(parent, parent_widget, child, ctx);
+                apply_bare_prop(parent, parent_widget, child, ctx, args);
             }
         }
     }
@@ -313,9 +314,16 @@ fn apply_bare_prop(
     parent_widget: Option<&Widget>,
     child: &ScreenNode,
     ctx: &Ctx,
+    values: &Args,
 ) {
     if parent_widget.is_some_and(|widget| widget.accepts(&child.name)) {
-        apply_prop(parent, &child.name, PropValue::bare(&child.args), ctx);
+        apply_prop(
+            parent,
+            &child.name,
+            PropValue::bare(&child.args),
+            ctx,
+            values,
+        );
     }
 }
 
@@ -375,14 +383,14 @@ fn apply_args(node: &mut Node, args: &[ScreenArg], ctx: &Ctx, values: &Args, lea
                 name, value: None, ..
             } if index == 0 && leaf => set_content_name(node, name, values),
             ScreenArg::Named { name, value, .. } => {
-                apply_prop(node, name, PropValue::inline(value.as_ref()), ctx);
+                apply_prop(node, name, PropValue::inline(value.as_ref()), ctx, values);
             }
         }
     }
 }
 
 /// Applies one prop to a node, in whichever shape its value arrived.
-fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx) {
+fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx, values: &Args) {
     match name {
         "pad" => set_number(&mut node.props.pad, value),
         "gap" => set_number(&mut node.props.gap, value),
@@ -413,11 +421,27 @@ fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx) {
             }
         }
         "action" => {
-            if let Some(action) = value.expr().and_then(action_of) {
+            if let Some(action) = action_value(value, values) {
                 node.action = Some(action);
             }
         }
         _ => {}
+    }
+}
+
+/// The action a prop's value denotes.
+///
+/// Two ways to write one, and both have to land here. A call is an action written where it is used
+/// (`action quit()`), which is the whole vocabulary. A bare name is an action the screen was *given*
+/// (`screen confirm(message, yes_action, no_action)` … `action yes_action`) — and dropping that case
+/// is what made the sample's confirm screen silently unclickable, with no diagnostic to say so.
+fn action_value(value: PropValue<'_>, values: &Args) -> Option<Action> {
+    if let Some(action) = value.expr().and_then(action_of) {
+        return Some(action);
+    }
+    match value.name().and_then(|name| values.get(name)) {
+        Some(Value::Action(action)) => Some(action.clone()),
+        _ => None,
     }
 }
 

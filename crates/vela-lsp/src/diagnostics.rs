@@ -78,6 +78,7 @@ pub fn file(session: &mut Session, file: vela_span::FileId) -> Vec<Diagnostic> {
 /// `chapters/street.vela` was rendered against `main.vela`, at whatever line happened to be there.
 fn screens(parsed: &ParseResult) -> Vec<Diagnostic> {
     let registry = vela_ui::WidgetRegistry::builtin();
+    let actions = vela_ui::ActionRegistry::builtin();
     let styles: Vec<&StyleDecl> = parsed
         .program
         .items
@@ -105,7 +106,12 @@ fn screens(parsed: &ParseResult) -> Vec<Diagnostic> {
     // like style inheritance, so a cycle is not reported again for every screen in the loop.
     diagnostics.extend(vela_ui::compose::check_cycles(&screens));
     for screen in &screens {
-        diagnostics.extend(vela_ui::check_screen(&screen.body, &registry, &screens));
+        diagnostics.extend(vela_ui::check_screen(
+            &screen.body,
+            &registry,
+            &screens,
+            &actions,
+        ));
         diagnostics.extend(vela_ui::check_screen_styles(&screen.body, &styles));
         diagnostics.extend(vela_ui::a11y::check_labels(&screen.body, &registry));
         diagnostics.extend(vela_ui::check_magic_colours(&screen.body));

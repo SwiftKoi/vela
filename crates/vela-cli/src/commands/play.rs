@@ -315,9 +315,19 @@ impl Player {
             }
             "quick_save" => self.save("quick"),
             "quick_load" => self.load("quick"),
-            // `jump`, `set`, `play`, and the rest need the VM or `World` and are not wired
-            // yet. Saying so beats a button that does nothing and looks broken.
-            _ => {}
+            "rollback" => self.rollback(),
+            "hide" => {
+                let Some(name) = action.first() else {
+                    return;
+                };
+                if self.overlays.close_named(name) {
+                    println!("screen hide {name}");
+                }
+            }
+            // The rest need the VM or `World` and are not wired yet — `SCREENS.md §7` says which, and
+            // the registry carries the same answer. Saying so beats a button that quietly does
+            // nothing, which is the failure that looks like the project's mistake.
+            other => println!("screen action {other} (declared, not dispatched)"),
         }
     }
 }

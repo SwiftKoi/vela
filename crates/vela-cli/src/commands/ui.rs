@@ -323,6 +323,22 @@ impl Stack {
         self.overlays.pop().map(|overlay| overlay.name)
     }
 
+    /// Closes a named screen, wherever it sits in the stack.
+    ///
+    /// What `hide(name)` needs and `close_screen` cannot give: a HUD screen asked to hide itself is
+    /// often not the topmost one, and closing "the top" would dismiss whatever is above it instead.
+    pub fn close_named(&mut self, name: &str) -> bool {
+        let Some(index) = self
+            .overlays
+            .iter()
+            .rposition(|overlay| overlay.name == name)
+        else {
+            return false;
+        };
+        self.overlays.remove(index);
+        true
+    }
+
     /// Moves focus within the topmost screen, wrapping at both ends.
     pub fn move_focus(&mut self, delta: isize) -> bool {
         let Some(top) = self.overlays.last_mut() else {

@@ -258,9 +258,43 @@ button:
     enable_if trust > 3                     # static condition
 ```
 
-The action set is a registry. Built-ins: `jump`, `call`, `return`, `set`, `toggle`,
-`play`, `stop`, `open_screen`, `close_screen`, `wait`, `quit`, `quick_save`, `quick_load`.
-Adding an action is a registry entry, not a UI-core edit.
+**An action is a value, not only a syntax.** A screen may take one as a parameter and hand it to a
+widget, which is what lets the *caller* supply the answer rather than the screen hard-coding it:
+
+```vela
+screen confirm(message, yes_action, no_action):
+    column:
+        text message
+        button:
+            text "Yes"
+            action yes_action
+        button:
+            text "No"
+            action no_action
+```
+
+Written where it is used, an action is a call (`action quit()`); handed in, it is a name
+(`action yes_action`). Both mean the same thing to the widget that holds it, and an action travels
+through `use` arguments like any other value (`§2.1`).
+
+The action set is a registry, and the checker **reads** it: a call whose name is not registered is
+`E5012`, and one whose argument count does not match is `E5013`. Adding an action is a registry
+entry, not a UI-core edit.
+
+Two things the registry also says, because a reader of the reference deserves both. An entry is
+either **dispatched** — the runtime acts on it — or *declared, not dispatched yet*, which is the
+state of most of the vocabulary: `preference`, `file_page`, `language`, and the rest are this
+language's words for systems the later milestones build, named now because a screen that uses one has
+to check now. And the set is not a list of Ren'Py's names: `ShowMenu`, `Start`, and `MainMenu` are
+absent because a menu is a screen (`open_screen`) and the beginning is a label (`jump`).
+
+> **Implemented (M12.1).** An action is a value a screen can be given and a widget can hold, and the
+> checker holds the vocabulary to the registry: `E5012` for a name that is not registered, `E5013` for
+> the wrong number of arguments, and a bare name that is a parameter is left alone because that is how
+> an action arrives. Of the twenty-six entries, seven are dispatched (`open_screen`, `close_screen`,
+> `hide`, `quit`, `quick_save`, `quick_load`, `rollback`) — the rest need the VM or `World`, and the
+> reference page, the hover, and an activation that reaches one all say so rather than doing nothing
+> quietly.
 
 ## 8. Reactivity
 
