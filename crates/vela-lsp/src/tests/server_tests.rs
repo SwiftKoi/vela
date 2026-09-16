@@ -105,13 +105,14 @@ fn initialize_answers_with_the_capabilities_it_actually_has() {
     assert_eq!(capabilities["textDocumentSync"], 1);
     assert_eq!(capabilities["positionEncoding"], "utf-16");
 
-    // What it does: the two features the symbol index answers.
+    // What it does: the three features the symbol index answers.
     assert_eq!(capabilities["definitionProvider"], true);
     assert_eq!(capabilities["referencesProvider"], true);
+    assert_eq!(capabilities["renameProvider"], true);
 
     // And nothing it does not: an advertised capability is one an editor calls. Hover and completion
-    // need the type and scope at an offset; rename needs a name's own span rather than its statement's.
-    for absent in ["hoverProvider", "completionProvider", "renameProvider"] {
+    // need the type and the scope at an offset, which is a question the type checker has to answer.
+    for absent in ["hoverProvider", "completionProvider"] {
         assert!(
             capabilities.get(absent).is_none(),
             "`{absent}` is advertised but not implemented"
@@ -346,6 +347,97 @@ fn an_unknown_request_is_answered_with_an_error() {
 
     assert_eq!(messages[0]["id"], 7);
     assert_eq!(messages[0]["error"]["code"], -32601);
+}
+
+/// A rename comes back as a workspace edit, one document at a time, with the *name* in each range.
+///
+/// The ranges are what an editor applies verbatim, so a range that covered `jump forest.clearing`
+/// instead of `clearing` would delete the keyword.
+#[test]
+fn a_rename_edits_every_file_the_name_appears_in() {
+    let mut server = cross_module();
+    let mut output = Vec::new();
+    server
+        .serve(
+            &mut framed(&[
+                request(1, "initialize", json!({})),
+                notice(
+                    "textDocument/didOpen",
+                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
+                ),
+                request(
+                    2,
+                    "textDocument/rename",
+                    json!({
+                        "textDocument": { "uri": "file:///game/main.vela" },
+                        "position": { "line": 3, "character": 12 },
+                        "newName": "glade",
+                    }),
+                ),
+            ]),
+            &mut output,
+        )
+        .expect("the server answers");
+
+    let messages = read_all(output);
+    let reply = messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request");
+
+    let changes = &reply["result"]["changes"];
+    let main = changes["file:///game/main.vela"]
+        .as_array()
+        .unwrap_or_else(|| panic!("the reference is not edited: {reply}"));
+    assert_eq!(main.len(), 1, "{reply}");
+    assert_eq!(main[0]["newText"], "glade");
+
+    // `    jump forest.clearing` — the target starts at column 9, and only `clearing` is replaced.
+    assert_eq!(main[0]["range"]["start"]["character"], 16);
+    assert_eq!(main[0]["range"]["end"]["character"], 24);
+
+    let forest = changes["file:///game/chapters/forest.vela"]
+        .as_array()
+        .unwrap_or_else(|| panic!("the declaration is not edited: {reply}"));
+    assert_eq!(forest.len(), 1, "{reply}");
+}
+
+/// A rename that would not be a name is refused *before* anything is edited: an editor that applied it
+/// would leave a file the parser cannot read, and the author looking at an error nobody wrote.
+#[test]
+fn a_rename_to_something_that_is_not_a_name_is_refused() {
+    let mut server = cross_module();
+    let mut output = Vec::new();
+    server
+        .serve(
+            &mut framed(&[
+                request(1, "initialize", json!({})),
+                notice(
+                    "textDocument/didOpen",
+                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
+                ),
+                request(
+                    2,
+                    "textDocument/rename",
+                    json!({
+                        "textDocument": { "uri": "file:///game/main.vela" },
+                        "position": { "line": 3, "character": 12 },
+                        "newName": "not a name",
+                    }),
+                ),
+            ]),
+            &mut output,
+        )
+        .expect("the server answers");
+
+    let messages = read_all(output);
+    let reply = messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request");
+
+    assert_eq!(reply["error"]["code"], -32602, "{reply}");
+    assert!(reply.get("result").is_none(), "{reply}");
 }
 
 /// `exit` ends the loop, and the messages after it are not read — the client has said it is done.

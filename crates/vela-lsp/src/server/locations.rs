@@ -1,5 +1,7 @@
 //! The two index queries: where a name is declared, and every place it is written.
 
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 use vela_span::{FileId, Span};
 
@@ -15,22 +17,7 @@ impl Server {
     /// One helper for both because they differ in which list they read — the declaration, or every
     /// occurrence — and not in how a position becomes an offset or a span becomes a location.
     pub(super) fn locations(&mut self, message: &Value, references: bool) -> Value {
-        let uri = string_at(message, &["params", "textDocument", "uri"]);
-        let Some(name) = self.open.get(&uri).cloned() else {
-            return Value::Null;
-        };
-        let Some(file) = self.session.file_named(&name) else {
-            return Value::Null;
-        };
-
-        let at = position::Position {
-            line: number_at(message, &["params", "position", "line"]),
-            character: number_at(message, &["params", "position", "character"]),
-        };
-        let Some(offset) = position::offset(self.session.sources(), file, at) else {
-            return Value::Null;
-        };
-        let Some(found) = symbols::at(&mut self.session, file, offset) else {
+        let Some(found) = self.target(message) else {
             return Value::Null;
         };
 
@@ -56,17 +43,75 @@ impl Server {
         json!(locations)
     }
 
+    /// The edit a rename would make, or `null` when it cannot be made safely.
+    ///
+    /// `null` covers the two ways that happens and the editor shows "cannot rename here" for both: the
+    /// offset names nothing this index knows, or one of the places the name is written cannot be
+    /// located precisely (`symbols::rename` refuses a partial edit).
+    pub(super) fn rename(&mut self, message: &Value) -> Value {
+        let Some(found) = self.target(message) else {
+            return Value::Null;
+        };
+        let Some(spans) = symbols::rename(&mut self.session, &found.named) else {
+            return Value::Null;
+        };
+
+        // Grouped by file, which is the shape a workspace edit takes: one document's changes together,
+        // so an editor applies each file once and can leave files the rename did not touch alone.
+        let mut changes: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+        for (file, span) in spans {
+            let Some(uri) = self.uri_of(file) else {
+                continue;
+            };
+            let range = position::range(self.session.sources(), span);
+            changes.entry(uri).or_default().push(json!({
+                "range": {
+                    "start": { "line": range.start.line, "character": range.start.character },
+                    "end": { "line": range.end.line, "character": range.end.character },
+                },
+                "newText": string_at(message, &["params", "newName"]),
+            }));
+        }
+
+        if changes.is_empty() {
+            return Value::Null;
+        }
+        json!({ "changes": changes })
+    }
+
+    /// What the offset in a request's position names, if anything.
+    ///
+    /// Shared by the three index capabilities: each of them starts by asking what the editor is pointing
+    /// at, and only what they do with the answer differs.
+    pub(super) fn target(&mut self, message: &Value) -> Option<symbols::Found> {
+        let uri = string_at(message, &["params", "textDocument", "uri"]);
+        let name = self.open.get(&uri).cloned()?;
+        let file = self.session.file_named(&name)?;
+
+        let at = position::Position {
+            line: number_at(message, &["params", "position", "line"]),
+            character: number_at(message, &["params", "position", "character"]),
+        };
+        let offset = position::offset(self.session.sources(), file, at)?;
+        symbols::at(&mut self.session, file, offset)
+    }
+
+    /// The URI of a file, addressed the way the editor addresses it.
+    fn uri_of(&self, file: FileId) -> Option<String> {
+        let name = self.session.sources().get(file)?.name().to_string();
+        Some(uri::of(&self.source, &name))
+    }
+
     /// One location: a file, addressed the way the editor addresses it, and a range.
     ///
     /// The URI is rebuilt from the source root rather than remembered from `didOpen`, because
     /// goto-definition lands in files nobody has opened — which is the whole point of it.
     fn location(&self, file: FileId, span: Span) -> Option<Value> {
-        let sources = self.session.sources();
-        let name = sources.get(file)?.name().to_string();
-        let range = position::range(sources, span);
+        let uri = self.uri_of(file)?;
+        let range = position::range(self.session.sources(), span);
 
         Some(json!({
-            "uri": uri::of(&self.source, &name),
+            "uri": uri,
             "range": {
                 "start": { "line": range.start.line, "character": range.start.character },
                 "end": { "line": range.end.line, "character": range.end.character },

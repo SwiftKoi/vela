@@ -243,14 +243,16 @@ fn terminates(statements: &[Stmt]) -> bool {
 fn transfers(statements: &[Stmt], out: &mut Vec<LabelRef>) {
     for statement in statements {
         match statement {
+            // The *target's* span rather than the statement's: a diagnostic about an undefined label
+            // should underline the label, and a rename should replace it without deleting the keyword.
             Stmt::Jump(jump) => out.push(LabelRef {
                 path: jump.target.clone(),
-                span: jump.span,
+                span: jump.target_span,
                 transfer: Transfer::Jump,
             }),
             Stmt::Call(call) => out.push(LabelRef {
                 path: call.target.clone(),
-                span: call.span,
+                span: call.target_span,
                 transfer: Transfer::Call,
             }),
             Stmt::Menu(menu) => {

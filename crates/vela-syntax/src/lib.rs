@@ -32,6 +32,7 @@ mod tests;
 
 pub use lex::cursor::Cursor;
 pub use lex::indent::{IndentAction, IndentError, IndentStack};
+pub use lex::is_name;
 pub use lex::lexer::{LexResult, lex};
 pub use lex::token::{Keyword, Token, TokenKind};
 pub use lex::{Comment, Pragma};

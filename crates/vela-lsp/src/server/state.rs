@@ -85,6 +85,7 @@ impl Server {
                 // advertised capability is one an editor calls.
                 "definitionProvider": true,
                 "referencesProvider": true,
+                "renameProvider": true,
             },
             "serverInfo": { "name": "vela-lsp", "version": env!("CARGO_PKG_VERSION") },
         })

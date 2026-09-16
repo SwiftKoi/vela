@@ -9,3 +9,4 @@ pub mod token;
 mod lexeme;
 
 pub use comment::{Comment, Pragma};
+pub use lexeme::is_name;

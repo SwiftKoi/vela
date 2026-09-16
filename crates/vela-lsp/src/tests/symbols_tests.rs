@@ -5,8 +5,56 @@
 //! lookup: with one module, every path resolves whether or not the qualifier is understood.
 
 use vela_compile::Session;
+use vela_hir::DefKind;
 
-use crate::symbols::{Named, at, declaration, occurrences};
+use crate::symbols::{Named, at, declaration, occurrences, rename};
+
+/// Every kind of declaration, one per `DefKind`.
+///
+/// The names are chosen so that each one is a *prefix of something else later in the line* as often as
+/// possible — `bg.room` before `@"art/room.png"`, `turns_word` before its parameter — because that is
+/// what a search for the name would find first if it started anywhere but after the keyword.
+const ALL_KINDS: &str = "\
+const MAX_TRUST: int = 1
+
+default trust: int = 0
+
+struct Route:
+    name: str
+
+enum Ending:
+    warm
+    cold
+
+character ren:
+    name = \"Ren\"
+
+image bg.room = @\"art/room.png\"
+
+transform slide_in:
+    x = 0.0
+
+screen pause:
+    layer ui
+    text \"hi\"
+
+style body:
+    color = 0xffffff
+
+theme dusk:
+    color bg = 0x10121a
+
+effect rand.int(low: int, high: int) -> int
+
+fn rank(e: Ending) -> int:
+    return 1
+
+label start:
+    return
+";
+
+/// One per `DefKind`, so a kind added without a fixture line fails the count.
+const ALL_KIND_COUNT: usize = 13;
 
 /// A two-module session, and the ids of its files.
 ///
@@ -97,8 +145,12 @@ fn the_declaration_is_in_the_other_file() {
         file, forest_file,
         "the label is declared in the forest module"
     );
-    let text = &FOREST[span.start() as usize..span.end() as usize];
-    assert!(text.starts_with("label clearing:"), "{text:?}");
+    // The *name's* span, not the declaration's: a goto that landed on the keyword would put the caret
+    // one word to the left of what the reader asked about, and a rename would delete the word `label`.
+    assert_eq!(
+        &FOREST[span.start() as usize..span.end() as usize],
+        "clearing"
+    );
 }
 
 /// Both directions at once: the unqualified `jump main.tally` in the other module resolves back into
@@ -119,8 +171,85 @@ fn an_unqualified_transfer_stays_in_its_own_module() {
         }
     );
     assert_eq!(file, main_file);
-    let text = &MAIN[span.start() as usize..span.end() as usize];
-    assert!(text.starts_with("label tally:"), "{text:?}");
+    assert_eq!(&MAIN[span.start() as usize..span.end() as usize], "tally");
+}
+
+/// The spans a rename would replace cover *the name and nothing else*, which is the difference between
+/// renaming a label and deleting the word `jump`.
+#[test]
+fn a_rename_replaces_every_name_exactly() {
+    let (mut session, _, forest_file) = project();
+    let offset = offset_of(FOREST, "call main.tally") + 5;
+    let found = at(&mut session, forest_file, offset).expect("a call names a label");
+
+    let spans = rename(&mut session, &found.named).expect("this name can be renamed");
+    assert_eq!(
+        spans.len(),
+        3,
+        "the declaration and both references: {spans:?}"
+    );
+
+    for (file, span) in spans {
+        let source = session.sources().file(file).text();
+        assert_eq!(
+            &source[span.start() as usize..span.end() as usize],
+            "tally",
+            "a rename span that is not the name would rewrite something else"
+        );
+    }
+}
+
+/// A declaration's own name is recovered from its first line, for every kind of declaration there is.
+///
+/// This is the test that makes the recovery trustworthy rather than plausible: it is text position
+/// arithmetic, and a kind whose keyword is longer than expected — `character`, `transform` — would be
+/// off by the difference. A name span in the syntax tree is the better fix, and until then this is the
+/// only thing standing between a rename and a file that no longer parses.
+#[test]
+fn a_declaration_name_is_recovered_for_every_kind() {
+    let mut session = Session::new();
+    let file = session.set_file("all.vela", ALL_KINDS);
+
+    let names: Vec<(String, DefKind)> = session
+        .symbols(file)
+        .module
+        .definitions
+        .values()
+        .map(|definition| (definition.name.clone(), definition.kind))
+        .collect();
+
+    assert_eq!(
+        names.len(),
+        ALL_KIND_COUNT,
+        "the fixture declares every kind"
+    );
+    for (name, kind) in names {
+        let named = Named::Definition {
+            module: vela_hir::ModuleName::new("all"),
+            name: name.clone(),
+        };
+        let (_, span) = occurrences(&mut session, &named)
+            .first()
+            .copied()
+            .unwrap_or_else(|| panic!("no declaration found for {kind:?} `{name}`"));
+
+        assert_eq!(
+            &ALL_KINDS[span.start() as usize..span.end() as usize],
+            name,
+            "the recovered name span for a {kind:?} is wrong"
+        );
+    }
+}
+
+/// A rename refuses what it cannot place exactly, rather than editing part of it: a `use` names a
+/// module, and a module is not a name inside one file.
+#[test]
+fn a_rename_of_something_that_is_not_a_name_refuses() {
+    let (mut session, main_file, _) = project();
+    let offset = offset_of(MAIN, "chapters.forest");
+    let found = at(&mut session, main_file, offset).expect("a use names a module");
+
+    assert_eq!(rename(&mut session, &found.named), None);
 }
 
 /// References are the union of both directions, and the declaration is among them: an editor that

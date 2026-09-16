@@ -11,19 +11,23 @@ impl Parser<'_> {
     pub(crate) fn parse_jump(&mut self) -> Stmt {
         let start = self.span();
         self.bump();
-        let (target, _) = self
+        let (target, target_span) = self
             .parse_path("a label")
             .unwrap_or_else(|| (Vec::new(), start));
         let span = start.to(self.prev_span());
         self.end_statement();
-        Stmt::Jump(JumpStmt { span, target })
+        Stmt::Jump(JumpStmt {
+            span,
+            target,
+            target_span,
+        })
     }
 
     /// Parses `call target [with transition]`.
     pub(crate) fn parse_call(&mut self) -> Stmt {
         let start = self.span();
         self.bump();
-        let (target, _) = self
+        let (target, target_span) = self
             .parse_path("a label")
             .unwrap_or_else(|| (Vec::new(), start));
         let transition = self.parse_with_clause();
@@ -32,6 +36,7 @@ impl Parser<'_> {
         Stmt::Call(CallStmt {
             span,
             target,
+            target_span,
             transition,
         })
     }

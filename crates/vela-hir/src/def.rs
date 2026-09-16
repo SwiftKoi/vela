@@ -34,6 +34,29 @@ pub enum DefKind {
 }
 
 impl DefKind {
+    /// The word that introduces this kind's declaration: `label`, `fn`, `default`, …
+    ///
+    /// The keyword itself rather than a phrase about it: a tool that has a declaration's span but not
+    /// its name's can use this to find the name, because the name is what follows the keyword.
+    #[must_use]
+    pub fn keyword(self) -> &'static str {
+        match self {
+            Self::Label => "label",
+            Self::Function => "fn",
+            Self::Effect => "effect",
+            Self::Constant => "const",
+            Self::Default => "default",
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Character => "character",
+            Self::Image => "image",
+            Self::Transform => "transform",
+            Self::Screen => "screen",
+            Self::Style => "style",
+            Self::Theme => "theme",
+        }
+    }
+
     /// The words a diagnostic uses for this kind.
     ///
     /// Worth having as a method rather than an inline string: the same phrase appears in

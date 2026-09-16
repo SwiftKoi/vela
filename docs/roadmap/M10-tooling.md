@@ -56,15 +56,23 @@ are. `crates/vela-cli/tests/lsp_stdio.rs` spawns the real binary and drives it t
 which is what covers the half that only exists in a real run: that the process starts, that the
 protocol really goes over the pipes, and that nothing else writes to stdout and corrupts the stream.
 
-**Two of the five features answer, and the rest are still absent on purpose.** Goto-definition and
-references read a symbol index (`symbols.rs`) built from what the compiler already knows: `vela-hir`
-records every definition with its span and every `jump`/`call` with its own, and resolution goes
-through `target_of` — the one function that decides what a reference points at — so the editor cannot
-disagree with the checker about where a `jump` lands. Both work across a module boundary, which is the
-case the exit criterion names. Hover, completion, and rename stay out of the capabilities until they
-answer: hover and completion need the type and the scope at an offset, which is a question
-`vela-types` has to answer, and rename needs a name's own span rather than its statement's, which is a
-syntax-tree change rather than a language-server one.
+**Three of the five features answer.** Goto-definition, references, and rename read a symbol index
+(`symbols.rs`) built from what the compiler already knows: `vela-hir` records every definition with its
+span and every `jump`/`call` with its target's, and resolution goes through `target_of` — the one
+function that decides what a reference points at — so the editor cannot disagree with the checker about
+where a `jump` lands. All three work across a module boundary, which is the case the exit criterion
+names: renaming a label edits the declaration and every reference through it, in both files.
+
+Two things had to become precise for rename, and both were worth having on their own. `JumpStmt` now
+records its target's span — the parser had it and threw it away — so a reference is a *range* a tool
+may replace rather than a whole statement it could only jump to; and a reference's span is the last
+segment of its path, because `jump main.tally` renames to `jump main.glade`, not to a bare name that
+would move the reference to another module. A declaration's own name is still *recovered* from its
+first line (the tree records `label start:` as one span), which is text arithmetic and is pinned by a
+test over every `DefKind`; recording name spans in the tree is the better fix and the next one.
+
+Hover and completion stay out of the capabilities until they answer: both need the type and the scope
+at an offset, which is a question `vela-types` has to answer rather than something this crate can infer.
 
 Building this found a bug worth recording, because it is the class the parity criterion exists for.
 Documents arrive as URIs, and the first version named them relative to the *project* root — so a

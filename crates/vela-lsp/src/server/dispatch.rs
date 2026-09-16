@@ -59,6 +59,18 @@ impl Server {
                 let locations = self.locations(message, true);
                 self.respond(output, id, locations)?;
             }
+            "textDocument/rename" => {
+                let new_name = string_at(message, &["params", "newName"]);
+                // Checked here rather than left to the checker afterwards: a rename that writes a name
+                // the language cannot read back would leave the file unparseable, and the author would
+                // be looking at a syntax error they did not write.
+                if !vela_syntax::is_name(&new_name) {
+                    self.respond_error(output, id, -32602, &format!("`{new_name}` is not a name"))?;
+                } else {
+                    let edit = self.rename(message);
+                    self.respond(output, id, edit)?;
+                }
+            }
             // A request for something this server does not do is answered as *not found*, which is the
             // truthful answer: the capability was not advertised, and saying so is better than silence,
             // which an editor waits on until it times out.
