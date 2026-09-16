@@ -20,6 +20,10 @@ vela-span.workspace = true
 vela-syntax = { version = "0.1.0", path = "../vela-syntax" }
 vela-compile.workspace = true
 vela-diag.workspace = true
+# For the symbol index: definitions and label references with their spans, and `target_of`, the one
+# function that decides what a reference points at. Reusing it is the point — a language server with
+# its own resolution rule would be a second answer to a question that already has one.
+vela-hir.workspace = true
 vela-ui.workspace = true
 
 [lints]

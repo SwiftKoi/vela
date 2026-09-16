@@ -2119,6 +2119,7 @@ dependencies = [
  "serde_json",
  "vela-compile",
  "vela-diag",
+ "vela-hir",
  "vela-span",
  "vela-syntax",
  "vela-ui",

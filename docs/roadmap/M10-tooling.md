@@ -56,12 +56,22 @@ are. `crates/vela-cli/tests/lsp_stdio.rs` spawns the real binary and drives it t
 which is what covers the half that only exists in a real run: that the process starts, that the
 protocol really goes over the pipes, and that nothing else writes to stdout and corrupts the stream.
 
-**What is deliberately not declared.** Hover, completion, goto-definition, references, and rename are
-absent from the capabilities, and that is a claim rather than an omission: an editor told a capability
-exists will call it, and a capability that answers nothing reads as broken rather than as missing. They
-are the rest of item 2, and four of the six exit criteria — including the newcomer walkthrough — wait
-on them. Next: the indexes those features need (a node at an offset, the labels in scope), which is the
-first work in this milestone that *adds* analysis rather than routing it.
+**Two of the five features answer, and the rest are still absent on purpose.** Goto-definition and
+references read a symbol index (`symbols.rs`) built from what the compiler already knows: `vela-hir`
+records every definition with its span and every `jump`/`call` with its own, and resolution goes
+through `target_of` — the one function that decides what a reference points at — so the editor cannot
+disagree with the checker about where a `jump` lands. Both work across a module boundary, which is the
+case the exit criterion names. Hover, completion, and rename stay out of the capabilities until they
+answer: hover and completion need the type and the scope at an offset, which is a question
+`vela-types` has to answer, and rename needs a name's own span rather than its statement's, which is a
+syntax-tree change rather than a language-server one.
+
+Building this found a bug worth recording, because it is the class the parity criterion exists for.
+Documents arrive as URIs, and the first version named them relative to the *project* root — so a
+session in the editor saw the module `src.main` where `vela check` saw `main`, and every cross-module
+reference in the editor would have failed to resolve while the command line resolved them all. The
+server now names files relative to the project's `src/`, the same rule `vela check` uses, and the
+integration test runs against a real project so that rule is exercised rather than assumed.
 
 **Input from the Ren'Py reference.** Ren'Py's `developer_tools` and `cli` pages are the closest
 thing to a spec for this milestone, and four of its tools are worth copying rather than inventing:

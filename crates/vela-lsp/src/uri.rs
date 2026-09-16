@@ -34,6 +34,38 @@ pub fn name(root: &str, path: &str) -> String {
     }
 }
 
+/// The URI of a name within a workspace.
+///
+/// A location in a *closed* document has to be addressable — goto-definition lands in a file the editor
+/// has not opened, and `jump chapters.street.arrive` is exactly that — so the name is put back together
+/// with the root it was taken from. The result is the same URI the editor would have sent for that file,
+/// which is what makes the round trip through [`name`] a round trip.
+#[must_use]
+pub fn of(root: &str, name: &str) -> String {
+    format!(
+        "file://{}/{}",
+        encode(root.trim_end_matches('/')),
+        encode(name)
+    )
+}
+
+/// Percent-encodes everything a URI cannot carry literally.
+///
+/// Conservative — a path segment may be almost anything, so anything outside the unreserved set is
+/// escaped — which is also what makes it the inverse of [`decode`] for the parts that matter.
+fn encode(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~' | b'/') {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
+}
+
 /// Percent-decodes a URI path, leaving anything that is not a valid escape as written.
 ///
 /// Lenient on purpose: a stray `%` in a filename is a file that exists, and refusing the whole document

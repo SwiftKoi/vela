@@ -60,7 +60,11 @@ fn replies(messages: &[Value]) -> Vec<Value> {
     server
         .serve(&mut framed(messages), &mut output)
         .expect("the server answers");
+    read_all(output)
+}
 
+/// Every message in a stream of framed bytes.
+fn read_all(output: Vec<u8>) -> Vec<Value> {
     let mut reader = Cursor::new(output);
     let mut out = Vec::new();
     while let Some(message) = transport::read(&mut reader).expect("read a reply") {
@@ -101,19 +105,174 @@ fn initialize_answers_with_the_capabilities_it_actually_has() {
     assert_eq!(capabilities["textDocumentSync"], 1);
     assert_eq!(capabilities["positionEncoding"], "utf-16");
 
-    // And nothing it does not: an advertised capability is one an editor calls.
-    for absent in [
-        "hoverProvider",
-        "completionProvider",
-        "definitionProvider",
-        "referencesProvider",
-        "renameProvider",
-    ] {
+    // What it does: the two features the symbol index answers.
+    assert_eq!(capabilities["definitionProvider"], true);
+    assert_eq!(capabilities["referencesProvider"], true);
+
+    // And nothing it does not: an advertised capability is one an editor calls. Hover and completion
+    // need the type and scope at an offset; rename needs a name's own span rather than its statement's.
+    for absent in ["hoverProvider", "completionProvider", "renameProvider"] {
         assert!(
             capabilities.get(absent).is_none(),
             "`{absent}` is advertised but not implemented"
         );
     }
+}
+
+/// Two modules, so the index has a cross-module `jump` to follow.
+///
+/// Named without a `src/` prefix because the workspace in these tests has no directory to check: the
+/// server's rule is "names are relative to `src/` when the project has one" (`source_root`), and the
+/// integration test is where a real project exercises that half.
+const MAIN: &str = "\
+use chapters.forest as forest
+
+label start:
+    jump forest.clearing
+";
+
+const FOREST: &str = "\
+label clearing:
+    \"Trees.\"
+    return
+";
+
+/// A server for that two-module workspace.
+fn cross_module() -> Server {
+    Server::new("/game", |_root: &str| {
+        let mut session = Session::new();
+        session.set_file("main.vela", MAIN);
+        session.set_file("chapters/forest.vela", FOREST);
+        session.set_entry("main.start");
+        session
+    })
+}
+
+/// A request about a position, framed the way an editor sends one.
+fn about_position(id: u32, method: &str, uri: &str, line: u32, character: u32) -> Value {
+    request(
+        id,
+        method,
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character },
+        }),
+    )
+}
+
+#[test]
+fn goto_definition_lands_in_another_module() {
+    let mut server = cross_module();
+    let mut output = Vec::new();
+    server
+        .serve(
+            &mut framed(&[
+                request(1, "initialize", json!({})),
+                notice(
+                    "textDocument/didOpen",
+                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
+                ),
+                // Line 3 is the `jump`, and column 12 is inside `forest.clearing`.
+                about_position(
+                    2,
+                    "textDocument/definition",
+                    "file:///game/main.vela",
+                    3,
+                    12,
+                ),
+            ]),
+            &mut output,
+        )
+        .expect("the server answers");
+
+    let messages = read_all(output);
+    let reply = messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request");
+
+    let locations = reply["result"].as_array().expect("a list of locations");
+    assert_eq!(locations.len(), 1, "{reply}");
+    assert_eq!(
+        locations[0]["uri"], "file:///game/chapters/forest.vela",
+        "the label lives in the other module"
+    );
+    assert_eq!(locations[0]["range"]["start"]["line"], 0);
+}
+
+/// References are the same walk, and the declaration is among them: an editor that renamed a label
+/// without its declaration would leave the project saying two different things.
+#[test]
+fn references_name_every_place_including_the_declaration() {
+    let mut server = cross_module();
+    let mut output = Vec::new();
+    server
+        .serve(
+            &mut framed(&[
+                request(1, "initialize", json!({})),
+                notice(
+                    "textDocument/didOpen",
+                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
+                ),
+                about_position(
+                    2,
+                    "textDocument/references",
+                    "file:///game/main.vela",
+                    3,
+                    12,
+                ),
+            ]),
+            &mut output,
+        )
+        .expect("the server answers");
+
+    let messages = read_all(output);
+    let reply = messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request");
+
+    let locations = reply["result"].as_array().expect("a list of locations");
+    let uris: Vec<&str> = locations
+        .iter()
+        .map(|location| location["uri"].as_str().unwrap_or(""))
+        .collect();
+
+    assert!(uris.contains(&"file:///game/main.vela"), "{uris:?}");
+    assert!(
+        uris.contains(&"file:///game/chapters/forest.vela"),
+        "{uris:?}"
+    );
+}
+
+/// A position that names nothing answers `null` rather than the enclosing label: an editor draws no
+/// goto arrow, which is honest, instead of jumping somewhere plausible.
+#[test]
+fn a_position_that_names_nothing_answers_null() {
+    let mut server = cross_module();
+    let mut output = Vec::new();
+    server
+        .serve(
+            &mut framed(&[
+                request(1, "initialize", json!({})),
+                notice(
+                    "textDocument/didOpen",
+                    json!({ "textDocument": { "uri": "file:///game/main.vela", "text": MAIN } }),
+                ),
+                // Line 0 is `use chapters.forest as forest`; column 1 is inside the keyword, which is
+                // not a name this index knows.
+                about_position(2, "textDocument/definition", "file:///game/main.vela", 1, 0),
+            ]),
+            &mut output,
+        )
+        .expect("the server answers");
+
+    let messages = read_all(output);
+    let reply = messages
+        .iter()
+        .find(|message| message["id"] == 2)
+        .expect("a reply to the request");
+    assert!(reply["result"].is_null(), "{reply}");
 }
 
 #[test]

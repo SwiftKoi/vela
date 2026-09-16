@@ -57,6 +57,26 @@ fn a_path_under_the_root_becomes_a_name_relative_to_it() {
     );
 }
 
+/// A name becomes a URI again, spaces and all: goto-definition lands in files the editor has never
+/// opened, and it has to address them the same way the editor would.
+#[test]
+fn a_name_becomes_a_uri_under_the_root() {
+    assert_eq!(
+        uri::of("/home/nikita/game", "src/main.vela"),
+        "file:///home/nikita/game/src/main.vela"
+    );
+
+    let uri = uri::of("/home/nikita/my game", "src/a b.vela");
+    assert_eq!(uri, "file:///home/nikita/my%20game/src/a%20b.vela");
+    assert_eq!(
+        uri::name(
+            "/home/nikita/my game",
+            &uri::path(&uri).expect("a file uri")
+        ),
+        "src/a b.vela"
+    );
+}
+
 /// A document from outside the workspace keeps its own path: a name is better than a refusal, because
 /// the file still has to be checked.
 #[test]
