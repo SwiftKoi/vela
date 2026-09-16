@@ -132,6 +132,26 @@ naming the line. `test` is a keyword; `run`, `advance`, `choose`, `expect`, and 
 names, so a story keeps all five as labels, variables, and functions — `LANGUAGE.md §7.6` records the
 trade, which `LANGUAGE.md §7.0` has four bug reports about making the other way.
 
+**What the runner needs, read off the machinery that already exists.** Four findings, recorded because
+each one changes the shape of the work and none is visible without reading the VM:
+
+1. `vela_vm::driver::run` drives a story *to completion*, which is what a game does and not what a test
+   does: `advance 4` means "answer four commands, then stop and assert", and `driver::replay` cannot be
+   asked to stop. So `vela-test` owns the step loop — `Vm::run`/`resume` with a pending answer, roughly
+   the twenty lines `drive` is built from — and the driver stays what it is good at.
+2. `Command::Menu` carries its `choices` with their text, so `choose "Explore"` is a lookup rather than a
+   convention, and a text that matches nothing is a failure that can print the options which *were*
+   offered. That is the honest version of "the script and the story stopped agreeing", and it is the
+   first thing a deliberately broken story can be made to fail on.
+3. An `expect` has to be evaluated by **the VM**, not by a second evaluator over the tree. The
+   expression is already typed (the checker does that now) and lowering already knows how to build code
+   for an expression, so the runner compiles each assertion as a function returning `bool` and calls it.
+   Writing a small interpreter in `vela-test` would be a second answer to "what does this expression
+   mean", and `visited(forest.river)` needs the world, which only the VM has.
+4. `driver::replay` is free determinism for a test: run it, keep the log, replay the log, assert the
+   world matches. `RUNTIME.md §4.1` promises exactly that, and a runner that never replays is a runner
+   that does not notice when the promise breaks.
+
 **Work items.**
 1. Formatter with the rules in `TOOLING.md §3`; `--check` and `--diff`.
 2. LSP server over the query database; the capability list in `TOOLING.md §4`.
