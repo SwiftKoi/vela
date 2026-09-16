@@ -2,8 +2,39 @@
 //!
 //! # Owns
 //!
-//! The .rpy parser, transpilation rules, the report generator.
+//! The `.rpy` reader, the transpilation rules, and the report of everything that was not
+//! translated.
 //!
 //! # Does not own
 //!
-//! Compiling the result (vela-compile).
+//! Compiling the result (`vela-compile`), or writing it — [`project`] plans a migration and
+//! [`Project::write`] performs it, so the rules can be tested without a filesystem.
+//!
+//! # The rule
+//!
+//! `TOOLING.md §8`: *"never silently mistranslate"*. A construct outside the supported set
+//! produces a [`Report`] entry naming the file, the line, the original text, and what to do
+//! about it — because a wrong automatic translation is worse than an explicit "port this by
+//! hand": it fails later, and it fails inside someone's save file.
+//!
+//! ```text
+//!   game/*.rpy ──rpy::read──► Node tree ──transpile──► .vela text
+//!                                 │
+//!                                 └──► Report (file:line + original + reason)
+//! ```
+
+mod error;
+mod expr;
+mod project;
+mod report;
+mod rpy;
+mod transpile;
+
+#[cfg(test)]
+mod tests;
+
+pub use error::MigrateError;
+pub use expr::{expression, literal_type, split_assignment, without_translation_call};
+pub use project::{Asset, Project, Source, project};
+pub use report::{Entry, Report};
+pub use rpy::{Kind, Node, read};

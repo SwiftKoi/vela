@@ -41,4 +41,12 @@ files = [
     # that an unimplemented command is *refused explicitly* (the fall-through arm), which the
     # match makes visible in one place.
     "crates/vela-debug/src/server/dispatch.rs",
+
+    # The transpiler's dispatch over the kinds of Ren'Py line it can read. Not dispatch anything
+    # extends: the `Kind` enum is the reader's own closed vocabulary, and every arm is "here is
+    # what this line of Ren'Py becomes in Vela". Exhaustiveness is the property that matters, and
+    # it is what makes an unfinished arm a compile error rather than a line that silently stops
+    # migrating — which is the one failure this crate exists to prevent. A registry would replace
+    # that with a table whose omissions only surface in someone's ported game.
+    "crates/vela-migrate/src/transpile.rs",
 ]
