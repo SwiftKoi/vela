@@ -217,12 +217,27 @@ Capabilities:
 `vela test --update` re-blesses goldens; CI fails on any unblessed change, so a golden diff
 is always reviewed.
 
-> **Implemented so far (M8).** Only the **accessibility sweep** exists — `vela test --a11y`
-> walks every screen's focus order and *fails* a focusable node with nothing to announce, which
-> is `W4010` enforced as a gate rather than reported as a warning. It is the M7 exit criterion
-> *"every screen passes the `--a11y` focus-order sweep"*. The scripted-input, assertion, golden,
-> and locale modes are M10's; `vela test` without `--a11y` says so rather than pretending to run
-> them.
+> **Implemented so far (M10).** `vela test` runs a project's `test` items headless, and `--a11y`
+> adds the M7 sweep beside them (*"every screen passes the `--a11y` focus-order sweep"*) — the two are
+> different subjects with different verdicts, which is why the sweep stays a flag.
+>
+> Running a suite is `vela-test`, and its shape is worth knowing before reading it. A **step loop**
+> rather than `driver::run`: a script answers a bounded number of commands and then asserts, where a
+> game plays to the end. **Assertions are compiled**: each `expect` and `choose` becomes a nullary
+> function appended to the file it was written in, and the runner reads its value out of the *live*
+> world with `Vm::call` — so `visited(forest.river)` needs no second evaluator, and the checker types
+> the assertion before it can fail. **A `choose` means the next choice**, not the next command: a
+> player hears the dialogue on the way to it, and a text that matches no option fails with the options
+> that *were* offered. **`cover labels` drives the run to its end**, because "every label" is a claim
+> about a whole playthrough; the labels are recorded by the machine (`Vm::entered_labels`), which is
+> observational state and deliberately not part of a save.
+>
+> **Not yet.** Golden frames (`--update`, `--seed`) and the locale sweep are named and unimplemented:
+> rendering at a scripted point and comparing to a stored image is `vela-render`'s to produce, and a
+> locale sweep needs the text pipeline rather than the story runner. `cover variants` needs the machine
+> to record which enum variants a `match` chose, which nothing does — so a directive this version cannot
+> honour is reported as a *note* on the test rather than skipped, because a test that checks less than it
+> says is worse than one that refuses to run.
 
 ## 6. Debugger (DAP)
 

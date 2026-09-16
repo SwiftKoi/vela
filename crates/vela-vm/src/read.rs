@@ -11,7 +11,7 @@
 use vela_world::{Value, World};
 
 use crate::fault::Fault;
-use crate::machine::{BodyRef, Vm};
+use crate::machine::{BodyRef, Frame, Vm};
 
 impl Vm {
     /// Calls a function and returns what it produced, leaving the story where it was.
@@ -54,11 +54,24 @@ impl Vm {
             });
         }
 
-        let depth = self.frames.len();
+        // A read has no *caller*, and a function frame returning to nothing is a fault in this machine:
+        // it means something called a function and is waiting for a value that will never come
+        // (`Vm::leave`). So when nothing is running — the story has ended, which is exactly where a test
+        // asserts about the ending — a frame goes below the call to stand in for the caller that is not
+        // there. It is never executed: the loop below stops the moment the call returns.
+        if self.frames.is_empty() && !self.module.labels.is_empty() {
+            self.frames.push(Frame {
+                body: BodyRef::Label(0),
+                ip: 0,
+                base: self.stack.len(),
+            });
+        }
+
+        let floor = self.frames.len();
         let stack = self.stack.len();
         self.enter(BodyRef::Function(u32::try_from(index).unwrap_or(u32::MAX)))?;
 
-        while self.frames.len() > depth {
+        while self.frames.len() > floor {
             if self.execute(world)?.is_some() {
                 return Err(Fault::NotAValue {
                     name: name.to_string(),

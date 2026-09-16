@@ -114,6 +114,7 @@ cargo run --release -p xtask -- budget   # startup and frame time, against xtask
 cargo run -p vela-cli -- --version
 cargo run -p vela-diag --example render_demo   # see a rendered diagnostic
 vela lsp examples/standard                     # the language server, on stdin and stdout
+vela test examples/standard                    # the suite, headless
 ```
 
 `docs/guides/lsp-walkthrough.md` walks through the language server in an editor — hover, completion,

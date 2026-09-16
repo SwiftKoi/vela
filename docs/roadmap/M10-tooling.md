@@ -152,6 +152,31 @@ each one changes the shape of the work and none is visible without reading the V
    world matches. `RUNTIME.md §4.1` promises exactly that, and a runner that never replays is a runner
    that does not notice when the promise breaks.
 
+**`vela test` runs a suite, and the criterion it was asked for is met by a broken story.** Scripted
+input, world assertions, and coverage of the labels a run reaches, all headless: `vela-test` owns a step
+loop over `vela-vm`'s `Session` (a test answers a bounded number of commands and then asserts; `driver::run`
+plays to the end), and each `expect`/`choose` is **compiled** — a nullary function appended to the file it
+was written in, read out of the live world with `Vm::call`. That is what keeps one answer to "what does
+this expression mean", and it means the checker types an assertion before it can fail.
+
+The decisions worth keeping are about *what a script means*. **A `choose` means the next choice, not the
+next command**: `run; choose "Back inside"` works whatever the story says on the way there, which is the
+difference between a test about the story and a test about the presentation. `advance` is the directive
+that counts commands, and a `cover` drives the run to its end, because "every label" is a claim about a
+whole playthrough. And a directive this version cannot honour — `cover variants`, today — is reported as a
+note on the test rather than skipped: a test that checks less than it says is worse than one that refuses.
+
+**Writing it found a fault in the machine.** Reading a value out of a *finished* story failed with
+"there is no function", which is `leave` refusing a function frame that returns to nothing — right for
+execution, because something called it and is waiting, and wrong for a read, because a read is the first
+caller that is not a frame. The runner's most natural place to assert is after the story ends, so this was
+the first thing that broke. `Vm::call` now puts a stand-in frame below the read, never executed, and the
+test that would have caught it is in `crates/vela-test/src/tests.rs`.
+
+The milestone's demo is half runnable: `vela test` on `examples/standard` is green (two tests over all
+seven labels in three modules, including a `cover labels` that would fail if any of them stopped being
+reached). `vela analyze` is next, and the demo line in the README is waiting for it.
+
 **Work items.**
 1. Formatter with the rules in `TOOLING.md §3`; `--check` and `--diff`.
 2. LSP server over the query database; the capability list in `TOOLING.md §4`.
@@ -197,6 +222,9 @@ that otherwise answers honestly.
       canonical files; idempotence and re-parsing are pinned by `vela-syntax/tests/format_roundtrip.rs`)
 - [ ] `vela test` runs a suite headless in CI and fails a deliberately broken story
 - [ ] `vela analyze --format json` output is deterministic across runs (diffed in CI)
+- [x] `vela test` runs a suite headless and fails a deliberately broken story (`crates/vela-cli`'s
+      `runner_tests.rs` breaks one three ways: a false assertion, a choice nothing offers, and a menu
+      the script never answers)
 - [x] A newcomer can navigate the fixture using only LSP features (documented walkthrough:
       `docs/guides/lsp-walkthrough.md`, every step of it a test)
 - [ ] **Demo:** `vela test && vela analyze` (the LSP walkthrough is in the README)

@@ -2059,6 +2059,7 @@ dependencies = [
  "vela-bytecode",
  "vela-compile",
  "vela-diag",
+ "vela-hir",
  "vela-host",
  "vela-lsp",
  "vela-migrate",
@@ -2206,9 +2207,13 @@ dependencies = [
 name = "vela-test"
 version = "0.1.0"
 dependencies = [
+ "vela-bytecode",
  "vela-diag",
- "vela-replay",
+ "vela-hir",
+ "vela-mir",
  "vela-span",
+ "vela-syntax",
+ "vela-types",
  "vela-vm",
  "vela-world",
 ]

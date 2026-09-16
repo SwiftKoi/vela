@@ -10,11 +10,17 @@ license.workspace = true
 rank = 9
 
 [dependencies]
-vela-span.workspace = true
-vela-vm.workspace = true
-vela-replay.workspace = true
-vela-world.workspace = true
+vela-bytecode.workspace = true
 vela-diag.workspace = true
+vela-span.workspace = true
+vela-syntax.workspace = true
+vela-vm.workspace = true
+vela-world.workspace = true
+
+[dev-dependencies]
+vela-hir.workspace = true
+vela-mir.workspace = true
+vela-types.workspace = true
 
 [lints]
 workspace = true

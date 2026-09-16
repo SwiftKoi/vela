@@ -129,3 +129,24 @@ label ending:
             ren "The room stayed cold."
     "That was the first of [nights] nights."
     return
+
+# Tests for this story, beside the state they assert about (`TOOLING.md §5`): the same files, the same
+# compiler, the same formatter, and one language. `vela test` runs them headless — no window, no
+# display — and each one drives the real VM down one path, so a test is a playthrough rather than a
+# simulation of one.
+#
+# They live in *this* module because `trust` and `nights` are this module's `default`s: a value in
+# another module is `E2005`, so an assertion about state belongs with the state.
+
+test "the street goes back inside, and the hub counts it":
+    run
+    choose "Back inside"
+    cover labels
+    expect trust == 1
+    expect nights == 1
+
+test "the other road arrives the same place":
+    run
+    choose "Further on"
+    cover labels
+    expect nights == 1
