@@ -8,6 +8,7 @@ pub mod diag_codes;
 pub mod exemptions;
 pub mod facade;
 pub mod file_size;
+pub mod format;
 pub mod layers;
 pub mod registries;
 pub mod scripts;

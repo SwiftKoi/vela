@@ -7,7 +7,7 @@
 
 use vela_span::Span;
 
-use crate::lex::Comment;
+use crate::lex::{Comment, Pragma};
 
 /// One indentation level, per `LANGUAGE.md §1`.
 const INDENT: &str = "    ";
@@ -143,23 +143,66 @@ impl<'a> Writer<'a> {
     /// Reproduces the source a statement or item covers, as written.
     ///
     /// What `# fmt: off` asks for: the author has said this region is not the formatter's to lay
-    /// out, and the only faithful answer is the text itself.
+    /// out, and the faithful answer is the text itself.
+    ///
+    /// *As written* means the region's own layout, relative to its first line — not its absolute
+    /// column. The first line lands at the indent the block calls for, and every line under it moves
+    /// by the same amount. Leaving the rest where they were would be worse than reformatting them:
+    /// indentation is structure in this language, so a region whose first line moved and whose body
+    /// did not would nest differently than its author wrote it. Nothing moves when the file is
+    /// already canonical, which is the case a pragma is normally written in.
     pub(crate) fn verbatim(&mut self, span: Span) {
         let text = self
             .src
             .get(span.start() as usize..span.end() as usize)
             .unwrap_or("");
-        let mut lines = text.lines();
+        let source = indent_of_line(self.src, span.start() as usize);
+        let canonical = self.level * INDENT.len();
 
+        let mut lines: Vec<&str> = text.lines().collect();
+        // A statement's span ends at the next *token*, so the slice's last "line" is usually just the
+        // indentation in front of that token. Emitting it adds a line — and one more on every run,
+        // since the next run copies the line the last one added. Formatting a region twice is the
+        // only way to see it, which is why the test formats twice.
+        if lines.last().is_some_and(|line| line.trim().is_empty()) {
+            lines.pop();
+        }
+
+        let mut lines = lines.into_iter();
         if let Some(first) = lines.next() {
             let first = first.to_string();
             self.line(&first);
         }
         for line in lines {
-            let line = line.to_string();
-            self.raw(&line);
+            let indent = leading_whitespace(line);
+            let moved = canonical as isize + (indent as isize - source as isize);
+            let body = line.get(indent..).unwrap_or("");
+            let shifted = format!("{}{body}", " ".repeat(moved.max(0) as usize));
+            self.raw(&shifted);
         }
-        self.note(span.end());
+
+        // The copy already contains whatever comments were in it — and a statement's span reaches
+        // past a comment on the next line, because it ends at the next *token* and a comment is not
+        // one. Leaving the cursor where it was prints that comment twice: once here, once when the
+        // cursor arrives. Found by formatting a region twice, which is the only way to see it.
+        self.skip_comments_until(span.end());
+
+        // The cursor goes just past the region's last *text*, not past its span. The span ends at
+        // the next token, which is already beyond the line break that follows the region — so
+        // measuring from there would hide a blank line the author wrote after it, and re-indenting
+        // would silently close up the gap.
+        self.note(span.start() + text.trim_end().len() as u32);
+    }
+
+    /// Moves the comment cursor past every comment before `end`, without writing any of them.
+    fn skip_comments_until(&mut self, end: u32) {
+        while self
+            .comments
+            .get(self.written)
+            .is_some_and(|comment| comment.span.start() < end)
+        {
+            self.written += 1;
+        }
     }
 
     /// Whether `offset` falls inside a `# fmt: off` region.
@@ -191,9 +234,9 @@ fn regions(src: &str, comments: &[Comment]) -> Vec<(usize, usize)> {
     let mut open: Option<usize> = None;
 
     for comment in comments {
-        match comment.text.trim() {
-            "fmt: off" if open.is_none() => open = Some(comment.span.end() as usize),
-            "fmt: on" => {
+        match comment.pragma() {
+            Some(Pragma::Off) if open.is_none() => open = Some(comment.span.end() as usize),
+            Some(Pragma::On) => {
                 if let Some(start) = open.take() {
                     regions.push((start, comment.span.start() as usize));
                 }
@@ -205,6 +248,19 @@ fn regions(src: &str, comments: &[Comment]) -> Vec<(usize, usize)> {
         regions.push((start, src.len()));
     }
     regions
+}
+
+/// The whitespace a line starts with, in characters.
+fn leading_whitespace(line: &str) -> usize {
+    line.len() - line.trim_start_matches([' ', '\t']).len()
+}
+
+/// The `leading_whitespace` of the line that `offset` is on.
+fn indent_of_line(src: &str, offset: usize) -> usize {
+    let start = src[..offset.min(src.len())]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
+    src.get(start..).map_or(0, leading_whitespace)
 }
 
 /// Whether two offsets are separated by a blank line.

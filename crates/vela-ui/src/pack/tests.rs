@@ -140,7 +140,7 @@ fn operators() -> Vec<Expr> {
             rhs: Box::new(leaf()),
         })
         .collect();
-    for op in [UnOp::Neg, UnOp::Not] {
+    for op in [UnOp::Neg, UnOp::Not, UnOp::Bang] {
         exprs.push(Expr::Unary {
             span: span(),
             op,

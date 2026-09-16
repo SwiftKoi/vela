@@ -209,8 +209,10 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
         Expr::Bool { value, .. } => *value,
         Expr::Name { name, .. } => values.get(name).is_some_and(Value::truthy),
         Expr::Paren { inner, .. } => eval(inner, values),
+        // Both negations evaluate the same way: the tree already says where each binds, so all
+        // that is left here is the truth value.
         Expr::Unary {
-            op: UnOp::Not,
+            op: UnOp::Not | UnOp::Bang,
             operand,
             ..
         } => !eval(operand, values),

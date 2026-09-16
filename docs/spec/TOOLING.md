@@ -122,7 +122,11 @@ Rules:
 - Hex integer literals keep their radix, because colours are written that way (`LANGUAGE.md §1`);
   `_` separators are dropped as decoration.
 - A `# fmt: off` region is reproduced verbatim, and an unterminated `off` runs to the end of the
-  file. The `W4011` lint that makes such a region visible in review is not written yet.
+  file. The pragma is **linted** (`W4011`, reported by `vela check`) so that its use is visible in
+  review rather than discovered later; both `off` and `on` are reported, because an `on` with no
+  `off` above it does nothing at all and a warning is the cheapest way to find that out. The
+  comment-to-pragma rule has one definition, on `Comment::pragma` in `vela-syntax` — the formatter
+  and the lint read the same function, so they cannot disagree about whether a region was asked for.
 - Trailing commas in multi-line lists/maps/params: **not reachable yet**. Nothing the formatter
   emits is multi-line except a wrapped right-hand side, and a wrap never lands inside a list. The
   rule stays here for whatever first produces one.
@@ -142,8 +146,11 @@ each of these costs a diff and is what makes two authors' files converge:
 was, so printing it would replace the unparsable part with nothing — the one failure that looks like
 success. `vela fmt` reports the diagnostic and leaves the file alone.
 
-`vela fmt` writes the files it changes; `vela fmt --check` writes nothing and exits non-zero when
-any file would change, which is the form CI runs. `--diff` is not implemented yet.
+`vela fmt` writes the files it changes. `--check` writes nothing and exits non-zero when any file
+would change — naming them, which is the form CI runs — and `--diff` writes nothing and prints the
+change as a unified diff, for a reader who wants to see it before agreeing to it. Both exit non-zero
+when there is anything to do; asking for both at once is a usage error, because they answer
+different questions.
 
 The formatter is deterministic and the compiler never depends on formatting — so a file that
 fails `--check` is still compilable, and CI's `fmt --check` is a style gate, not a
@@ -210,12 +217,27 @@ Capabilities:
 `vela test --update` re-blesses goldens; CI fails on any unblessed change, so a golden diff
 is always reviewed.
 
-> **Implemented so far (M8).** Only the **accessibility sweep** exists — `vela test --a11y`
-> walks every screen's focus order and *fails* a focusable node with nothing to announce, which
-> is `W4010` enforced as a gate rather than reported as a warning. It is the M7 exit criterion
-> *"every screen passes the `--a11y` focus-order sweep"*. The scripted-input, assertion, golden,
-> and locale modes are M10's; `vela test` without `--a11y` says so rather than pretending to run
-> them.
+> **Implemented so far (M10).** `vela test` runs a project's `test` items headless, and `--a11y`
+> adds the M7 sweep beside them (*"every screen passes the `--a11y` focus-order sweep"*) — the two are
+> different subjects with different verdicts, which is why the sweep stays a flag.
+>
+> Running a suite is `vela-test`, and its shape is worth knowing before reading it. A **step loop**
+> rather than `driver::run`: a script answers a bounded number of commands and then asserts, where a
+> game plays to the end. **Assertions are compiled**: each `expect` and `choose` becomes a nullary
+> function appended to the file it was written in, and the runner reads its value out of the *live*
+> world with `Vm::call` — so `visited(forest.river)` needs no second evaluator, and the checker types
+> the assertion before it can fail. **A `choose` means the next choice**, not the next command: a
+> player hears the dialogue on the way to it, and a text that matches no option fails with the options
+> that *were* offered. **`cover labels` drives the run to its end**, because "every label" is a claim
+> about a whole playthrough; the labels are recorded by the machine (`Vm::entered_labels`), which is
+> observational state and deliberately not part of a save.
+>
+> **Not yet.** Golden frames (`--update`, `--seed`) and the locale sweep are named and unimplemented:
+> rendering at a scripted point and comparing to a stored image is `vela-render`'s to produce, and a
+> locale sweep needs the text pipeline rather than the story runner. `cover variants` needs the machine
+> to record which enum variants a `match` chose, which nothing does — so a directive this version cannot
+> honour is reported as a *note* on the test rather than skipped, because a test that checks less than it
+> says is worse than one that refuses to run.
 
 ## 6. Debugger (DAP)
 
@@ -248,6 +270,22 @@ Turns the compile-time story graph into human decisions.
 Output is deterministic and diffable, so `vela analyze --format json` can be tracked as a
 metric over time in CI — "our dead-end count went up by 3 this week."
 
+> **Implemented so far (M10).** `vela analyze [path] [--format text|json|dot]` reports the story graph:
+> every label in every module as one graph, with the edges resolved by the compiler's own resolver, and
+> whether a run from the manifest's entry can reach each one. The JSON is the documented surface
+> (`tests/golden/analyze/` is its golden), `dot` draws it for `dot -Tsvg`, and `text` is one line per
+> label — which is the form a diff reads best.
+>
+> Two of the reports above are already the checker's: an unreachable label is `W4002` and a label that can
+> end without transferring control is `W4003`. Re-deriving them here would give the project two answers to
+> one question, so `reached` is a *graph* fact computed from the same resolver, and the diagnostics stay
+> `vela check`'s to report with spans and advice.
+>
+> **Not yet:** unused assets (`W7001`, which does not exist), per-scene load sizes, localization coverage,
+> and variable reachability. Each needs something the project does not have yet — an asset manifest that
+> survives a check, a text pipeline, a liveness pass over `default`s — and the omission is named in the
+> source rather than left as a section that silently never appears.
+
 ## 8. Migration (`vela-migrate`)
 
 `vela migrate path/to/game` transpiles `.rpy` → `.vela` for the common case and reports the
@@ -273,6 +311,21 @@ Generates reference documentation from the single sources of truth already in th
 widget prop schemas, effect signatures, diagnostic registry, action registry, and public
 script APIs. Because it reads the same schemas the compiler uses, generated docs cannot drift
 from behavior. This is also what keeps the LSP completion list and the docs identical.
+
+> **Implemented so far (M10).** `vela doc [widgets|actions|diagnostics]` prints the reference on standard
+> output, and `vela doc --out docs/reference` writes it — one file per page, which is the only place in
+> this tool that writes anything, because a reference page is an artifact whose whole point is landing
+> where a reader finds it. The committed pages are under `docs/reference/`.
+>
+> What makes the "cannot drift" claim real is a test rather than a promise:
+> `crates/vela-cli/tests/doc_golden.rs` regenerates every page and compares it with what is committed, so
+> adding a prop, an action, or a diagnostic code and forgetting the reference fails the suite. It also
+> asserts that printing a page and writing it agree, since a reader piping the command into a file should
+> get the same page a build script does.
+>
+> **Not generated:** effect signatures, because an `effect` is declared by the *project* — reference for
+> one project's effects is that project's code, not engine documentation — and public script APIs, because
+> the engine's callable surface is the builtins and those are not a schema.
 
 ## 10. Open questions
 

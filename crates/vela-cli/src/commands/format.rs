@@ -49,6 +49,13 @@ impl Command for Format {
             positional(args).map_or_else(|| self.base.clone(), |path| self.base.join(path));
         let project = collect(&target)?;
         let check = args.iter().any(|arg| arg == "--check");
+        let diff = args.iter().any(|arg| arg == "--diff");
+        if check && diff {
+            return Err(Error::usage(
+                "`--check` says which files would change and `--diff` says how; pick one"
+                    .to_string(),
+            ));
+        }
 
         let mut changed: Vec<String> = Vec::new();
         for path in &project.files {
@@ -73,7 +80,11 @@ impl Command for Format {
             if canonical == text {
                 continue;
             }
-            if !check {
+            if diff {
+                // A preview, so nothing is written: the point of asking for the diff is to read it
+                // before deciding.
+                let _ = out.write_all(crate::diff::unified(&shown, &text, &canonical).as_bytes());
+            } else if !check {
                 fs::write(path, canonical)
                     .map_err(|error| Error::usage(format!("{shown}: {error}")))?;
             }
@@ -85,15 +96,22 @@ impl Command for Format {
             return Ok(());
         }
 
+        // `--check` names the files, `--diff` has already shown them, and neither writes: what they
+        // share is the exit code, which is what CI reads.
         let verb = if check {
-            "would reformat"
+            Some("would reformat")
+        } else if diff {
+            None
         } else {
-            "reformatted"
+            Some("reformatted")
         };
-        for path in &changed {
-            let _ = writeln!(out, "{verb} {path}");
+        if let Some(verb) = verb {
+            for path in &changed {
+                let _ = writeln!(out, "{verb} {path}");
+            }
         }
-        if check {
+
+        if check || diff {
             // A style gate, not a correctness one (`TOOLING.md §3`): the exit code is the verdict,
             // and the message says what to run.
             return Err(Error::diagnostics(format!(

@@ -23,6 +23,7 @@ toml.workspace = true
 vela-diag.workspace = true
 vela-syntax = { version = "0.1.0", path = "../vela-syntax" }
 vela-compile.workspace = true
+vela-hir.workspace = true
 vela-mir.workspace = true
 vela-bytecode.workspace = true
 vela-vm.workspace = true

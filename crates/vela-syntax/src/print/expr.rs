@@ -120,11 +120,12 @@ pub(crate) fn bin_op(op: BinOp) -> &'static str {
     }
 }
 
-/// A prefix operator, as written.
-fn un_op(op: UnOp) -> &'static str {
+/// A prefix operator, as written, including the space a word operator needs.
+pub(crate) fn un_op(op: UnOp) -> &'static str {
     match op {
         UnOp::Neg => "-",
-        UnOp::Not => "!",
+        UnOp::Not => "not ",
+        UnOp::Bang => "!",
     }
 }
 

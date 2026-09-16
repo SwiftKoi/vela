@@ -16,6 +16,7 @@ vela-diag = { version = "0.1.0", path = "../crates/vela-diag" }
 vela-mir = { version = "0.1.0", path = "../crates/vela-mir" }
 vela-render = { version = "0.1.0", path = "../crates/vela-render" }
 vela-span = { version = "0.1.0", path = "../crates/vela-span" }
+vela-syntax = { version = "0.1.0", path = "../crates/vela-syntax" }
 vela-text = { version = "0.1.0", path = "../crates/vela-text" }
 vela-vm = { version = "0.1.0", path = "../crates/vela-vm" }
 vela-world = { version = "0.1.0", path = "../crates/vela-world" }

@@ -2,6 +2,7 @@
 
 use vela_diag::{Code, Diagnostic};
 use vela_span::Span;
+use vela_syntax::Pragma;
 
 use crate::def::Definition;
 use crate::module::ModuleName;
@@ -118,6 +119,27 @@ pub fn unreachable_label(name: &str, span: Span, module: &str) -> Diagnostic {
         span,
         format!("nothing in `{module}` transfers here"),
     )
+}
+
+/// `W4011` — a formatting pragma, reported so that it is visible in review.
+#[must_use]
+pub fn format_pragma(pragma: Pragma, span: Span) -> Diagnostic {
+    match pragma {
+        Pragma::Off => diag(
+            "W4011",
+            "`# fmt: off` leaves this region as written",
+            span,
+            "the formatter will not reformat from here",
+        )
+        .with_help("allowed, and worth a comment saying why; remove it when the region no longer needs hand layout"),
+        Pragma::On => diag(
+            "W4011",
+            "`# fmt: on` closes a region the formatter leaves alone",
+            span,
+            "the region above is reproduced as written",
+        )
+        .with_help("if nothing above is a `# fmt: off`, this does nothing"),
+    }
 }
 
 /// `W4003` — a label some path can fall off the end of.

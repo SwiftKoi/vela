@@ -7,12 +7,26 @@ rust-version.workspace = true
 license.workspace = true
 
 [package.metadata.vela]
-rank = 8
+# 9, not 8: the answer this server publishes has to be the answer `vela check` publishes, and that
+# answer includes what the *widgets* have to say — which is `vela-ui`, itself rank 8. At rank 8 this
+# crate could not see it, and the parity criterion in `M10-tooling.md` was unsatisfiable. Rank 9 puts
+# it beside `vela-test`, the other crate that assembles what the lower layers say rather than adding
+# analysis of its own.
+rank = 9
 
 [dependencies]
+serde_json.workspace = true
 vela-span.workspace = true
+vela-syntax = { version = "0.1.0", path = "../vela-syntax" }
 vela-compile.workspace = true
 vela-diag.workspace = true
+# For the symbol index: definitions and label references with their spans, and `target_of`, the one
+# function that decides what a reference points at. Reusing it is the point — a language server with
+# its own resolution rule would be a second answer to a question that already has one.
+vela-hir.workspace = true
+# For hover: the type of a local, a parameter, or an expression, which only the checker can say.
+vela-types.workspace = true
+vela-ui.workspace = true
 
 [lints]
 workspace = true

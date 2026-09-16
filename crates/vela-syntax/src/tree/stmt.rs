@@ -52,6 +52,13 @@ pub struct JumpStmt {
     pub span: Span,
     /// The target label's dotted path.
     pub target: Vec<String>,
+    /// The target's own span, without the `jump` keyword.
+    ///
+    /// The statement's span covers the keyword too, and a rename may replace the *name* and nothing
+    /// else — a tool that rewrote `jump forest.clearing` as a whole statement would delete the word
+    /// `jump`. The parser already had this span in hand; recording it is what makes a reference a
+    /// range a tool can edit rather than one it can only jump to.
+    pub target_span: Span,
 }
 
 /// A `call` statement.
@@ -61,6 +68,8 @@ pub struct CallStmt {
     pub span: Span,
     /// The target label's dotted path.
     pub target: Vec<String>,
+    /// The target's own span, for the reason [`JumpStmt::target_span`] gives.
+    pub target_span: Span,
     /// A transition applied while the call runs.
     pub transition: Option<String>,
 }

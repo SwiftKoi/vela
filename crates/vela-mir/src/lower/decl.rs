@@ -224,7 +224,7 @@ pub(crate) fn fold_unary(op: UnOp, value: Const) -> Option<Const> {
     match (op, value) {
         (UnOp::Neg, Const::Int(number)) => Some(Const::Int(-number)),
         (UnOp::Neg, Const::Float(number)) => Some(Const::Float(-number)),
-        (UnOp::Not, Const::Bool(flag)) => Some(Const::Bool(!flag)),
+        (UnOp::Not | UnOp::Bang, Const::Bool(flag)) => Some(Const::Bool(!flag)),
         _ => None,
     }
 }

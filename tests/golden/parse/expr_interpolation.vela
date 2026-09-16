@@ -1,4 +1,4 @@
 label a:
     var s = "score: [score] and [other + 1]"
-    var t = "a \[ bracket and a {{ brace"
+    var t = "a [[ bracket and a {{ brace"
     var u = "a [list[0]] inside"

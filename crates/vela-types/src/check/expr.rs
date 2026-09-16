@@ -1,7 +1,7 @@
 //! Typing expressions.
 
 use vela_span::Span;
-use vela_syntax::{BinOp, Expr, Param, StrPart, UnOp};
+use vela_syntax::{Expr, Param, StrPart};
 
 use crate::check::run::Checker;
 use crate::error;
@@ -9,12 +9,26 @@ use crate::lower::lower;
 use crate::ty::Ty;
 
 impl Checker<'_> {
+    /// Works out an expression's type, and notes it for a caller that asked about an offset.
+    ///
+    /// The wrapper exists because the work below returns early in half a dozen arms: recording at each
+    /// of those returns would be a rule about this file's shape rather than about expressions, and the
+    /// first arm added without one would silently stop answering.
+    pub(crate) fn expr(&mut self, expr: &Expr) -> Ty {
+        let ty = self.expr_uncached(expr);
+        self.note(
+            expr.span(),
+            crate::check::at::Found::Expression { ty: ty.clone() },
+        );
+        ty
+    }
+
     /// Works out an expression's type.
     ///
     /// Never fails. An expression that cannot be typed is `Unknown`, which fits everywhere
     /// and is never reported against — so one mistake produces one diagnostic rather than
     /// one for every place its result is used.
-    pub(crate) fn expr(&mut self, expr: &Expr) -> Ty {
+    fn expr_uncached(&mut self, expr: &Expr) -> Ty {
         match expr {
             Expr::Int { .. } => Ty::Int,
             Expr::Float { .. } => Ty::Float,
@@ -114,63 +128,6 @@ impl Checker<'_> {
         Ty::Unknown
     }
 
-    /// The type of a binary operation.
-    fn binary(&mut self, op: BinOp, left: &Ty, right: &Ty, span: Span) -> Ty {
-        use BinOp::{
-            Add, And, Coalesce, Div, Eq, Ge, Gt, In, Is, IsNot, Le, Lt, Mul, Ne, NotIn, Or, Rem,
-            Sub,
-        };
-
-        match op {
-            Add | Sub | Mul | Div | Rem => {
-                if left.is_optional() {
-                    self.report(error::needs_unwrap(left, span));
-                    return Ty::Unknown;
-                }
-                if right.is_optional() {
-                    self.report(error::needs_unwrap(right, span));
-                    return Ty::Unknown;
-                }
-                // Only numbers can be combined, and `LANGUAGE.md §5.7` forbids converting
-                // between them implicitly: a score that silently becomes `3.0` produces a
-                // display bug nobody can explain.
-                if left.is_numeric() && right.is_numeric() && left != right {
-                    self.report(error::mixed_numbers(left, right, span));
-                    return Ty::Unknown;
-                }
-                left.clone()
-            }
-
-            Eq | Ne => {
-                if !left.accepts(right) && !right.accepts(left) {
-                    self.report(error::mismatch(left, right, span));
-                }
-                Ty::Bool
-            }
-
-            Lt | Le | Gt | Ge => {
-                if left.is_numeric() && right.is_numeric() && left != right {
-                    self.report(error::mixed_numbers(left, right, span));
-                }
-                Ty::Bool
-            }
-
-            And | Or => Ty::Bool,
-            Is | IsNot | In | NotIn => Ty::Bool,
-
-            Coalesce => match left {
-                // `a ?? b` is the payload of `a` when it has one, so the result is never
-                // optional — which is the whole point of writing it.
-                Ty::Optional(inner) => {
-                    if !inner.accepts(right) {
-                        self.report(error::mismatch(inner, right, span));
-                    }
-                    (**inner).clone()
-                }
-                _ => left.clone(),
-            },
-        }
-    }
     /// The type of a `map` literal, taking its shape from the first entry.
     fn map(&mut self, entries: &[(Expr, Expr)]) -> Ty {
         let key = entries
@@ -237,26 +194,6 @@ impl Checker<'_> {
         for ((expected, found), argument) in params.iter().zip(found).zip(args) {
             if !expected.accepts(found) {
                 self.report(error::mismatch(expected, found, argument.span()));
-            }
-        }
-    }
-
-    /// The type of a prefix operation.
-    fn unary(&mut self, op: UnOp, operand: &Expr, span: Span) -> Ty {
-        let ty = self.expr(operand);
-        match op {
-            UnOp::Neg => {
-                if ty.is_optional() {
-                    self.report(error::needs_unwrap(&Ty::Int, span));
-                    return Ty::Unknown;
-                }
-                ty
-            }
-            UnOp::Not => {
-                if ty != Ty::Bool && ty != Ty::Unknown {
-                    self.report(error::mismatch(&Ty::Bool, &ty, operand.span()));
-                }
-                Ty::Bool
             }
         }
     }

@@ -9,6 +9,16 @@
 
 use vela_span::Span;
 
+/// A formatting pragma: a comment that asks the formatter to keep its hands off a region
+/// (`TOOLING.md §3`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Pragma {
+    /// `# fmt: off` — from here, the file is as the author left it.
+    Off,
+    /// `# fmt: on` — the region ends here.
+    On,
+}
+
 /// One `#` comment, from the `#` to the end of its line.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Comment {
@@ -26,6 +36,21 @@ impl Comment {
     #[must_use]
     pub fn rendered(&self) -> String {
         format!("#{}", self.text)
+    }
+
+    /// The formatting pragma this comment is, if it is one.
+    ///
+    /// The definition lives here, beside the comment it is about, because two readers need the same
+    /// answer: the formatter, to decide which regions to leave alone, and the lint that reports a
+    /// pragma so its use is visible in review. Two spellings of `"fmt: off"` is how a lint and a
+    /// formatter come to disagree about whether a region was asked for.
+    #[must_use]
+    pub fn pragma(&self) -> Option<Pragma> {
+        match self.text.trim() {
+            "fmt: off" => Some(Pragma::Off),
+            "fmt: on" => Some(Pragma::On),
+            _ => None,
+        }
     }
 
     /// Whether the comment sits on the same line as code that ends at `end`.

@@ -9,7 +9,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Directory names that are never descended into.
-const SKIP_DIRS: &[&str] = &["target", ".git", "node_modules", ".commandcode"];
+///
+/// `dist` is here because it is where `vela build` writes: a check that walked into it would be
+/// reporting on output rather than on the source that produced it.
+const SKIP_DIRS: &[&str] = &["target", "dist", ".git", "node_modules", ".commandcode"];
 
 /// Recursively collects files under `root` with one of `exts`, **sorted** so every
 /// check produces identical output on identical input.

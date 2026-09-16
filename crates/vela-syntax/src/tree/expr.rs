@@ -50,8 +50,19 @@ pub enum BinOp {
 pub enum UnOp {
     /// `-`
     Neg,
-    /// `!`
+    /// `not`, which binds *looser* than a comparison: `not a == b` is `not (a == b)`.
     Not,
+    /// `!`, which binds *tighter* than any binary operator: `!a == b` is `(!a) == b`.
+    ///
+    /// A separate variant from [`UnOp::Not`] rather than a second spelling of it, because the two
+    /// are different operators: they sit at different levels of the grammar
+    /// (`LANGUAGE.md §3`, `not_expr` and `unary`) and the same characters therefore mean different
+    /// programs. One variant for both would make the tree unable to say which was written — and a
+    /// printer cannot recover that: printing `not a == b` as `!a == b` silently re-parses as
+    /// `(!a) == b`, a different expression with a different value. Found by running the formatter
+    /// over the repository's own fixtures, which is the first thing a corpus-wide `fmt --check`
+    /// does.
+    Bang,
 }
 
 /// One piece of a string literal.

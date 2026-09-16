@@ -24,7 +24,7 @@ mod ty;
 #[cfg(test)]
 mod tests;
 
-pub use check::{check, type_of};
+pub use check::{Found, at, check, scope_at, type_of};
 pub use env::{EnumShape, Env, Scope};
 pub use lower::lower;
 pub use ty::Ty;

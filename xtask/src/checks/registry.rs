@@ -7,7 +7,9 @@
 use crate::ctx::Ctx;
 use crate::report::Report;
 
-use super::{determinism, diag_codes, exemptions, facade, file_size, layers, registries, scripts};
+use super::{
+    determinism, diag_codes, exemptions, facade, file_size, format, layers, registries, scripts,
+};
 
 /// A registered architecture/policy check.
 pub struct Check {
@@ -60,6 +62,11 @@ pub static CHECKS: &[Check] = &[
         name: "check-scripts",
         about: "the shell and JavaScript in tools/ parses (REPO_LAYOUT.md §6)",
         run: scripts::run,
+    },
+    Check {
+        name: "check-format",
+        about: "every .vela file is already canonical (TOOLING.md §3)",
+        run: format::run,
     },
 ];
 

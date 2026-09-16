@@ -431,10 +431,14 @@ fn render_binop(op: BinOp) -> &'static str {
     }
 }
 
-/// The symbol for a prefix operator.
+/// The symbol for a prefix operator, as the source wrote it.
+///
+/// `not ` keeps its space: MIR is read by people, and a goldens diff that turns `not x` into `notx`
+/// would be a diff nobody can read.
 fn render_unop(op: UnOp) -> &'static str {
     match op {
         UnOp::Neg => "-",
-        UnOp::Not => "!",
+        UnOp::Not => "not ",
+        UnOp::Bang => "!",
     }
 }

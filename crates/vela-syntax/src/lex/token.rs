@@ -85,6 +85,8 @@ pub enum Keyword {
     Struct,
     /// `style`
     Style,
+    /// `test`
+    Test,
     /// `theme`
     Theme,
     /// `transform`
@@ -150,6 +152,7 @@ impl Keyword {
         (Self::Stop, "stop"),
         (Self::Struct, "struct"),
         (Self::Style, "style"),
+        (Self::Test, "test"),
         (Self::Theme, "theme"),
         (Self::Transform, "transform"),
         (Self::True, "true"),

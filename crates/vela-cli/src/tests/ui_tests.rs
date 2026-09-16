@@ -75,12 +75,16 @@ fn the_a11y_sweep_fails_an_unlabelled_control() {
     assert!(out.contains("1 unlabelled"), "{out}");
 }
 
-/// Without a test mode, `vela test` says where story tests are, rather than pretending.
+/// A directory that is not a project is refused, whichever mode was asked for.
+///
+/// This test used to assert that `vela test` refused to run *anything* until story tests landed. They
+/// have: `vela test` runs a project's suite, and what it still refuses is a directory that is not a
+/// project at all.
 #[test]
-fn test_without_a_mode_is_a_usage_error() {
+fn test_outside_a_project_is_an_error() {
     let (code, out) = cli(&["test", "."]);
     assert_eq!(code, 2, "{out}");
-    assert!(out.contains("M10"), "{out}");
+    assert!(out.contains("vela.toml"), "{out}");
 }
 
 /// Reloading after an edit picks up the new screen — what hot reload does once change is seen.

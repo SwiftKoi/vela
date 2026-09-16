@@ -169,6 +169,9 @@ expr       = or_expr [ "if" expr "else" expr ] ;
 or_expr    = coalesce { "or" coalesce } ;
 coalesce   = and_expr [ "??" coalesce ] ;
 and_expr   = not_expr { "and" not_expr } ;
+(* `not` and `!` are two operators, not two spellings: `not` binds looser than a
+   comparison and `!` tighter than every binary operator, so `not a == b` and
+   `!a == b` are different programs. *)
 not_expr   = "not" not_expr | cmp_expr ;
 cmp_expr   = add_expr [ cmpop add_expr ] ;
 cmpop      = "==" | "!=" | "<" | "<=" | ">" | ">="
@@ -457,6 +460,71 @@ discover while writing a struct.
 > **Not yet.** `W7001` (unused asset) needs a span to point at, and the manifest is not a source
 > file the session knows about; until it is, there is nowhere honest to hang the diagnostic.
 > `vela build` does not run the check either, because it does not compile scripts yet.
+
+### 7.6 Tests
+
+A `test` item is a test, and it lives in the same files as the story it exercises (`TOOLING.md §5`)
+rather than in a format of its own:
+
+```vela
+test "picking the forest sets trust":
+    run from chapters.forest.clearing
+    choose "Explore"
+    advance 4
+    expect trust == 1
+    expect visited(chapters.forest.river)
+```
+
+One thing here is a keyword and five things are not.
+
+**`test` is reserved** — the parser has to know where a test begins, and no story has another use
+for a heading called `test`. It is an item like `label` or `screen`, so §7.0's rule applies to it
+unchanged: it is special at the start of a line, and a name everywhere else.
+
+**The directives are contextual.** `run`, `advance`, `choose`, `expect`, and `cover` are ordinary
+identifiers in the first position of a line inside a test, looked up by name — which means a story
+keeps every one of them as a label, a variable, or a function. That is not a coincidence: `expect`
+and `run` are exactly the words a story about expecting and running would use, and reserving them would
+cost the language's own subject matter to buy the parser a table lookup. §7.0's doc comment in the
+parser records four separate bugs from that trade being made the other way, which is why this one is
+made deliberately.
+
+Their arguments are parsed as the things they are, not as strings:
+
+- `run from <label>` carries a dotted path *and* that path's own span, the pair a `jump` target
+  carries, so a reference written in a test resolves the way every other reference resolves (`§6`) —
+  and a rename can edit it.
+- `expect` and `choose` take expressions rather than strings. That is what will let the checker type
+  them — an assertion that could never hold should be a diagnostic before it is a failing run — and
+  what lets a test name the menu text once and use it twice. Until the HIR records the directives,
+  nothing checks them: the tree holds a real expression, and the checker has not been given it yet.
+- `cover` takes `labels` or `variants`, and an unknown word is an error rather than a directive that
+  quietly covers nothing.
+
+```vela
+test "every route reaches an ending":
+    run
+    cover labels
+    cover variants
+```
+
+A `test` is not story content: it neither defines a name nor adds a node to the story graph, and
+`vela build` does not carry it into a bundle.
+
+> **Implemented so far (M10).** The item parses, formats, and prints as canonical
+> (`tests/golden/parse/item_test.vela` is in the corpus every formatting gate covers), and an unknown
+> directive or cover word is reported once, with the line it is on.
+>
+> An `expect` and a `choose` are typed by the checker — `expect trust` where `trust` is an `int` is
+> `E3007`, because an assertion that cannot hold should be a diagnostic rather than a failing run — and
+> a `run from` is resolved like any other reference: `E5003` for a label that does not exist, `E2002`
+> for a module the file did not import. The reference is collected *beside* the story graph rather than
+> in it, because a test does not run during the story and an edge into a label would be a claim about
+> what the story does.
+>
+> **Not yet.** Everything that *runs* one: evaluating an assertion against the world, matching a
+> `choose` against a menu, `cover`, and golden frames. `vela build` ignores the item, so a bundle
+> carries no tests. That runner is the next thing in this milestone.
 
 ## 8. Diagnostics
 

@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use vela_diag::Diagnostic;
 use vela_span::{FileId, Span};
-use vela_syntax::{Item, LabelDecl, Program, Stmt, UseDecl};
+use vela_syntax::{DirectiveKind, Item, LabelDecl, Program, Stmt, UseDecl};
 
 use crate::def::{DefKind, Definition};
 use crate::error;
@@ -29,6 +29,13 @@ pub struct Module {
     pub aliases: BTreeMap<String, Import>,
     /// The labels and the transfers between them.
     pub story: StoryGraph,
+    /// The labels a `test`'s `run from` names.
+    ///
+    /// Here rather than in `story` because a test is not a node of the story: it says where to *start*
+    /// reading one, which is a reference to resolve (and for a rename to reach) but not a transfer the
+    /// graph has an edge for. A test does not run during the story, so an edge from nowhere to a label
+    /// would be a lie about what the story does.
+    pub test_targets: Vec<LabelRef>,
 }
 
 impl Module {
@@ -67,6 +74,7 @@ pub fn collect(name: ModuleName, file: FileId, program: &Program) -> Collected {
             definitions: BTreeMap::new(),
             aliases: BTreeMap::new(),
             story: StoryGraph::default(),
+            test_targets: Vec::new(),
         },
         diagnostics: Vec::new(),
     };
@@ -124,6 +132,25 @@ impl Collector {
             }
             Item::Theme(decl) => {
                 self.define(&decl.name, DefKind::Theme, decl.span);
+            }
+            // A test defines no name, but it does *reference* one: `run from` names a label, and the
+            // reference is collected so that resolution, diagnostics, and a rename all treat it like
+            // every other reference in the file.
+            Item::Test(decl) => {
+                for directive in &decl.directives {
+                    if let DirectiveKind::Run {
+                        target,
+                        target_span,
+                    } = &directive.kind
+                        && !target.is_empty()
+                    {
+                        self.module.test_targets.push(LabelRef {
+                            path: target.clone(),
+                            span: *target_span,
+                            transfer: Transfer::Jump,
+                        });
+                    }
+                }
             }
             Item::Function(decl) => {
                 self.define(&decl.name, DefKind::Function, decl.span);
@@ -243,14 +270,16 @@ fn terminates(statements: &[Stmt]) -> bool {
 fn transfers(statements: &[Stmt], out: &mut Vec<LabelRef>) {
     for statement in statements {
         match statement {
+            // The *target's* span rather than the statement's: a diagnostic about an undefined label
+            // should underline the label, and a rename should replace it without deleting the keyword.
             Stmt::Jump(jump) => out.push(LabelRef {
                 path: jump.target.clone(),
-                span: jump.span,
+                span: jump.target_span,
                 transfer: Transfer::Jump,
             }),
             Stmt::Call(call) => out.push(LabelRef {
                 path: call.target.clone(),
-                span: call.span,
+                span: call.target_span,
                 transfer: Transfer::Call,
             }),
             Stmt::Menu(menu) => {

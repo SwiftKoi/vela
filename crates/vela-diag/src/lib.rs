@@ -23,7 +23,7 @@ mod suggest;
 #[cfg(test)]
 mod tests;
 
-pub use code::{Code, Severity};
+pub use code::{Code, Severity, codes};
 pub use diagnostic::{Diagnostic, Label, Suggestion};
 pub use render::render;
 

@@ -1,0 +1,81 @@
+{
+  "entry": "main.start",
+  "labels": [
+    {
+      "column": 1,
+      "file": "chapters/hearth.vela",
+      "line": 5,
+      "name": "chapters.hearth.settle",
+      "reached": true,
+      "targets": [
+        "main.back_from_hearth",
+        "main.tally"
+      ]
+    },
+    {
+      "column": 1,
+      "file": "chapters/street.vela",
+      "line": 22,
+      "name": "chapters.street.arrive",
+      "reached": true,
+      "targets": [
+        "main.back_from_street",
+        "main.tally"
+      ]
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 117,
+      "name": "main.back_from_hearth",
+      "reached": true,
+      "targets": [
+        "main.ending"
+      ]
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 112,
+      "name": "main.back_from_street",
+      "reached": true,
+      "targets": [
+        "chapters.hearth.settle"
+      ]
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 120,
+      "name": "main.ending",
+      "reached": true,
+      "targets": []
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 95,
+      "name": "main.start",
+      "reached": true,
+      "targets": [
+        "chapters.street.arrive"
+      ]
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 104,
+      "name": "main.tally",
+      "reached": true,
+      "targets": []
+    }
+  ],
+  "schema": 1,
+  "totals": {
+    "edges": 7,
+    "labels": 7,
+    "reached": 7,
+    "terminal": 2,
+    "unreachable": 0
+  }
+}

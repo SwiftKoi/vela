@@ -39,6 +39,7 @@ impl Parser<'_> {
             TokenKind::Keyword(Keyword::Transform) => Item::Transform(self.parse_transform()),
             TokenKind::Keyword(Keyword::Screen) => Item::Screen(self.parse_screen()),
             TokenKind::Keyword(Keyword::Style) => Item::Style(self.parse_style()),
+            TokenKind::Keyword(Keyword::Test) => Item::Test(self.parse_test()),
             TokenKind::Keyword(Keyword::Theme) => Item::Theme(self.parse_theme()),
             TokenKind::Keyword(Keyword::Fn) => Item::Function(self.parse_fn()),
             TokenKind::Keyword(Keyword::Effect) => Item::Effect(self.parse_effect()),

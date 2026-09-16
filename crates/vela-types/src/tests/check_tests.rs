@@ -336,3 +336,40 @@ fn calling_a_function_with_the_wrong_argument_type_is_reported_e3007() {
                   label a:\n    var x = double(\"two\")\n    return\n";
     assert_eq!(codes(source), vec!["E3007"]);
 }
+
+/// A test's assertion is typed, so a test that could never pass says so before it runs.
+///
+/// This is the whole reason `expect` holds an expression rather than a string: an assertion written in
+/// the language is an assertion the checker has already read.
+#[test]
+fn an_assertion_that_is_not_a_bool_is_reported() {
+    let reported = codes(
+        "default trust: int = 0\n\nlabel start:\n    return\n\n\
+         test \"wrong\":\n    run\n    expect trust\n",
+    );
+
+    assert_eq!(reported, vec!["E3007"], "{reported:?}");
+}
+
+/// `choose` picks a menu option by its text, so its argument has to be text.
+#[test]
+fn a_choice_that_is_not_text_is_reported() {
+    let reported = codes(
+        "label start:\n    return\n\n\
+         test \"wrong\":\n    choose 1\n",
+    );
+
+    assert_eq!(reported, vec!["E3007"], "{reported:?}");
+}
+
+/// And a well-typed test reports nothing, which is what says the assertion above is about a mistake
+/// rather than about tests not being checked at all.
+#[test]
+fn a_well_typed_test_reports_nothing() {
+    let reported = codes(
+        "default trust: int = 0\n\nlabel start:\n    return\n\n\
+         test \"right\":\n    run\n    expect trust == 0\n    choose \"Leave\"\n",
+    );
+
+    assert!(reported.is_empty(), "{reported:?}");
+}

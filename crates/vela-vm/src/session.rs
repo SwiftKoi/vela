@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 use vela_bytecode::Module;
-use vela_world::{Command, Input, World};
+use vela_world::{Command, Input, Value, World};
 
 use crate::fault::Fault;
 use crate::machine::{Step, Vm};
@@ -169,6 +169,25 @@ impl Session {
     #[must_use]
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// Calls a function and returns what it produced, in the world as it is right now.
+    ///
+    /// The story is untouched: this is for asking a question *about* a suspended story rather than
+    /// moving it, which is what a test's `expect` is. See [`Vm::call`] for the one thing it refuses to
+    /// do, which is read a piece of story as if it were a value.
+    ///
+    /// # Errors
+    ///
+    /// Fails if there is no such function, or if it cannot be read as a value.
+    pub fn call(&mut self, name: &str) -> Result<Value, Fault> {
+        self.vm.call(&mut self.world, name)
+    }
+
+    /// The labels this session has entered, in the order it first entered them.
+    #[must_use]
+    pub fn entered_labels(&self) -> Vec<String> {
+        self.vm.entered_labels()
     }
 
     /// The module it is running.

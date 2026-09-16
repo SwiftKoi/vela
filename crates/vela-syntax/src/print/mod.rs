@@ -26,6 +26,7 @@ mod expr;
 mod item;
 mod screen;
 mod stmt;
+mod test;
 mod writer;
 
 pub use item::{NotFormatted, format};

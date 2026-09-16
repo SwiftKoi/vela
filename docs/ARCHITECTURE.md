@@ -23,8 +23,8 @@ rank  crates
  5    vela-mir
  6    vela-bytecode
  7    vela-compile  vela-vm
- 8    vela-replay   vela-ui      vela-lsp     vela-migrate
- 9    vela-test     vela-plugin
+ 8    vela-replay   vela-ui      vela-migrate
+ 9    vela-test     vela-lsp     vela-plugin
 10    vela-cli     vela-web*
 ```
 
@@ -34,6 +34,14 @@ never point up or sideways.
 **Rule 2 — adapters.** `vela-host` (windowing, input, filesystem, clock) and `vela-render`
 (GPU) are marked `*`: they are *adapters*. **No crate of rank ≤ 7 may depend on an adapter.**
 Ranks 8–10 may — `vela-ui` consumes the renderer, `vela-cli` consumes the platform host.
+
+**Why `vela-lsp` is 9 and not 8.** The language server must publish what `vela check` publishes —
+`TOOLING.md §4` makes that a parity criterion, because an editor that disagrees with CI is worse than
+no editor — and what `vela check` publishes includes what the *widgets* have to say, which is
+`vela-ui`, itself rank 8. At rank 8 the server could not see `vela-ui` at all, so the criterion was
+not merely untested but unsatisfiable, and the comment in `vela-cli` claiming otherwise was how the
+conflict surfaced. Rank 9 puts the server beside `vela-test`, the other crate that assembles what the
+lower layers say instead of adding analysis of its own.
 
 Why this shape: Rule 2 is what keeps the front end, compiler, and VM free of both graphics
 and platform code. `vela test` therefore runs the entire story engine headless on a build
@@ -66,8 +74,8 @@ be below everything that reports through it.
 | `vela-vm` | 7 | Bytecode interpreter, deterministic scheduler, yields commands | `Vm`, `Frame`, `Step` |
 | `vela-replay` | 8 | Snapshots, rollback, input log, save migration engine | `Recorder`, `Snapshot`, `Migrator` |
 | `vela-ui` | 8 | Screen runtime, layout solver, widget registry, styling | `Tree`, `Widget`, `Registry` |
-| `vela-lsp` | 8 | Language server over `vela-compile` | `Server` |
 | `vela-migrate` | 8 | `.rpy` → `.vela` transpiler + compat report | `Transpile`, `Report` |
+| `vela-lsp` | 9 | Language server over `vela-compile` and `vela-ui` | `Server` |
 | `vela-test` | 9 | Headless story runner, assertions, golden frames | `StoryTest`, `Asserts` |
 | `vela-plugin` | 9 | WASM plugin host, capability ABI, versioned surface | `PluginHost`, `Capability` |
 | `vela-cli` | 10 | The `vela` binary; subcommand registry | `Command`, `Main` |

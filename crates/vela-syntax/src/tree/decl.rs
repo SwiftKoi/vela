@@ -2,7 +2,7 @@
 
 use vela_span::Span;
 
-use crate::tree::{Expr, ScreenLine, Stmt, Type};
+use crate::tree::{Expr, ScreenLine, Stmt, TestDecl, Type};
 
 /// One parameter of a function, screen, lambda, or enum variant.
 #[derive(Clone, Debug)]
@@ -271,6 +271,8 @@ pub enum Item {
     Screen(ScreenDecl),
     /// `style`
     Style(StyleDecl),
+    /// `test`
+    Test(TestDecl),
     /// `theme`
     Theme(ThemeDecl),
     /// `fn`
@@ -300,6 +302,7 @@ impl Item {
             Self::Transform(d) => d.span,
             Self::Screen(d) => d.span,
             Self::Style(d) => d.span,
+            Self::Test(d) => d.span,
             Self::Theme(d) => d.span,
             Self::Function(d) => d.span,
             Self::Label(d) => d.span,

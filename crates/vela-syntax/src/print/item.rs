@@ -7,6 +7,7 @@ use vela_span::FileId;
 
 use crate::print::decl;
 use crate::print::expr;
+use crate::print::test;
 use crate::print::writer::Writer;
 use crate::tree::{ConstDecl, DefaultDecl, EffectDecl, Item, Program, Type, UseDecl};
 
@@ -104,6 +105,7 @@ fn item(writer: &mut Writer<'_>, item: &Item) {
         Item::Enum(decl) => decl::enum_(writer, decl),
         Item::Character(decl) => decl::character(writer, decl),
         Item::Style(decl) => decl::style(writer, decl),
+        Item::Test(decl) => test::test_(writer, decl),
         Item::Theme(decl) => decl::theme(writer, decl),
         Item::Screen(decl) => decl::screen(writer, decl),
         Item::Function(decl) => decl::function(writer, decl),
@@ -114,11 +116,34 @@ fn item(writer: &mut Writer<'_>, item: &Item) {
     }
 
     // Where the item ended, so the next one measures its blank line from here.
-    writer.note(if decl::opens_a_body(item) {
+    writer.note(if span_overshoots_text(item) {
         span.start()
     } else {
         span.end()
     });
+}
+
+/// Whether an item's span reaches past the text it covers.
+///
+/// Two ways that happens, and either hides a blank line the author wrote if the gap to the next item
+/// is measured from the span's end: a body ends at a synthetic `Dedent`, which sits at the start of
+/// the following line, and a `transform` — whose body is consumed rather than parsed — ends at the
+/// token *after* its body, past the line break and any blank line in between. Found by the corpus
+/// gate, which pointed at the one fixture with a blank line after a transform.
+fn span_overshoots_text(item: &Item) -> bool {
+    matches!(
+        item,
+        Item::Transform(_)
+            | Item::Struct(_)
+            | Item::Enum(_)
+            | Item::Character(_)
+            | Item::Style(_)
+            | Item::Test(_)
+            | Item::Theme(_)
+            | Item::Screen(_)
+            | Item::Function(_)
+            | Item::Label(_)
+    )
 }
 
 /// A `use`, with its alias if it has one.
