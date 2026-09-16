@@ -60,10 +60,11 @@ after `if h.who:` — Ren'Py's own `screens.rpy` is full of them — ended the b
 of a screen to the enclosing file and turned a 1,500-line file into 596 report entries.
 
 The rest of the project — the 1,538-line `screens.rpy`, the theme in `gui.rpy`, the engine config in
-`options.rpy`, the per-language translation trees — has its own document: **`M12.5-project-parity.md`**
-is the survey of every file in the sample and the disposition of each, because migrating a screen
-language is *implementing* it rather than translating it, and that is a decision this milestone
-should not have made by accident.
+`options.rpy`, the per-language translation trees — is the **M12 series**: `M12.1-screen-language.md`
+(§1–§3 of which is the survey of every file in the sample and the disposition of each), then M12.2 for
+the interface a game ships and M12.3 for media, input and language. Migrating a screen language is
+*implementing* it rather than translating it, and that is a decision M12 should not have made by
+accident.
 
 ## Still open
 
@@ -78,7 +79,7 @@ should not have made by accident.
   (`decode` picks by magic bytes; the texture importer re-encodes a JPEG as a PNG, so there is one
   artifact format). **Opus is still open** (one track: `illurock.opus`), and the **GUI skin**'s 48
   images are reported rather than copied, because they belong to Ren'Py's screens — the disposition
-  for those is `M12.5-project-parity.md §2`.
+  for those is `M12.1-screen-language.md §2`.
 - **The ported sample is not under `tests/`** as work item 7 asks. It cannot be: the sample is
   Ren'Py's own project, with Ren'Py's art. What is committed instead is the migration *test*, and
   `examples/the_question_migrated` is regenerated on demand.

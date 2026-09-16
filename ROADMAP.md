@@ -63,7 +63,9 @@ the boundary rather than working around it.
 | [M10](docs/roadmap/M10-tooling.md) | Tooling | LSP, formatter, test runner, and analysis |
 | [M11](docs/roadmap/M11-debugger.md) | Debugger | Debug a story like software, including backwards |
 | [M12](docs/roadmap/M12-migration.md) | Migration | A Ren'Py project ports incrementally, measurably |
-| [M12.5](docs/roadmap/M12.5-project-parity.md) | Parity | The rest of a project — screens, theme, config — is migrated or deliberately not |
+| [M12.1](docs/roadmap/M12.1-screen-language.md) | Screen language | A project's own screens migrate: composition, state, scrolling, dynamic actions |
+| [M12.2](docs/roadmap/M12.2-game-interface.md) | The game's interface | The menu and settings system every game has, as Vela's own |
+| [M12.3](docs/roadmap/M12.3-media-input-language.md) | Media and language | Audio, the input map, device variants, the translation catalogue |
 | [M13](docs/roadmap/M13-extensibility.md) | Extensibility | Third parties extend the engine; rich media works |
 | [M14](docs/roadmap/M14-hardening.md) | 1.0 | Every claim in `VISION.md §5` is measurably true |
 
@@ -88,7 +90,7 @@ M0 bootstrap
    M10 tooling            M11 debugger+docs          M12 migration
         └────────────────────────┴────────────────────────┘
                                  ▼
-                     M12.5 project parity (screens)
+              M12.1 screen language ─► M12.2 interface ─► M12.3 media
                                  ▼
                     M13 extensibility + rich media
                                  ▼
@@ -100,8 +102,10 @@ M0 bootstrap
   presentation.
 - After M5: M8 and M6 are independent.
 - After M9: M11 and M12 are independent.
-- After M12: M12.5's screen work is `vela-ui`, and anything that touches the widget registry
-  collides with M13's rich media — the two want the same files.
+- After M12: the M12.x series is `vela-ui`, and anything that touches the widget registry collides
+  with M13's rich media — the two want the same files. Within the series the order is the dependency:
+  a project's screens (M12.1) before the interface a game ships (M12.2), and both before the media
+  M12.3 adds.
 - Throughout: `xtask` checks and the golden corpus grow with whichever milestone lands first.
 
 ---
