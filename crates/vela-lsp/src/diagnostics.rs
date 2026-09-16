@@ -45,14 +45,26 @@ pub fn project(session: &mut Session) -> Vec<Diagnostic> {
     diagnostics
 }
 
-/// One file's diagnostics: what the compiler says about it, and what its screens say.
+/// One file's diagnostics: everything that points at it.
 ///
-/// This is the editor's question after an edit. It deliberately leaves out the whole-program findings:
-/// a label nothing reaches is not a fact about the file that was just typed in, and re-reporting it in
-/// every open document would say so anyway.
+/// This is the editor's question after an edit, and the whole answer rather than a subset: the
+/// per-file findings, the whole-program findings that *point at this file*, and its screens. A
+/// diagnostic belongs to the document it is drawn in, which is what lets an editor publish one file at
+/// a time and still show a player everything `vela check` would.
 #[must_use]
 pub fn file(session: &mut Session, file: vela_span::FileId) -> Vec<Diagnostic> {
     let mut diagnostics = session.check(file).as_ref().clone();
+
+    // A label nothing reaches is a fact about the project, but it is *reported* at the label — so it
+    // goes to the file that holds the label, and asking per file costs a memoized query.
+    diagnostics.extend(
+        session
+            .analyse()
+            .iter()
+            .filter(|diagnostic| diagnostic.primary.span.file() == file)
+            .cloned(),
+    );
+
     let parsed = session.parse(file);
     diagnostics.extend(screens(&parsed));
     diagnostics

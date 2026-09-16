@@ -46,9 +46,22 @@ either caller is a failure rather than a drift. Moving the screen checks also fi
 carried: they parsed each file with a fixed `FileId`, so every screen warning in a project claimed to
 be in the first file and was rendered against whatever line happened to be there.
 
-**Next: the transport.** `vela-lsp` still has no protocol — no `initialize`, no document sync, no
-publish. That is item 2, and the position mapping it needs (byte offsets to LSP's UTF-16 columns) is
-the next thing to write.
+**Item 2 serves diagnostics, and nothing else yet.** `vela lsp` speaks the protocol on stdin and
+stdout: `initialize` (declaring `textDocumentSync: 1` and `positionEncoding: "utf-16"`),
+`didOpen`/`didChange`/`didClose`, and `publishDiagnostics` from the same answer `vela check` prints.
+The framing is hand-written (`transport.rs`, with a test per way a header can lie), the offsets→
+positions conversion is its own module, and the workspace is loaded by *the command line's* loader —
+handed to the server as a closure, so the editor and CI cannot disagree about what a project's files
+are. `crates/vela-cli/tests/lsp_stdio.rs` spawns the real binary and drives it the way an editor does,
+which is what covers the half that only exists in a real run: that the process starts, that the
+protocol really goes over the pipes, and that nothing else writes to stdout and corrupts the stream.
+
+**What is deliberately not declared.** Hover, completion, goto-definition, references, and rename are
+absent from the capabilities, and that is a claim rather than an omission: an editor told a capability
+exists will call it, and a capability that answers nothing reads as broken rather than as missing. They
+are the rest of item 2, and four of the six exit criteria — including the newcomer walkthrough — wait
+on them. Next: the indexes those features need (a node at an offset, the labels in scope), which is the
+first work in this milestone that *adds* analysis rather than routing it.
 
 **Input from the Ren'Py reference.** Ren'Py's `developer_tools` and `cli` pages are the closest
 thing to a spec for this milestone, and four of its tools are worth copying rather than inventing:

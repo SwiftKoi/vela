@@ -70,6 +70,10 @@ fn the_command_and_the_language_server_report_the_same_diagnostics() {
 /// `vela check` prints the compiler's findings, then the whole-program ones, then the screens, and an
 /// editor publishes one document at a time. What must match is which diagnostics exist, and that each
 /// per-file answer is in source order — which the second half of this test checks.
+///
+/// Note what is *not* added here: the whole-program findings. `file` already carries the ones that
+/// point at the file, which is exactly what makes publishing one document at a time complete — and
+/// adding them again here would be the test asserting a belief the server does not hold.
 #[test]
 fn per_file_answers_cover_the_project() {
     let project = super::support::temp_project("lsp-parity-files", SOURCE);
@@ -91,7 +95,6 @@ fn per_file_answers_cover_the_project() {
         );
         per_file.extend(one);
     }
-    per_file.extend(session.analyse().iter().cloned());
 
     let mut listed: Vec<(String, u32)> = whole.iter().map(identify).collect();
     let mut per: Vec<(String, u32)> = per_file.iter().map(identify).collect();

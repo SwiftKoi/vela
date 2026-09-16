@@ -168,6 +168,15 @@ impl Session {
         (0..self.files.len() as u32).map(FileId::from_raw).collect()
     }
 
+    /// The file a name refers to, if the session has one.
+    ///
+    /// The language server asks this: a document arrives as a URI, which becomes the same name the
+    /// command line would have given the file, and everything after that is keyed by id.
+    #[must_use]
+    pub fn file_named(&self, name: &str) -> Option<FileId> {
+        self.by_name.get(name).copied()
+    }
+
     /// The module a file declares, when its path says it is one.
     pub fn module_of(&self, file: FileId) -> Option<&ModuleName> {
         self.files

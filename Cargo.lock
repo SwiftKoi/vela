@@ -2116,6 +2116,7 @@ dependencies = [
 name = "vela-lsp"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "vela-compile",
  "vela-diag",
  "vela-span",

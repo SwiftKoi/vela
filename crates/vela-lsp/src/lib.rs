@@ -14,7 +14,10 @@
 
 pub mod diagnostics;
 pub mod position;
+pub mod transport;
+
 mod server;
+mod uri;
 
 #[cfg(test)]
 mod tests;

@@ -15,6 +15,7 @@ license.workspace = true
 rank = 9
 
 [dependencies]
+serde_json.workspace = true
 vela-span.workspace = true
 vela-syntax = { version = "0.1.0", path = "../vela-syntax" }
 vela-compile.workspace = true
