@@ -52,3 +52,20 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 unicode-width = "0.2"
+
+# Off, deliberately, and measured rather than assumed. Debug information is 78–85% of every linked
+# artifact — it is embedded in each `.rlib` and duplicated into each of the ~100 test binaries — and
+# nothing here is stepped through in a Rust debugger: a failing test prints its own source location,
+# and `vela debug` debugs *Vela* programs over the VM, not the Rust engine. Incremental compilation
+# caches only the workspace crates (never a dependency) and returns little against the whole-graph
+# `clippy --all-targets` and `test --workspace` this repository runs, while leaving a second copy of
+# each crate's debug-laden state on disk that cargo never reaps.
+#
+# Want a backtrace with line numbers, or a debugger, for one session? Turn both back on for that run
+# instead of editing this file — see CONVENTIONS.md §2.5:
+#   cargo build --config 'profile.dev.debug=2' --config 'profile.dev.incremental=true'
+#
+# `test` inherits this table, so it is not repeated.
+[profile.dev]
+debug = false
+incremental = false

@@ -76,6 +76,27 @@ pub fn resolve_labels(module: &mut Module) -> Result<(), ResolveError> { ... }
 - Prefer early return over nested `if`. Prefer `match` over `if/else if` chains on enums.
 - Comments explain *why*, never *what*. A comment restating the code is deleted in review.
 
+### 2.5 Build profile
+`Cargo.toml` turns off `debug` and `incremental` for the `dev` profile, and so for `test`, which
+inherits it. Both are off for a reason that was measured rather than assumed.
+
+Debug information is **78–85% of every linked artifact** — embedded in each `.rlib` and duplicated
+into each of the ~100 test binaries — and nothing here is stepped through in a Rust debugger: a
+failing test prints its own source location, and `vela debug` debugs *Vela* programs over the VM,
+not the Rust engine. Without it a backtrace still names functions; it loses file:line and variables.
+Incremental compilation caches only the workspace crates — never a dependency — and returns little
+against the whole-graph `clippy --all-targets` and `test --workspace` this repository runs, while
+leaving a second copy of each crate's debug-laden state on disk that cargo never reaps.
+
+Neither is a rule against ever using them. Turn both back on **for one session**, never in a commit:
+
+```sh
+cargo build --config 'profile.dev.debug=2' --config 'profile.dev.incremental=true'
+```
+
+A profile that changes with whoever last wanted a backtrace is a profile nobody can reason about,
+which is why the override is per-run and the decision lives here.
+
 ## 3. Testing
 
 | Kind | Where | Purpose |
