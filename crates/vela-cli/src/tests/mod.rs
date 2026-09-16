@@ -1,5 +1,6 @@
 //! Unit tests for `vela-cli`.
 
+mod analyze_tests;
 mod build_tests;
 mod bundle_tests;
 mod cli_tests;

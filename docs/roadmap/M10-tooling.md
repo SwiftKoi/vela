@@ -173,9 +173,20 @@ caller that is not a frame. The runner's most natural place to assert is after t
 the first thing that broke. `Vm::call` now puts a stand-in frame below the read, never executed, and the
 test that would have caught it is in `crates/vela-test/src/tests.rs`.
 
-The milestone's demo is half runnable: `vela test` on `examples/standard` is green (two tests over all
-seven labels in three modules, including a `cover labels` that would fail if any of them stopped being
-reached). `vela analyze` is next, and the demo line in the README is waiting for it.
+The milestone's demo runs: `vela test examples/standard && vela analyze examples/standard` is green, the
+suite covering all seven labels of the example across its three modules and the analysis drawing the graph
+they make.
+
+**`vela analyze` is the graph, and the two reports it does not re-derive.** Every module's labels as one
+graph, every edge resolved by the compiler's own resolver, and a `reached` flag from a walk that starts at
+the manifest's entry. The form is decided by the criterion — *"deterministic and diffable, so it can be
+tracked as a metric over time in CI"* — so there is no hashing anywhere, every list is sorted, and the
+golden in `tests/golden/analyze/` is compared against a second run of the command in the same test. What it
+does *not* do is re-derive `W4002` (unreachable label) and `W4003` (a label can end without transferring
+control): those are `vela check`'s, with spans and advice, and a second answer to one question is worse than
+no answer. Unused assets, load sizes, localization coverage, and variable reachability are named as
+missing in the report's own source, because a section that silently never appears reads as "nothing to
+report".
 
 **Work items.**
 1. Formatter with the rules in `TOOLING.md §3`; `--check` and `--diff`.
@@ -222,6 +233,9 @@ that otherwise answers honestly.
       canonical files; idempotence and re-parsing are pinned by `vela-syntax/tests/format_roundtrip.rs`)
 - [ ] `vela test` runs a suite headless in CI and fails a deliberately broken story
 - [ ] `vela analyze --format json` output is deterministic across runs (diffed in CI)
+- [x] `vela analyze --format json` is deterministic across runs, and tracked as a diffable golden
+      (`crates/vela-cli/tests/analyze_golden.rs` analyzes each case twice and compares with
+      `tests/golden/analyze/`)
 - [x] `vela test` runs a suite headless and fails a deliberately broken story (`crates/vela-cli`'s
       `runner_tests.rs` breaks one three ways: a false assertion, a choice nothing offers, and a menu
       the script never answers)

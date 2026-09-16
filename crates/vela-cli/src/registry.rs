@@ -52,6 +52,7 @@ impl Default for Registry {
 pub fn builtin() -> Registry {
     let mut registry = Registry::new();
     registry.register(Box::new(commands::NewProject::at_current_dir()));
+    registry.register(Box::new(commands::Analyze::at_current_dir()));
     registry.register(Box::new(commands::Build::at_current_dir()));
     registry.register(Box::new(commands::Check::at_current_dir()));
     registry.register(Box::new(commands::Format::at_current_dir()));

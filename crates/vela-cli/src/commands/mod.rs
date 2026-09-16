@@ -3,6 +3,7 @@
 //! A facade: each command lives in its own file, and registering one is a single line
 //! in `crate::registry`.
 
+pub mod analyze;
 pub mod build;
 pub mod bundle;
 pub mod bundle_run;
@@ -13,11 +14,13 @@ pub mod lsp;
 pub mod new;
 pub mod patch;
 pub mod play;
+pub mod resolve;
 pub mod run;
 pub mod target;
 pub mod test;
 pub mod ui;
 
+pub use analyze::Analyze;
 pub use build::Build;
 pub use check::Check;
 pub use format::Format;

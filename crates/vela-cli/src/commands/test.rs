@@ -10,15 +10,12 @@
 //! the language server makes, and for the same reason — the project's files are the command line's
 //! question, and a runner that answered it differently would be a runner that runs a different program.
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use vela_compile::Session;
 use vela_diag::Severity;
-use vela_hir::{Collected, Module, ModuleName, Modules, Transfer};
 use vela_span::{FileId, Span};
 use vela_syntax::{Item, parse};
 use vela_test::{Plan, Report};
@@ -27,6 +24,7 @@ use vela_ui::a11y::A11yNode;
 
 use crate::command::{Command, Error};
 use crate::commands::check::{Project, collect, load};
+use crate::commands::resolve::{self, Table};
 use crate::commands::run::flag_value;
 
 /// The `vela test` command.
@@ -191,15 +189,10 @@ fn prepare(session: &mut Session, filter: Option<&str>) -> Vec<Plan> {
 /// runner reports that there is no such label, which is the truthful answer and points at the test.
 fn start(session: &mut Session, table: &Table, file: FileId, plan: &Plan) -> Option<Vec<String>> {
     let path = plan.start.clone()?;
-    let collected = session.symbols(file);
-
-    let target = vela_hir::LabelRef {
-        path: path.clone(),
-        span: plan.start_span,
-        transfer: Transfer::Jump,
-    };
-    match vela_hir::target_of(&collected.module, table, &target) {
-        Some((module, label)) => Some(vec![module.name.to_string(), label.to_string()]),
+    match resolve::target(session, table, file, &path, plan.start_span) {
+        Some((module, label)) => Some(vec![module.to_string(), label]),
+        // Left as written, and the runner reports that there is no such label — which is true, and points
+        // at the test rather than at a table this command could not build.
         None => Some(path),
     }
 }
@@ -245,37 +238,6 @@ fn located(session: &Session, span: Span, message: &str) -> String {
         .map_or_else(String::new, |source| source.name().to_string());
 
     format!("{name}:{}:{}: {message}", state.line + 1, state.col + 1)
-}
-
-/// Every module in a session, for the resolver.
-///
-/// The same table `vela-lsp` builds for its index, and the same duplication: `Modules` is a trait so
-/// that resolution is a pure function of a module and whatever it names, and each caller supplies the
-/// modules. One implementation in `vela-hir` would be the fix.
-struct Table(BTreeMap<ModuleName, Rc<Collected>>);
-
-impl Table {
-    /// Every module the session holds.
-    fn of(session: &mut Session) -> Self {
-        let mut modules = BTreeMap::new();
-        for file in session.file_ids() {
-            let collected = session.symbols(file);
-            if session.module_of(file).is_some() {
-                modules.insert(collected.module.name.clone(), collected);
-            }
-        }
-        Self(modules)
-    }
-}
-
-impl Modules for Table {
-    fn get(&self, name: &ModuleName) -> Option<&Module> {
-        self.0.get(name).map(|collected| &collected.module)
-    }
-
-    fn all(&self) -> Vec<&Module> {
-        self.0.values().map(|collected| &collected.module).collect()
-    }
 }
 
 /// One screen's focus order.

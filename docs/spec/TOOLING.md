@@ -270,6 +270,22 @@ Turns the compile-time story graph into human decisions.
 Output is deterministic and diffable, so `vela analyze --format json` can be tracked as a
 metric over time in CI — "our dead-end count went up by 3 this week."
 
+> **Implemented so far (M10).** `vela analyze [path] [--format text|json|dot]` reports the story graph:
+> every label in every module as one graph, with the edges resolved by the compiler's own resolver, and
+> whether a run from the manifest's entry can reach each one. The JSON is the documented surface
+> (`tests/golden/analyze/` is its golden), `dot` draws it for `dot -Tsvg`, and `text` is one line per
+> label — which is the form a diff reads best.
+>
+> Two of the reports above are already the checker's: an unreachable label is `W4002` and a label that can
+> end without transferring control is `W4003`. Re-deriving them here would give the project two answers to
+> one question, so `reached` is a *graph* fact computed from the same resolver, and the diagnostics stay
+> `vela check`'s to report with spans and advice.
+>
+> **Not yet:** unused assets (`W7001`, which does not exist), per-scene load sizes, localization coverage,
+> and variable reachability. Each needs something the project does not have yet — an asset manifest that
+> survives a check, a text pipeline, a liveness pass over `default`s — and the omission is named in the
+> source rather than left as a section that silently never appears.
+
 ## 8. Migration (`vela-migrate`)
 
 `vela migrate path/to/game` transpiles `.rpy` → `.vela` for the common case and reports the

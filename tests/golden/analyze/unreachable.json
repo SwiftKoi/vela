@@ -1,0 +1,41 @@
+{
+  "entry": "main.start",
+  "labels": [
+    {
+      "column": 1,
+      "file": "chapters/road.vela",
+      "line": 3,
+      "name": "chapters.road.onward",
+      "reached": true,
+      "targets": [
+        "main.start"
+      ]
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 8,
+      "name": "main.detour",
+      "reached": false,
+      "targets": []
+    },
+    {
+      "column": 1,
+      "file": "main.vela",
+      "line": 3,
+      "name": "main.start",
+      "reached": true,
+      "targets": [
+        "chapters.road.onward"
+      ]
+    }
+  ],
+  "schema": 1,
+  "totals": {
+    "edges": 2,
+    "labels": 3,
+    "reached": 2,
+    "terminal": 1,
+    "unreachable": 1
+  }
+}

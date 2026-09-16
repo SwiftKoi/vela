@@ -13,6 +13,7 @@ const GOLDEN_TESTS: &[(&str, &str)] = &[
     ("vela-text", "layout_golden"),
     ("vela-replay", "corpus"),
     ("vela-assets", "assets_golden"),
+    ("vela-cli", "analyze_golden"),
 ];
 
 /// Regenerates every golden, returning whether all of them succeeded.
