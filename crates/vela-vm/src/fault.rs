@@ -68,6 +68,19 @@ pub enum Fault {
     LogExhausted(usize),
     /// A command's arguments did not fit its schema.
     BadSchema(String),
+    /// A function was asked for a value it cannot produce.
+    ///
+    /// The caller is [`crate::Vm::call`], which evaluates a function *inside* a running story — a
+    /// test's assertion, read by the runner. Three ways that goes wrong, and all three are the
+    /// caller's mistake rather than the module's: there is no such function, it takes parameters
+    /// with nothing to pass them, or it suspends, which makes it a piece of story rather than an
+    /// expression.
+    NotAValue {
+        /// The function.
+        name: String,
+        /// Why it could not be read.
+        why: &'static str,
+    },
 }
 
 impl fmt::Display for Fault {
@@ -103,6 +116,7 @@ impl fmt::Display for Fault {
                  since it was written"
             ),
             Self::BadSchema(name) => write!(f, "`{name}` was built with the wrong arguments"),
+            Self::NotAValue { name, why } => write!(f, "`{name}` is not a value: {why}"),
         }
     }
 }

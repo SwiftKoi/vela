@@ -65,6 +65,14 @@ pub struct Vm {
     /// The command `Cmd` built, waiting for the `Yield` that hands it over.
     pub(crate) pending: Option<Command>,
     pub(crate) status: Status,
+    /// The labels entered so far, by index, in the order they were first entered.
+    ///
+    /// Observational state rather than story state. `vela test`'s `cover labels` is a question about a
+    /// *run* — which labels did this playthrough go through — and the machine is the only thing that
+    /// knows. It is deliberately not part of a save: a save records where the story is, and a load
+    /// resuming with an empty list at worst makes a coverage report for a resumed run, which is a
+    /// report nobody asks for.
+    pub(crate) entered: Vec<u32>,
 }
 
 impl Vm {
@@ -77,6 +85,7 @@ impl Vm {
             stack: Vec::new(),
             pending: None,
             status: Status::Ready,
+            entered: Vec::new(),
         }
     }
 
@@ -113,6 +122,7 @@ impl Vm {
             .ok_or_else(|| Fault::NoLabel(label.to_string()))?;
 
         let index = u32::try_from(index).unwrap_or(u32::MAX);
+        self.record_label(index);
         self.frames.push(Frame {
             body: BodyRef::Label(index),
             ip: 0,
@@ -156,7 +166,7 @@ impl Vm {
     }
 
     /// Executes one instruction, returning a command if it suspended.
-    fn execute(&mut self, world: &mut World) -> Result<Option<Command>, Fault> {
+    pub(crate) fn execute(&mut self, world: &mut World) -> Result<Option<Command>, Fault> {
         let Some(frame) = self.frames.last() else {
             self.status = Status::Finished;
             return Ok(None);
@@ -287,6 +297,9 @@ impl Vm {
     /// found nothing and handed back `none`, so `n == 1` was false for every `n` and a function
     /// quietly took the wrong branch instead of failing.
     pub(crate) fn enter(&mut self, body: BodyRef) -> Result<(), Fault> {
+        if let BodyRef::Label(index) = body {
+            self.record_label(index);
+        }
         let (exists, params) = match body {
             BodyRef::Function(index) => (
                 self.module.fns.get(index as usize).is_some(),
