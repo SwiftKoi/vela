@@ -32,4 +32,13 @@ files = [
     # replace that with a table whose omissions only surface in a bundle that will not load.
     "crates/vela-ui/src/pack/read/expr.rs",
     "crates/vela-ui/src/pack/write/expr.rs",
+
+    # The DAP command dispatcher: one arm per protocol command this adapter implements, over a
+    # vocabulary defined by an external specification rather than by us. It is an adapter's whole
+    # job to mirror a foreign command set — the same reasoning as vela-host/window.rs — and the
+    # set is closed for our purposes: nothing extends a debug adapter's protocol, so there is no
+    # third party who could add a command and need a registry to register it in. What matters is
+    # that an unimplemented command is *refused explicitly* (the fall-through arm), which the
+    # match makes visible in one place.
+    "crates/vela-debug/src/server/dispatch.rs",
 ]

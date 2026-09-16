@@ -1,0 +1,34 @@
+[package]
+name = "vela-debug"
+description = "The debugger: a Debug Adapter Protocol server over the VM's step interface."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[package.metadata.vela]
+# 9, beside `vela-lsp` and `vela-test`: it assembles what the lower layers already say — the
+# machine (`vela-vm`), the snapshot ring (`vela-replay`), and the checker (`vela-types`, through
+# `vela-syntax` and `vela-hir`) — into one protocol, rather than adding analysis of its own.
+rank = 9
+
+[dependencies]
+serde_json.workspace = true
+vela-span.workspace = true
+vela-syntax.workspace = true
+vela-hir.workspace = true
+vela-types.workspace = true
+vela-bytecode.workspace = true
+vela-vm.workspace = true
+vela-replay.workspace = true
+vela-world.workspace = true
+vela-diag.workspace = true
+
+[dev-dependencies]
+# The whole front end, so a test can compile a fixture into the program a debugger runs — the same
+# pipeline the command line uses, so a test cannot describe a story the build would reject.
+vela-hir.workspace = true
+vela-mir.workspace = true
+
+[lints]
+workspace = true

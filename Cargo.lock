@@ -2058,6 +2058,7 @@ dependencies = [
  "vela-assets",
  "vela-bytecode",
  "vela-compile",
+ "vela-debug",
  "vela-diag",
  "vela-hir",
  "vela-host",
@@ -2086,6 +2087,23 @@ dependencies = [
  "vela-span",
  "vela-syntax",
  "vela-types",
+]
+
+[[package]]
+name = "vela-debug"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "vela-bytecode",
+ "vela-diag",
+ "vela-hir",
+ "vela-mir",
+ "vela-replay",
+ "vela-span",
+ "vela-syntax",
+ "vela-types",
+ "vela-vm",
+ "vela-world",
 ]
 
 [[package]]
