@@ -6,7 +6,7 @@
 
 **Crates.** `vela-plugin`, `vela-audio`, `vela-ui`/`vela-render` media widgets.
 
-**Work items.**
+## Work items
 1. WASM plugin host (wasmtime) with the capability ABI and version negotiation
    (`ARCHITECTURE.md §6.4`); `check-abi`.
 2. Plugin registration into every registry: effects, widgets, importers, passes, CLI commands.
@@ -20,7 +20,7 @@
 7. Mobile targets: `android`, `ios`, touch input profile, safe-area handling, lifecycle
    (backgrounding mid-animation must replay correctly).
 
-**Exit criteria.**
+## Exit criteria
 - [ ] A sample plugin adds a widget, an effect, and a lint touching **zero** core files
 - [ ] A plugin requesting an undeclared capability is denied deterministically
 - [ ] Audio position survives save/load exactly
@@ -28,6 +28,12 @@
 - [ ] The full widget set passes the accessibility sweep
 - [ ] **Demo:** `vela run` a fixture using the sample plugin, Live2D, and audio
 
-**Risks.** The plugin ABI is the hardest thing here to get right and the most expensive to
+## Status
+
+Not started. Nothing here is designed yet beyond the ABI shape `ARCHITECTURE.md §6.4` fixes.
+
+## Risks
+
+The plugin ABI is the hardest thing here to get right and the most expensive to
 change. Mitigation: ship ABI 1.0 with the smallest possible surface — effects and widgets
 only — and add surfaces additively.

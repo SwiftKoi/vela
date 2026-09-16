@@ -6,7 +6,7 @@
 
 **Crates.** `vela-replay`, `vela-world` (schema derivation).
 
-**Work items.**
+## Work items
 1. Schema derivation from `default`/`struct`/`enum` declarations; `schema_digest` computation.
 2. Serialization of `World` + frames; `Save` container with atomic write (`RUNTIME.md §5`).
 3. Snapshot ring buffer and rollback-to-command (`RUNTIME.md §7`).
@@ -15,7 +15,7 @@
 6. The append-only `tests/golden/saves/` corpus, seeded from M8 onward.
 7. Snapshot-cost benchmark against the budget in `RUNTIME.md §7.2`.
 
-**Exit criteria.**
+## Exit criteria
 - [x] Save in build N loads in build N+1 with only an added migration; asserted in CI
 - [x] A missing migration fails with `E7201` and names the gap
 - [x] Rollback to any of 20 points in a session replays exactly (asserted on `World` bytes)
@@ -24,7 +24,9 @@
 - [x] **Demo:** `vela run examples/standard` — rollback wheel, save/load slots, migrate a
       fixture save across one version
 
-**Where it landed.** `SAVE_VERSION` is 3. Two steps are in `vela-replay`'s migration chain —
+## Status
+
+`SAVE_VERSION` is 3. Two steps are in `vela-replay`'s migration chain —
 `1 → 2` (`trust` → `affection`) and `2 → 3`, which is the suspension anchor and rewrites no
 world state — and `tests/golden/saves/` holds a real save for each, so CI loads all three into
 the current build on every run. `cargo xtask budget` measures the snapshot against
@@ -51,22 +53,27 @@ Two honest deviations from this page's wording:
   Both report `load quick (migrated 1 -> 3)`; the world the second one produces is asserted by
   `tests/corpus.rs`, since the CLI prints the version and not the state.
 
-**Risks.** Serialization formats ossify. Mitigation: the append-only save corpus is
+## Still open
+
+- **A restored scene is not rebuilt.** A rollback or load re-applies the command on screen but does
+  not rebuild the staged scene from the restored `World`, so a rollback across a `scene` change
+  leaves the old backdrop until the next one.
+- **Snapshot intervals do not auto-tune.** A project over budget still takes one every 64 commands
+  rather than spacing them out (`RUNTIME.md §7.2`).
+- **The digest is deliberately non-cryptographic.**
+- **A pre-anchor save resumes from its index** — the corpus's version-1 and version-2 files — which
+  catches a body that is too short and nothing subtler.
+- **An anchor that survives an *edit***, which is a language decision rather than a state one. A
+  frame is anchored to a statement's source range, which survives a rebuild and is refused rather
+  than resumed wrongly when the body no longer holds it (`RUNTIME.md §5`). But a range is a position
+  in a file, so inserting a line above a `call` makes every save suspended inside that call stale.
+  Ren'Py names the return site with a `from` clause and has its *build* add the clauses a script is
+  missing — and the same "identity for a statement that outlives the characters around it" is what a
+  translation message id wants and what M11's warp wants. Decide it before the first patch ships,
+  and give it one mechanism rather than three.
+
+## Risks
+
+Serialization formats ossify. Mitigation: the append-only save corpus is
 established the moment the format exists, making incompatibility a test failure rather than a
 player report.
-
-**Still open after M8.** A rollback or load re-applies the command on screen but does not
-rebuild the staged scene from the restored `World`, so a rollback across a `scene` change
-leaves the old backdrop until the next one. Snapshot intervals do not yet auto-tune for a
-project over budget. The digest stays deliberately non-cryptographic. A save written before the
-anchor existed (the corpus's version-1 and version-2 files) still resumes from its index, which
-catches a body that is too short and nothing subtler.
-
-**Still open, and it is a language decision rather than a state one: an anchor that survives an
-*edit*.** A frame is anchored to a statement's source range, which survives a rebuild and is
-refused rather than resumed wrongly when the body no longer holds it (`RUNTIME.md §5`). But a
-range is a position in a file, so inserting a line above a `call` makes every save suspended
-inside that call stale. Ren'Py names the return site with a `from` clause and has its *build*
-add the clauses a script is missing — and the same "identity for a statement that outlives the
-characters around it" is what a translation message id wants and what M11's warp wants. Decide it
-before the first patch ships, and give it one mechanism rather than three.

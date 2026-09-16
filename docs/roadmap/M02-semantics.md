@@ -7,7 +7,7 @@ story graph is analyzed.
 
 **Crates.** `vela-hir`, `vela-types`, `vela-compile` (query database).
 
-**Work items.**
+## Work items
 1. Query database (salsa-style) with tracked inputs `file`, `module`; queries `parse`,
    `resolve`, `typecheck`. **Design this in now, not later** (`ARCHITECTURE.md §6.2`).
 2. Name resolution: module scopes, `use`, `pub`, duplicate detection (`E2xxx`).
@@ -19,7 +19,7 @@ story graph is analyzed.
 7. Type-related diagnostics `E3xxx`, story diagnostics `E5xxx`.
 8. `vela check --format json` and `--format sarif` with a stable schema (`TOOLING.md §2`).
 
-**Exit criteria.**
+## Exit criteria
 - [x] Every `E2xxx`–`E5xxx` code in `LANGUAGE.md §8` has a test
 - [x] `W4002` fires on an unreachable label in a fixture and not on a reachable one
 - [x] SARIF output validates against the SARIF schema — checked against the official 2.1.0
@@ -33,9 +33,11 @@ story graph is analyzed.
 - [x] **Demo:** `vela check --deny-warnings` on a fixture with six deliberate errors reports
       all six and two warnings, and exits 1
 
-**Status.** Complete. 184 tests, 7/7 `xtask` checks, clippy clean with `-D warnings`.
+## Status
 
-**Found during implementation.**
+Complete. 184 tests, 7/7 `xtask` checks, clippy clean with `-D warnings`.
+
+## Found during implementation
 
 - **Two cache-correctness bugs**, both caught by the incrementality tests and both the same
   shape in reverse. `collect_deps` *took* the scratch entries, so a nested query emptied its
@@ -78,6 +80,8 @@ with `E2005` at check time rather than lowered into a field read that faults whe
 it: the checker is per-module, so it has no signature to check the call against, and refusing beats
 guessing. Cross-module types remain the open half, and are what would let values follow.
 
-**Risks.** Inference and lowering were expected to be the danger; they were routine. The
+## Risks
+
+Inference and lowering were expected to be the danger; they were routine. The
 danger was in the *cache*, which the milestone's own exit criteria caught twice — worth
 noting for M3, where the same machinery carries more queries.

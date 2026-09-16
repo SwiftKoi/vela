@@ -50,7 +50,8 @@ screens, and plugins without rewriting, the engine has failed regardless of what
 | [docs/spec/TOOLING.md](docs/spec/TOOLING.md) | CLI, diagnostics, LSP, formatter, debugger, test runner |
 | [docs/spec/BUILD_AND_ASSETS.md](docs/spec/BUILD_AND_ASSETS.md) | Asset pipeline, targets, web, delta patches, reproducibility |
 | [docs/guides/lsp-walkthrough.md](docs/guides/lsp-walkthrough.md) | The language server in an editor, step by step, over `examples/standard` |
-| [docs/adr/](docs/adr/README.md) | Decision records for choices that are expensive to reverse |
+| [docs/guides/debugger-walkthrough.md](docs/guides/debugger-walkthrough.md) | The debug adapter in a client, step by step, over `examples/standard` |
+| [docs/README.md](docs/README.md) | What lives where in `docs/`, and how each kind is updated |
 | [ROADMAP.md](ROADMAP.md) | Milestones M0–M14, work items, exit criteria |
 
 ## Reading order
@@ -101,6 +102,18 @@ cover.
   subsetting, the remaining importers, `W7001`, the target drivers, and drawing in a browser are
   still to come — though `crates/vela-web` already runs the engine in wasm and plays the same
   story the native build plays, at 287 KB and gated.
+- **M10** (tooling) — complete: the language server (diagnostics at parity with `vela check`,
+  hover, completion, goto-definition, references, and rename across module boundaries), the
+  formatter behind `vela fmt --check` and the `check-format` gate, the headless runner behind
+  `vela test`, `vela analyze`, and `vela doc`.
+- **M11** (debugger) — *in progress*: `vela debug` speaks the Debug Adapter Protocol over stdio or
+  a port, so a client attaches to a compiled story, breaks on a label or a line, steps
+  over/into/out, steps *backwards* through the rollback ring, inspects `World` and the running
+  frame's slots, and checks an expression with the real type checker — an invalid one is a normal
+  `Exxx`. Trace hooks cost nothing in a release build: the machine reports no span or slot name
+  when `Header::FLAG_DEBUG` is clear. Hover answers a widget or an action from the same schema the
+  generated reference is built from, and links to that page when the project has one. Still to
+  come: an editor extension.
 
 ## Working in this repo
 
@@ -114,6 +127,7 @@ cargo run --release -p xtask -- budget   # startup and frame time, against xtask
 cargo run -p vela-cli -- --version
 cargo run -p vela-diag --example render_demo   # see a rendered diagnostic
 vela lsp examples/standard                     # the language server, on stdin and stdout
+vela debug examples/standard                   # the debug adapter, on stdin and stdout
 vela test examples/standard                    # the suite, headless
 vela analyze examples/standard                 # the story graph, and what a run cannot reach
 vela doc widgets                               # reference Markdown, from the schemas

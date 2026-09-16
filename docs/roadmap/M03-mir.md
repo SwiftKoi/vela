@@ -6,7 +6,7 @@
 
 **Crates.** `vela-mir`.
 
-**Work items.**
+## Work items
 1. MIR data structures exactly as `BYTECODE.md §2` (`Module`, `Body`, `Block`, `Stmt`,
    `Terminator`, `Value`).
 2. Lowering split by construct: `lower/stmt/`, `lower/expr/`, `lower/decl.rs`.
@@ -18,7 +18,7 @@
 6. Differential harness: run the corpus with and without passes, assert identical observable
    behavior (command stream + final `World`). This harness is reused at M5.
 
-**Exit criteria.**
+## Exit criteria
 - [x] Every construct in `LANGUAGE.md §3` lowers to MIR with a golden pretty-print — 13
       entries in `tests/golden/mir/`, and `every_mir_form_appears_in_the_corpus` fails if any
       MIR form stops being produced by any of them
@@ -29,7 +29,11 @@
       a registry entry, and a golden
 - [x] **Demo:** `vela check --emit mir examples/hello`
 
-**Status.** Complete. 204 tests, 7/7 `xtask` checks, clippy clean with `-D warnings`.
+## Status
+
+Complete. 204 tests, 7/7 `xtask` checks, clippy clean with `-D warnings`.
+
+## Found during implementation
 
 **The spec could not express the language.** Building MIR against `BYTECODE.md §2` turned up
 eight gaps where the draft had no way to say something `LANGUAGE.md §3` requires. Each was
@@ -88,7 +92,9 @@ effects are one table, which is what makes `LANGUAGE.md §6.1`'s `jump forest.cl
 `CallLabel`. Values still do not cross (`E2005`), so item 3's promise now holds exactly for labels,
 which is what it was about.
 
-**Risks.** The risk named here was that lowering story constructs into generic control flow
+## Risks
+
+The risk named here was that lowering story constructs into generic control flow
 would lose clarity. It did not: `JumpLabel` and `CallLabel` stayed first-class, and the story
 graph is recoverable from MIR by inspection — the printer shows it directly. The actual risk
 was **block construction ordering**, which is invisible in the printed output and only shows

@@ -1,6 +1,6 @@
 # Language Specification
 
-Status: **draft, normative for M1–M5.**
+Status: **draft, normative for M1–M5, extended by M9's asset references and M10's tests.**
 
 The surface language is called **Vela** (`.vela` files). It is indentation-significant,
 statically typed, and compiled ahead-of-time to bytecode. Its design goal is a specific
@@ -441,7 +441,7 @@ program's type environment. Making assets a real type is what would let the save
 plugin's ABI name one, so it is a change to agree on before either of them ships, not a detail to
 discover while writing a struct.
 
-> **Implemented so far (M9).** `E7001` is reported by `vela check` for every `@"path"` that
+> **Implemented (M9).** `E7001` is reported by `vela check` for every `@"path"` that
 > names nothing in the project's manifest, underlined at the literal itself.
 >
 > Path literals are recorded **where they are parsed** (`ParseResult::paths`) rather than found
@@ -511,7 +511,7 @@ test "every route reaches an ending":
 A `test` is not story content: it neither defines a name nor adds a node to the story graph, and
 `vela build` does not carry it into a bundle.
 
-> **Implemented so far (M10).** The item parses, formats, and prints as canonical
+> **Implemented (M10).** The item parses, formats, and prints as canonical
 > (`tests/golden/parse/item_test.vela` is in the corpus every formatting gate covers), and an unknown
 > directive or cover word is reported once, with the line it is on.
 >

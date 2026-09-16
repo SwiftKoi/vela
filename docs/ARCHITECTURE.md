@@ -24,7 +24,7 @@ rank  crates
  6    vela-bytecode
  7    vela-compile  vela-vm
  8    vela-replay   vela-ui      vela-migrate
- 9    vela-test     vela-lsp     vela-plugin
+ 9    vela-test     vela-lsp     vela-debug   vela-plugin
 10    vela-cli     vela-web*
 ```
 
@@ -64,7 +64,7 @@ be below everything that reports through it.
 | `vela-text` | 1 | Shaping, layout, glyph atlas, font subsetting hooks | `ShapedRun`, `TextLayout` |
 | `vela-audio` | 1 | Audio graph description (mixing is a host responsibility) | `AudioCommand`, `Bus` |
 | `vela-host` | 1 | **adapter** — platform traits + native impls (window, input, fs, time) | `Host`, `InputEvent`, `Clock` |
-| `vela-hir` | 3 | Name resolution, scopes, desugared AST, story graph | `Hir`, `DefId`, `StoryGraph` |
+| `vela-hir` | 3 | Module definitions, aliases, name resolution, story graph | `Hir`, `DefId`, `StoryGraph` |
 | `vela-render` | 2 | **adapter** — `wgpu` renderer, render graph, shaders, command consumption | `Renderer`, `RenderGraph` |
 | `vela-assets` | 2 | Importers, transformers, content-addressed manifest | `Importer`, `Manifest`, `Digest` |
 | `vela-types` | 4 | Type representation, inference, checking rules | `Ty`, `TypeCtx`, `Infer` |
@@ -76,6 +76,7 @@ be below everything that reports through it.
 | `vela-ui` | 8 | Screen runtime, layout solver, widget registry, styling | `Tree`, `Widget`, `Registry` |
 | `vela-migrate` | 8 | `.rpy` → `.vela` transpiler + compat report | `Transpile`, `Report` |
 | `vela-lsp` | 9 | Language server over `vela-compile` and `vela-ui` | `Server` |
+| `vela-debug` | 9 | Debug Adapter Protocol server over the VM's step interface (`RUNTIME.md §9`) | `Server`, `Program`, `Debuggee` |
 | `vela-test` | 9 | Headless story runner, assertions, golden frames | `StoryTest`, `Asserts` |
 | `vela-plugin` | 9 | WASM plugin host, capability ABI, versioned surface | `PluginHost`, `Capability` |
 | `vela-cli` | 10 | The `vela` binary; subcommand registry | `Command`, `Main` |
@@ -108,27 +109,33 @@ must never disagree about what a program means.
    │  vela-syntax::lex + parse
    ▼
 CST ──────────────► vela-diag (syntax errors E0xxx/E1xxx)
-   │  vela-hir::lower
+   │  vela-hir::collect — definitions, aliases, story graph
    ▼
-HIR ──► name resolution ──────► E2xxx, story graph checks E5xxx
-   │  vela-types::check
+symbols ──► name resolution ──► E2xxx, story graph checks E5xxx
+   │  vela-types::Env::build + check — the type environment
    ▼
-typed HIR ────────────────────► E3xxx, exhaustiveness/reachability E4xxx
-   │  vela-mir::lower
+checked program ─────────────► E3xxx, exhaustiveness/reachability E4xxx
+   │  vela-mir::lower(tree, env)
    ▼
-MIR (typed IR, the stable contract)
+MIR (typed IR, the stable contract), one module per file
    │  vela-mir::opt (pass pipeline — extensible)
    ▼
-optimized MIR, one module per file
+optimized MIR
    │  vela-mir::link — the whole program into one module (LANGUAGE.md §6.1)
    ▼
 one MIR module
-   │  vela-bytecode::codegen
+   │  vela-bytecode::compile
    ▼
 bytecode module ──► verifier (E6xxx if a pass is buggy) ──► .velac bundle
                                                             (bytecode + asset manifest
                                                              + schema hashes)
 ```
+
+**There is no lowered HIR.** `vela-hir` is the *names* of a program — its definitions, its aliases,
+and the story graph they make — and it never produces statement or expression nodes. Types are
+checked against the syntax tree with an environment built from it, and `vela-mir::lower` reads the
+same tree with that environment beside it. The diagram used to route through a "typed HIR" that
+does not exist; the phases are the real ones.
 
 ### 3.2 Editor pipeline (interactive)
 
@@ -191,11 +198,11 @@ extension surface is a registry populated at link/startup time.
 
 | To add… | Register with | Lives in | Core files touched |
 | --- | --- | --- | --- |
-| A new statement/expression | Parser rule table + pass pipeline | `vela-syntax`, `vela-hir` | **None** — rules are added to a table module |
-| A new effect (host call) | `EffectRegistry` | `vela-vm` / `vela-host` | **None** |
+| A new statement/expression | Parser rule table + pass pipeline | `vela-syntax`, `vela-types`, `vela-mir` | **None** — rules are added to a table module |
+| A new effect (host call) | One arm in `vela-vm`'s `effect` match — a registry once an effect needs a host (`CONVENTIONS.md §4.3`) | `vela-vm` / `vela-host` | **One arm** |
 | A new UI widget | `WidgetRegistry` | `vela-ui` | **None** |
 | A new asset format | `ImporterRegistry` | `vela-assets` | **None** |
-| A new lint | `PassRegistry` | `vela-compile` | **None** |
+| A new lint | The phase that owns the question — `vela-hir` for reachability, `vela-types` for coverage, the formatter for a pragma | the owning phase | **One arm where the question is asked** |
 | A new render stage | `RenderGraph` insertion | `vela-render` | **None** |
 | A new CLI command | `CommandRegistry` | `vela-cli` | **None** |
 | A new bytecode instruction | `OpSpec` table + handler struct | `vela-bytecode`, `vela-vm` | **One table module** |
@@ -217,8 +224,8 @@ applicable suggestion where one exists. Codes are never reused or renumbered. Se
 `spec/LANGUAGE.md §8` for the numbering scheme and `spec/TOOLING.md §2` for renderings.
 
 ### 6.2 Incremental computation
-`vela-compile` is built on a query database (salsa-style): `parse(file)`, `resolve(module)`,
-`typecheck(body)`, `mir(body)`, `codegen(body)` are queries with tracked inputs. This is not
+`vela-compile` is built on a query database (salsa-style): `parse(file)`, `symbols(file)`,
+`check(file)`, `analyse(project)`, and `mir(file)` are queries with tracked inputs. This is not
 an optimization — it is what makes the LSP viable, and it is cheapest to design in from the
 start rather than retrofit.
 
@@ -235,9 +242,12 @@ and additive; a plugin built against ABI 1 keeps working when we add ABI 2 featu
 
 ## 7. Key decisions
 
-Short decision records. Each has a rationale and, where relevant, the alternative we
-rejected. Long-form decisions graduate to a file under [`docs/adr/`](adr/) when they are
-revisited; the index there is the canonical list.
+Short decision records. Each has a rationale and, where relevant, the alternative we rejected.
+A decision that needs more than a row graduates to the document that owns the area it governs —
+`docs/spec/*` for a contract, `docs/engineering/*` for a rule about working here — and the row
+below links to it. There is deliberately no separate decision-record directory: the one that
+existed held a single record, and a second index of the same decisions is how two lists come to
+disagree.
 
 | # | Decision | Rationale | Rejected alternative |
 | --- | --- | --- | --- |

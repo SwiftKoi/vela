@@ -6,7 +6,7 @@
 
 **Crates.** `vela-bytecode`.
 
-**Work items.**
+## Work items
 1. `OpSpec` table (`op.rs`) as data; assembler and disassembler both read it.
 2. MIR → bytecode codegen, including jump-table construction for `Dispatch`.
 3. Verifier implementing all eight rules in `BYTECODE.md §4`.
@@ -15,7 +15,7 @@
 6. Debug info: span table, slot names, line table (`BYTECODE.md §5`).
 7. Golden disassembly corpus + a verifier-rejection corpus.
 
-**Exit criteria.**
+## Exit criteria
 - [x] Verifier rejects, with `E6xxx`, a hand-crafted module for each of its eight rules —
       `tests/rejection.rs`: ten modules, one per rule, plus a well-formed one so the tests
       are rejecting something rather than everything
@@ -28,7 +28,11 @@
       else being told about it
 - [x] **Demo:** `vela check --emit disasm examples/hello`
 
-**Status.** Complete. 230 tests, 7/7 `xtask` checks, clippy clean with `-D warnings`.
+## Status
+
+Complete. 230 tests, 7/7 `xtask` checks, clippy clean with `-D warnings`.
+
+## Found during implementation
 
 **The instruction table was missing eleven ops.** Each was found by asking what
 `LANGUAGE.md §3` needs, and the cluster says something about how §3.2 was written: it reads
