@@ -8,6 +8,7 @@ mod diff_tests;
 mod format_tests;
 mod linking_tests;
 mod lsp_parity;
+mod migrate_tests;
 mod runner_tests;
 mod support;
 mod ui_tests;

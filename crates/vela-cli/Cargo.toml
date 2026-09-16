@@ -32,8 +32,8 @@ vela-assets.workspace = true
 vela-host.workspace = true
 vela-lsp.workspace = true
 vela-debug.workspace = true
-vela-test.workspace = true
 vela-migrate.workspace = true
+vela-test.workspace = true
 vela-render = { version = "0.1.0", path = "../vela-render" }
 vela-text = { version = "0.1.0", path = "../vela-text" }
 vela-world = { version = "0.1.0", path = "../vela-world" }

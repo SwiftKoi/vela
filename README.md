@@ -114,6 +114,12 @@ cover.
   when `Header::FLAG_DEBUG` is clear. Hover answers a widget or an action from the same schema the
   generated reference is built from, and links to that page when the project has one. Still to
   come: an editor extension.
+- **M12** (migration) — *in progress*: `vela migrate <project>` transpiles a Ren'Py project's story
+  files into `.vela` and writes `MIGRATION.md` beside them — every construct it refused to guess at,
+  with `file:line`, the original text, and what to do. `--strict` makes that count an exit code, so a
+  port can be tracked as a number that goes to zero. Ren'Py's own `the_question` migrates, checks
+  with no problems, and plays headless; the engine grew **text tags** for `"{b}Good Ending{/b}."`
+  rather than reporting it, since `{` was an error until M12.
 
 ## Working in this repo
 
@@ -128,6 +134,7 @@ cargo run -p vela-cli -- --version
 cargo run -p vela-diag --example render_demo   # see a rendered diagnostic
 vela lsp examples/standard                     # the language server, on stdin and stdout
 vela debug examples/standard                   # the debug adapter, on stdin and stdout
+vela migrate ../renpy-game --report            # Ren'Py in, and what to port by hand
 vela test examples/standard                    # the suite, headless
 vela analyze examples/standard                 # the story graph, and what a run cannot reach
 vela doc widgets                               # reference Markdown, from the schemas

@@ -327,6 +327,36 @@ expressions (`$` statement blocks → best-effort function extraction, flagged).
 The report is itself a work item list, and `--strict` turns any unsupported construct into a
 non-zero exit, so a team can track migration progress as a number that goes to zero.
 
+> **Implemented (M12).** `vela migrate <path> [--out <dir>] [--report] [--strict]` transpiles a
+> project's story files and writes `MIGRATION.md` beside them — the report *is* the rest of the
+> work, and a work item list that scrolls off a terminal is one nobody keeps. `--strict` is the
+> number a team can gate on. `crates/vela-migrate/src/tests/transpile_tests.rs` holds the corpus
+> of known-unsupported snippets the third exit criterion asks for, and
+> `crates/vela-cli/src/tests/migrate_tests.rs` migrates a project and then **checks** it, because
+> "the output compiles" is not a claim a migrator can make about itself.
+>
+> **A story file is one that declares a label.** That is the whole test, and it is the right one:
+> Ren'Py's story files are exactly the files with labels in them, and every other `.rpy` —
+> `options`, `gui`, `screens`, `testcases` — is engine configuration or the screen language, which
+> Vela expresses differently. Those are reported once, by file, rather than per line: a 1,500-line
+> `screens.rpy` reported as 596 entries is a report nobody reads.
+>
+> **Assets are inventoried, not copied.** An asset in Vela is only meaningful once something
+> declares it (`image bg.room = @"art/room.png"`), and Ren'Py declares its images *automatically*
+> from filenames — reproducing that is its own piece of work, and the first item on the report.
+> There is also a hard reason not to copy blindly: `vela check` **imports** everything under
+> `assets/`, so a file no importer claims (a JPEG background, an Opus track) is an error rather
+> than a warning.
+>
+> **Two things the language had to grow, rather than report.** Text tags, because the sample's
+> ending is `"{b}Good Ending{/b}."` and reporting it would have been a blocker for a construct the
+> engine can carry (`LANGUAGE.md §1`). And a report entry that is *not* a blocker: Ren'Py keeps a
+> label and a `default` in separate namespaces and Vela does not, so a colliding label is renamed
+> deterministically, with the entry saying so and every `jump`/`call` following it.
+>
+> **Not yet:** work items 2–7 — the expression translator beyond the whitelist, the compat shim for
+> `renpy.*` calls, local labels, the ported sample under `tests/`, and translation extraction.
+
 ## 9. Docs (`vela doc`)
 
 Generates reference documentation from the single sources of truth already in the codebase:

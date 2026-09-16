@@ -59,6 +59,7 @@ pub fn builtin() -> Registry {
     registry.register(Box::new(commands::Doc::new()));
     registry.register(Box::new(commands::Format::at_current_dir()));
     registry.register(Box::new(commands::Lsp::at_current_dir()));
+    registry.register(Box::new(commands::Migrate::at_current_dir()));
     registry.register(Box::new(commands::Patch::at_current_dir()));
     registry.register(Box::new(commands::Run::at_current_dir()));
     registry.register(Box::new(commands::Test::at_current_dir()));
