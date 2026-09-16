@@ -2219,6 +2219,7 @@ version = "0.1.0"
 dependencies = [
  "vela-diag",
  "vela-span",
+ "vela-text",
 ]
 
 [[package]]

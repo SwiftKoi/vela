@@ -121,12 +121,33 @@ fn an_escaped_sigil_is_literal_text() {
     );
 }
 
-/// The whole reason `{` is an error: the same characters would mean something else the day text tags
-/// exist, and a string that quietly changed meaning when the engine grew would be worse than one
-/// that refused to build.
+/// A text tag is part of the text rather than a part of its own.
+///
+/// `BYTECODE.md §3.3`: a line of dialogue is one command, and what a script puts inside that text
+/// is interpreted by the presenter. So the tag's characters stay in the literal, which is what
+/// makes a migrated line byte-identical to the one its author wrote.
 #[test]
-fn a_brace_is_a_reserved_text_tag() {
-    let parsed = parse_src("label a:\n    var s = \"a {b} b\"\n");
+fn a_known_text_tag_stays_in_the_text() {
+    let body = only_label("label a:\n    var s = \"a {b}bold{/b} b\"\n");
+    let Stmt::Var(var) = &body[0] else {
+        panic!("expected a var statement");
+    };
+    let Expr::Str { parts, .. } = &var.value else {
+        panic!("expected a string");
+    };
+    assert_eq!(parts.len(), 1);
+    assert!(
+        matches!(&parts[0], StrPart::Literal { text, .. } if text == "a {b}bold{/b} b"),
+        "{parts:?}"
+    );
+}
+
+/// A tag outside the vocabulary is an error rather than text, because the two readings differ in
+/// meaning: Ren'Py's `{color=#fff}` styles the words around it, and drawing the markup literally
+/// would put it in front of a player.
+#[test]
+fn an_unknown_text_tag_is_reported() {
+    let parsed = parse_src("label a:\n    var s = \"a {color=#fff} b\"\n");
     let codes: Vec<&str> = parsed
         .diagnostics
         .iter()

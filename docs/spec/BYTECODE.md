@@ -242,9 +242,9 @@ to it. That line is **saveable presentation state**, alongside the staged scene 
 thing as the M8 gap where a rollback re-applies a command without rebuilding what was staged
 (`M08-state.md`).
 
-The text tags themselves are not implemented, and `{` is an error until they are
-(`LANGUAGE.md §1`): what is settled here is the *shape of the command*, which is what the freeze
-needed and what the rest of the pipeline already assumes.
+Text tags are read by the presenter for the same reason: a `{b}` changes how the words are drawn
+and nothing about what the story does, so it stays in the text a `Say` carries (`LANGUAGE.md §1`)
+rather than becoming a command of its own.
 
 **Adding a command or effect is a schema registration, not an instruction.** This narrows the
 "adding an instruction" exception in `CONVENTIONS.md §4.6` to genuinely new *arithmetic or

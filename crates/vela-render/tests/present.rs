@@ -281,3 +281,37 @@ fn long_dialogue_wraps_inside_the_box() {
         .fold(0.0f32, f32::max);
     assert!(widest < 1280.0, "text ran off the frame: {widest}");
 }
+
+/// A text tag changes how the words are drawn, and is never drawn itself.
+///
+/// Bold is synthesized by drawing the glyphs twice a hair apart, because the project ships one
+/// font face. Italic has no shear to lean with yet — that is a transform, and the draw list has
+/// none until M13 — so it is drawn plain. The gap is asserted here so that it stays *stated*
+/// rather than becoming a surprise in a screenshot.
+#[test]
+fn text_tags_are_read_rather_than_drawn() {
+    let glyphs = |body: &str| {
+        let mut presenter = fresh();
+        presenter.apply(&say(None, body));
+        let mut draw = DrawList::new();
+        presenter.build(&mut draw);
+        draw.glyph_count()
+    };
+
+    let plain = glyphs("Good Ending.");
+    assert!(plain > 0, "the fixture should draw something");
+    assert!(
+        glyphs("{b}Good Ending.{/b}") > plain,
+        "bold is a second pass over the same glyphs"
+    );
+    assert_eq!(
+        glyphs("{i}Good Ending.{/i}"),
+        plain,
+        "italic has no face to lean, so it is drawn plain rather than not at all"
+    );
+    assert_eq!(
+        glyphs("{b}Good{/b} Ending."),
+        glyphs("Good Ending.") + glyphs("Good"),
+        "the tag itself is read, never drawn"
+    );
+}

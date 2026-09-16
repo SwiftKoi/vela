@@ -7,12 +7,17 @@
 //!
 //! # Two sigils, and why they are not the same one
 //!
-//! `[` interpolates a value and `{` is reserved for text tags, which is the split Ren'Py arrived
-//! at and for the same reason: both are things a VN puts *inside* dialogue, and one sigil cannot
-//! be both. `"{b}Hi{/b}"` must mean bold, `"Score: [score]"` must mean the number, and with one
-//! sigil the first reads as "interpolate `b`". A brace is therefore an error today rather than a
-//! literal (`E0010`), because the two readings differ in meaning and accepting the wrong one now
-//! would change what already-written dialogue says.
+//! `[` interpolates a value and `{` opens a text tag, which is the split Ren'Py arrived at and for
+//! the same reason: both are things a VN puts *inside* dialogue, and one sigil cannot be both.
+//! `"{b}Hi{/b}"` must mean bold, `"Score: [score]"` must mean the number, and with one sigil the
+//! first reads as "interpolate `b`".
+//!
+//! A tag is **kept in the literal text** rather than becoming a part of its own. `BYTECODE.md §3.3`
+//! puts the interpretation in the presenter — a line of dialogue is one command, and what a script
+//! puts inside that text changes how it is drawn, not what the story does — so the tag travels with
+//! the words and the `Say` carries exactly what the author wrote. A tag outside the vocabulary is
+//! `E0010`, because Ren'Py's `{color=…}` styles the words around it and drawing those characters
+//! literally would put markup in front of a player.
 
 use vela_diag::{Diagnostic, Label, Suggestion};
 use vela_span::Span;
@@ -68,22 +73,13 @@ impl Parser<'_> {
                     );
                     literal_start = inner_start + i;
                 }
-                // `{{` is one literal `{`; a bare brace is a text tag, which does not exist yet.
+                // `{{` is one literal `{`; a bare brace opens a text tag.
                 b'{' if inner[i + 1..].starts_with('{') => {
                     literal.push('{');
                     i += 2;
                 }
                 b'{' => {
-                    let end = tag_end(inner, i);
-                    self.diagnostics.push(error::reserved_text_tag(
-                        self.file,
-                        (inner_start + i) as u32,
-                        (inner_start + end) as u32,
-                    ));
-                    // Recovered as literal text: the string still has a shape, and the reader gets
-                    // one diagnostic rather than a cascade from whatever the braces confused.
-                    literal.push('{');
-                    i += 1;
+                    i = self.tag(inner, i, inner_start, &mut literal);
                 }
                 _ => {
                     let ch = inner[i..].chars().next().unwrap_or('\u{fffd}');
@@ -104,6 +100,41 @@ impl Parser<'_> {
             span: token.span,
             parts,
         }
+    }
+
+    /// Emits the text tag that starts at `at`, and returns the offset past its `}`.
+    ///
+    /// A **known** tag is kept: the presenter reads it (`BYTECODE.md §3.3`), so it travels with the
+    /// words and a `Say` carries exactly what the author wrote. An unknown one is `E0010` and is
+    /// recovered as a literal brace, so the reader gets one diagnostic rather than a cascade from
+    /// whatever the braces confused.
+    fn tag(&mut self, inner: &str, at: usize, inner_start: usize, literal: &mut String) -> usize {
+        let Some(close) = inner[at + 1..].find('}') else {
+            self.diagnostics.push(error::unknown_text_tag(
+                self.file,
+                (inner_start + at) as u32,
+                (inner_start + at + 1) as u32,
+                &inner[at + 1..],
+            ));
+            literal.push('{');
+            return at + 1;
+        };
+
+        let end = at + close + 2;
+        let tag = inner[at + 1..at + close + 1].trim();
+        if vela_text::tags::is_known(tag) {
+            literal.push_str(&inner[at..end]);
+            return end;
+        }
+
+        self.diagnostics.push(error::unknown_text_tag(
+            self.file,
+            (inner_start + at) as u32,
+            (inner_start + end) as u32,
+            tag,
+        ));
+        literal.push('{');
+        at + 1
     }
 
     /// Emits the interpolation that starts at `at`, and returns the offset past its `]`.
@@ -227,18 +258,6 @@ fn end_of_string(inner: &str, from: usize) -> usize {
         i += 1;
     }
     bytes.len()
-}
-
-/// One past the `}` that closes the tag starting at `from`, or the end of the text.
-///
-/// The tags themselves are not parsed: the language has not decided what they say yet, and a parser
-/// for a syntax that does not exist would be a guess to unlearn later. Only the extent is needed, to
-/// point at what the reader wrote.
-fn tag_end(inner: &str, from: usize) -> usize {
-    match inner[from + 1..].find('}') {
-        Some(offset) => from + offset + 2,
-        None => inner.len(),
-    }
 }
 
 /// Moves every span in a diagnostic forward, for diagnostics produced by a sub-parser.

@@ -18,7 +18,7 @@ E0006|error|numeric literal is malformed or out of range
 E0007|error|float literal ends with a decimal point
 E0008|error|unterminated string literal
 E0009|error|unexpected character
-E0010|error|text tags are reserved and not implemented
+E0010|error|unknown text tag
 E1001|error|unexpected token
 E1002|error|expected an indented block
 E1003|error|expected an expression

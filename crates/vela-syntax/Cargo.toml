@@ -11,6 +11,10 @@ rank = 2
 
 [dependencies]
 vela-span.workspace = true
+# For one thing only: the text-tag vocabulary, so the parser and the renderer cannot disagree
+# about which tags exist (`vela-text::tags`). A second list in the parser is how `{/}` comes to
+# mean one thing to the checker and another to the presenter.
+vela-text.workspace = true
 vela-diag.workspace = true
 
 [lints]

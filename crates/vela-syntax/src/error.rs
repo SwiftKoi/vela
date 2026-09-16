@@ -124,21 +124,24 @@ pub fn unexpected_character(file: FileId, offset: u32) -> Diagnostic {
     )
 }
 
-/// `E0010` — a `{`, which is reserved for text tags.
+/// `E0010` — a `{`, which begins a text tag the language does not define.
 ///
-/// An error rather than a silent literal, because the two readings differ in *meaning*: today a
-/// brace is text, and the day text tags exist the same characters would style the words around
-/// them. Accepting it now would change what already-written dialogue says, and the way out costs
-/// one keystroke.
+/// Text tags exist (`LANGUAGE.md §4.1`): `{b}` and `{i}`, closed by `{/b}`, `{/i}`, or `{/}`. A tag
+/// outside that set is an error rather than text, because the two readings differ in *meaning* —
+/// Ren'Py's `{color=#fff}` styles the words around it, and drawing those characters literally
+/// would put the markup in front of a player.
 #[must_use]
-pub fn reserved_text_tag(file: FileId, start: u32, end: u32) -> Diagnostic {
+pub fn unknown_text_tag(file: FileId, start: u32, end: u32, tag: &str) -> Diagnostic {
     diag(
         "E0010",
-        "text tags are reserved and not implemented",
+        format!("unknown text tag `{tag}`"),
         Span::new(file, start, end),
         "this begins a text tag",
     )
-    .with_help("write `{{` for a literal brace, `[expr]` to interpolate a value")
+    .with_help(
+        "the tags are `{b}`, `{i}`, `{/b}`, `{/i}`, and `{/}`; write `{{` for a literal brace, \
+         `[expr]` to interpolate a value",
+    )
 }
 
 /// `E1001` — a token that does not fit where it was found.

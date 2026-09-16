@@ -54,17 +54,19 @@ analyzable.*
 - **String literals**: `"..."` with escapes `\" \\ \n \t`.
   `[expr]` inside a string is **interpolation** (§5.5), evaluated in the surrounding scope.
   Unterminated string is `E0008`.
-- **Two sigils, two jobs.** `[` interpolates a value; `{` is **reserved for text tags**, which are
-  not implemented (`E0010`). Doubling is the escape: `[[` is a literal `[` and `{{` a literal `{`.
-  A backslash before either (`\[`, `\{`) is also literal — an escape that does nothing is
-  normalized away by the formatter, which always writes the doubling.
+- **Two sigils, two jobs.** `[` interpolates a value; `{` opens a **text tag**. Doubling is the
+  escape: `[[` is a literal `[` and `{{` a literal `{`. A backslash before either (`\[`, `\{`) is
+  also literal — an escape that does nothing is normalized away by the formatter, which always
+  writes the doubling.
 
   The split is deliberate and it is Ren'Py's, for the same reason: both things live *inside*
   dialogue, and one sigil cannot be both. `"{b}Hi{/b}"` has to mean bold while `"Score: [score]"`
-  means the number, and with one sigil the first reads as "interpolate `b`". That is also why a
-  brace is an **error** rather than a literal today: the two readings differ in meaning, and
-  accepting the wrong one now would silently change what already-written dialogue says on the day
-  tags arrive.
+  means the number, and with one sigil the first reads as "interpolate `b`".
+
+  The tags are `{b}`, `{i}`, `{/b}`, `{/i}`, and `{/}`; anything else is `E0010`. A tag is
+  **kept in the string** rather than becoming a part of its own: `BYTECODE.md §3.3` puts the
+  interpretation in the presenter, so a `Say` carries exactly what the author wrote and the
+  compiler never has to decide what bold means.
 - **Path literals**: `@"assets/forest.png"` — a compile-time-checked asset reference (§7.5).
 
 ## 3. Grammar
@@ -213,6 +215,10 @@ eileen "Hi." (volume=0.5)              # say-scoped options
 `eileen` must be a declared `character` (`E5001`). `sad` must be a declared attribute for
 that character's image set (`E5002`). A bare IDENT in say position that is not a character
 is `E2001`.
+
+A say's text may carry **text tags** — `"{b}Good Ending{/b}."` — which the presenter reads
+(`§1`, `BYTECODE.md §3.3`). They are part of the string, so nothing else in the pipeline has to
+know about them.
 
 ### 4.2 Menu
 ```vela

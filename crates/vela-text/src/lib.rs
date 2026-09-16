@@ -30,9 +30,11 @@ pub mod engine;
 pub mod font;
 pub mod layout;
 pub mod shape;
+pub mod tags;
 
 pub use atlas::{GlyphAtlas, GlyphRect};
 pub use engine::TextEngine;
 pub use font::{Font, FontMetrics};
 pub use layout::{Line, PlacedGlyph, TextLayout};
 pub use shape::{ShapedGlyph, ShapedRun};
+pub use tags::{Run, is_known, plain, runs};

@@ -1,7 +1,7 @@
-error[E0010]: text tags are reserved and not implemented
+error[E0010]: unknown text tag `color=red`
  --> diag_e0010.vela:2:8
   |
-2 |     "a {b} b"
-  |        ^^^ this begins a text tag
+2 |     "a {color=red} b"
+  |        ^^^^^^^^^^^ this begins a text tag
   |
-  = help: write `{{` for a literal brace, `[expr]` to interpolate a value
+  = help: the tags are `{b}`, `{i}`, `{/b}`, `{/i}`, and `{/}`; write `{{` for a literal brace, `[expr]` to interpolate a value

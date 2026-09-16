@@ -1,2 +1,2 @@
 label a:
-    "a {b} b"
+    "a {color=red} b"
