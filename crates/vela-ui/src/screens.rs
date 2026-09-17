@@ -17,6 +17,7 @@ use vela_text::TextEngine;
 use crate::actions::Action;
 use crate::eval::{Args, Ctx};
 use crate::focus::{self, Hotspot};
+use crate::images::ImageTable;
 use crate::instantiate;
 use crate::layout::{Constraints, Frame, layout};
 use crate::pack::PackedSet;
@@ -86,6 +87,7 @@ pub struct ScreenSet {
     styles: Vec<StyleDecl>,
     palette: Palette,
     fonts: Fonts,
+    images: ImageTable,
     registry: WidgetRegistry,
 }
 
@@ -120,8 +122,35 @@ impl ScreenSet {
             styles,
             palette,
             fonts,
+            images: ImageTable::new(),
             registry: WidgetRegistry::builtin(),
         }
+    }
+
+    /// Supplies the pictures this set's screens may draw.
+    ///
+    /// Injected rather than compiled, because only the platform knows which texture a name became
+    /// (`images.rs`): `vela build` compiles the *screens*, and the runner that uploaded the assets is
+    /// the one that can say where they are. A set that was never given a table draws no pictures and is
+    /// otherwise correct — which is what a headless run is.
+    #[must_use]
+    pub fn with_images(mut self, images: ImageTable) -> Self {
+        self.set_images(images);
+        self
+    }
+
+    /// Replaces the pictures this set resolves names against.
+    ///
+    /// The in-place half of [`with_images`](Self::with_images), for a caller holding a `Vec` of sets
+    /// rather than building them.
+    pub fn set_images(&mut self, images: ImageTable) {
+        self.images = images;
+    }
+
+    /// The pictures this set resolves names against.
+    #[must_use]
+    pub fn images(&self) -> &ImageTable {
+        &self.images
     }
 
     /// Replaces the widget vocabulary, which a plugin extends.
@@ -154,6 +183,9 @@ impl ScreenSet {
             styles: packed.styles,
             palette: packed.palette,
             fonts: packed.fonts,
+            // From a bundle nobody has uploaded anything yet, so the pictures arrive the same way they
+            // do for a project: `set_images`, once a window exists (`SCREENS.md §3`).
+            images: ImageTable::new(),
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -192,6 +224,7 @@ impl ScreenSet {
             registry: &self.registry,
             palette: &self.palette,
             fonts: &self.fonts,
+            images: &self.images,
             styles: &self.styles,
             screens: &screens,
         };
@@ -265,7 +298,15 @@ impl ScreenSet {
         let Some(laid) = self.lay(name, args, size, text, font) else {
             return false;
         };
-        paint::paint(&laid.node, &laid.frame, text, font, draw, None);
+        paint::paint(
+            &laid.node,
+            &laid.frame,
+            text,
+            font,
+            draw,
+            None,
+            &self.images,
+        );
         true
     }
 }

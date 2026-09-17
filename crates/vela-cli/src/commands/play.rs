@@ -13,13 +13,16 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use vela_render::{DrawList, Presenter, RenderGraph, Surface};
-use vela_replay::{Save, Timeline};
+use vela_replay::Timeline;
 use vela_text::{Font, TextEngine};
 use vela_world::Input;
 
 use crate::command::Error;
 use crate::commands::ui::{Screens, Stack, Watcher};
 use vela_ui::actions::Action as ScreenAction;
+
+pub(crate) mod images;
+mod saves;
 
 /// The bundled default face. See `assets/fonts/README.md`.
 const FACE: &[u8] = include_bytes!("../../../../assets/fonts/LiberationSans-Regular.ttf");
@@ -52,6 +55,14 @@ pub struct Player {
     /// The schema a save is written against: a load migrates an older save into it
     /// (`RUNTIME.md §6`), and refuses one whose schema it cannot reach.
     schema: vela_replay::Schema,
+    /// The pictures a screen may draw, once the platform has uploaded them (`SCREENS.md §3`).
+    ///
+    /// Empty until the window opens: a picture is a name *and* a texture, and the texture does not
+    /// exist until the renderer has the bytes. A screen that draws one before then draws nothing, which
+    /// is the same answer a screen with no picture at all gets.
+    images: vela_ui::ImageTable,
+    /// The name and pixel size of every staged picture, kept so the table can be built at that moment.
+    image_sizes: Vec<(String, u32, u32)>,
 }
 
 impl Player {
@@ -78,6 +89,14 @@ impl Player {
         // were compiled from.
         let watcher = Watcher::new(screens.paths());
 
+        // The sizes are kept and the bytes handed to the presenter: a screen needs a picture's
+        // *dimensions* to lay out and its *texture* to draw, and the texture only exists once the
+        // window has uploaded the bytes (`SCREENS.md §3`).
+        let image_sizes: Vec<(String, u32, u32)> = images
+            .iter()
+            .map(|(name, width, height, _)| (name.clone(), *width, *height))
+            .collect();
+
         Ok(Self {
             timeline: Timeline::start(module, label)
                 .map_err(|fault| Error::internal(format!("{fault}")))?,
@@ -100,6 +119,8 @@ impl Player {
             watcher,
             saves,
             schema,
+            images: vela_ui::ImageTable::new(),
+            image_sizes,
         })
     }
 
@@ -164,56 +185,6 @@ impl Player {
         self.finished = false;
         self.refresh_presentation();
         println!("rollback {reached}");
-    }
-
-    /// Writes the current state to a slot.
-    fn save(&mut self, slot: &str) {
-        if std::fs::create_dir_all(&self.saves).is_err() {
-            println!("save failed: cannot create {}", self.saves.display());
-            return;
-        }
-        let save = Save::new(self.timeline.snapshot(), self.schema.digest(), slot);
-        let path = self.saves.join(format!("{slot}.velasave"));
-        match save.write_atomic(&path) {
-            Ok(()) => println!("save {slot}"),
-            Err(error) => println!("save failed: {error}"),
-        }
-    }
-
-    /// Reads a slot back into the running story, migrating it if it is from an older build.
-    fn load(&mut self, slot: &str) {
-        let path = self.saves.join(format!("{slot}.velasave"));
-        let bytes = match std::fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                println!("load failed: {error}");
-                return;
-            }
-        };
-        let written = vela_replay::Save::version_of(&bytes).unwrap_or(vela_replay::SAVE_VERSION);
-        let save = match Save::load(&bytes, &vela_replay::chain(), &self.schema) {
-            Ok(save) => save,
-            Err(error) => {
-                println!("load failed: {error}");
-                return;
-            }
-        };
-        match Timeline::resume(&self.module, &save.snapshot) {
-            Ok(timeline) => {
-                self.timeline = timeline;
-                self.finished = false;
-                self.refresh_presentation();
-                if written == vela_replay::SAVE_VERSION {
-                    println!("load {slot}");
-                } else {
-                    println!(
-                        "load {slot} (migrated {written} -> {})",
-                        vela_replay::SAVE_VERSION
-                    );
-                }
-            }
-            Err(fault) => println!("load failed: {fault}"),
-        }
     }
 
     /// Re-applies the command now on screen, so the presenter matches a restored state.
@@ -353,6 +324,13 @@ impl vela_host::App for Player {
         if let Some(surface) = surface.as_mut() {
             presenter.upload_images(surface.renderer_mut());
         }
+
+        // Now that every picture has a texture, the screens can be told where its name leads — and a
+        // name only enters the table once it has one, so a screen never samples a texture that is not
+        // there (`SCREENS.md §3`).
+        let images = images::table(&self.image_sizes, |name| self.presenter.texture_of(name));
+        self.screens.set_images(images.clone());
+        self.images = images;
     }
 
     fn action(&mut self, action: vela_host::Action, _window: &vela_host::Window) {
@@ -435,8 +413,12 @@ impl vela_host::App for Player {
         // The menu is the runtime's, not a screen's, so it is drawn whichever way the dialogue
         // was. Open screens go over it, with the focus highlight on top of those.
         self.presenter.build_menu(&mut draw);
-        self.overlays
-            .paint(self.presenter.text_mut(), FACE_NAME, &mut draw);
+        self.overlays.paint(
+            self.presenter.text_mut(),
+            FACE_NAME,
+            &mut draw,
+            &self.images,
+        );
 
         let Some(surface) = self.surface.as_mut() else {
             return;

@@ -68,7 +68,7 @@ impl Command for Run {
         // The screens the presenter may draw. Compiled here rather than in the compiler, for
         // the rank reason `commands::ui` records: the CLI is the lowest layer that can see both
         // a screen and the widget registry.
-        let screens = Screens::load(&project);
+        let mut screens = Screens::load(&project);
         let images = stage_images(&project, out);
 
         if wants_a_window(args) {
@@ -94,7 +94,7 @@ impl Command for Run {
             .map_err(|fault| Error::internal(format!("{fault}")))?;
 
         if let Some(path) = flag_value(args, "--capture") {
-            return frame::capture(&execution.commands, path, args, out, &screens, images);
+            return frame::capture(&execution.commands, path, args, out, &mut screens, images);
         }
 
         for command in &execution.commands {

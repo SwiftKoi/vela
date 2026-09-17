@@ -132,9 +132,10 @@ pub(crate) fn measure(node: &Node, constraints: Constraints) -> (Size, Vec<Size>
 
     let (content, children) = match &node.kind {
         // A leaf wants its intrinsic size; `resolve` applies any explicit rule on top.
-        Kind::Measured { size } | Kind::Widget { size, .. } | Kind::Text { size, .. } => {
-            (*size, Vec::new())
-        }
+        Kind::Measured { size }
+        | Kind::Widget { size, .. }
+        | Kind::Text { size, .. }
+        | Kind::Image { size, .. } => (*size, Vec::new()),
         // A spacer holds no content, so under `Auto` it wants nothing and relies on `grow`
         // to be given anything. Asking for the whole available extent — which is what using
         // `inner.max_*` as the content did — makes an unweighted spacer eat the row and push
@@ -243,9 +244,11 @@ fn arrange(node: &Node, measured: &[Size], size: Size) -> Vec<Frame> {
     };
 
     match &node.kind {
-        Kind::Measured { .. } | Kind::Widget { .. } | Kind::Text { .. } | Kind::Spacer => {
-            Vec::new()
-        }
+        Kind::Measured { .. }
+        | Kind::Widget { .. }
+        | Kind::Text { .. }
+        | Kind::Image { .. }
+        | Kind::Spacer => Vec::new(),
         Kind::Box => node
             .children
             .first()

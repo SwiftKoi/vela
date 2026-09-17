@@ -66,8 +66,8 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
     if !wants_a_window(args) {
         let commands = drive(session)?;
         if let Some(path) = run::flag_value(args, "--capture") {
-            let screens = screens(dir)?;
-            return frame::capture(&commands, path, args, out, &screens, images);
+            let mut screens = screens(dir)?;
+            return frame::capture(&commands, path, args, out, &mut screens, images);
         }
         for command in &commands {
             let _ = writeln!(out, "{command}");

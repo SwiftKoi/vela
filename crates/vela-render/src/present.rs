@@ -128,8 +128,10 @@ impl Presenter {
         }
     }
 
-    /// The texture id an image name was uploaded as, if it was.
-    fn texture_of(&self, name: &str) -> Option<u32> {
+    /// The texture id an image name was uploaded as, if it was — public because a screen draws
+    /// pictures by the same names a scene does (`SCREENS.md §3`).
+    #[must_use]
+    pub fn texture_of(&self, name: &str) -> Option<u32> {
         self.uploaded
             .iter()
             .find(|(candidate, _)| candidate == name)

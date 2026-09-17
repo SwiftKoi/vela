@@ -237,6 +237,12 @@ impl DrawList {
         self.glyphs().count()
     }
 
+    /// How many images there are.
+    #[must_use]
+    pub fn image_count(&self) -> usize {
+        self.images().count()
+    }
+
     /// Whether nothing is drawn.
     #[must_use]
     pub fn is_empty(&self) -> bool {

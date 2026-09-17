@@ -73,6 +73,20 @@ pub enum Kind {
         /// What it measured to.
         size: Size,
     },
+    /// A picture, with the name it was resolved to.
+    ///
+    /// The *name*, not a texture: resolving one to the other is the painter's job, because the platform
+    /// that uploaded the picture is the only party that knows which texture it became (`images.rs`).
+    /// The name is also what a reference in a screen is, so a node that carried a texture id would be
+    /// carrying something no screen can be written with. The size does come from the picture — layout
+    /// has to know it before anything is painted — so a screen whose picture has not arrived lays out
+    /// at nothing rather than at a guess.
+    Image {
+        /// The picture's name, as resolved — `bg.room`, or whatever a value held.
+        name: String,
+        /// What the platform said it measures.
+        size: Size,
+    },
 }
 
 /// A width and a height in pixels.

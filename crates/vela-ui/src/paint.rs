@@ -10,9 +10,10 @@
 //! Rectangles first, then text, because that is the order the draw list keeps them in and the
 //! order a frame paints them.
 
-use vela_render::{Color, DrawList, GlyphQuad, RectQuad};
+use vela_render::{Color, DrawList, GlyphQuad, ImageQuad, RectQuad};
 use vela_text::TextEngine;
 
+use crate::images::ImageTable;
 use crate::layout::Frame;
 use crate::tree::{Kind, Node, Paint, State};
 
@@ -53,6 +54,8 @@ struct Painter<'a> {
     text: &'a mut TextEngine,
     font: &'a str,
     draw: &'a mut DrawList,
+    /// The pictures a name resolves to, so an `image` node has a texture to sample.
+    images: &'a ImageTable,
     /// How many action-bearing nodes the walk has passed.
     seen: usize,
     /// Which of them the focus cursor is on, by the same numbering [`crate::focus::hotspots`] produces.
@@ -79,6 +82,10 @@ struct Painter<'a> {
 /// `focused` is the focused hotspot's index, counting action-bearing nodes in tree order — the same
 /// numbering `focus::hotspots` produces, so a caller that has a focus cursor can pass it straight
 /// through (`SCREENS.md §10`).
+///
+/// `images` is where a picture's name becomes a texture. It is supplied rather than reached for
+/// because only the platform knows it (`images.rs`), and a name the table does not hold draws
+/// nothing — the screen around it is still correct, which is what a build in progress looks like.
 pub fn paint(
     root: &Node,
     frame: &Frame,
@@ -86,11 +93,13 @@ pub fn paint(
     font: &str,
     draw: &mut DrawList,
     focused: Option<usize>,
+    images: &ImageTable,
 ) {
     let mut painter = Painter {
         text,
         font,
         draw,
+        images,
         seen: 0,
         focused,
         selected: false,
@@ -140,6 +149,30 @@ fn paint_node(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, painter:
         && frame.rect.width > 0.0
     {
         paint_text(content, &paint, left, top, frame.rect.width, painter);
+    }
+
+    // A picture, at the rectangle layout gave it. A name the platform says nothing about draws
+    // nothing — the same silence the presenter keeps for a scene whose image was never built, and for
+    // the same reason: there is no texture to sample, and a guess would be a picture nobody asked for.
+    if let Kind::Image { name, .. } = &node.kind
+        && frame.rect.width > 0.0
+        && frame.rect.height > 0.0
+        && let Some(picture) = painter.images.get(name)
+    {
+        painter.draw.push_image(ImageQuad {
+            x: left,
+            y: top,
+            width: frame.rect.width,
+            height: frame.rect.height,
+            uv: [0.0, 0.0, 1.0, 1.0],
+            image: picture.texture,
+            color: Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+        });
     }
 
     for (child, child_frame) in node.children.iter().zip(&frame.children) {

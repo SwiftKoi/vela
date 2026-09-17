@@ -246,6 +246,36 @@ variant — the list below is the *default set* shipped in `vela-ui`, and a plug
 | `spacer` | leaf | Flexible space |
 | `video`, `live2d`, `particles` | leaf | Rich media |
 
+### 3.1 Pictures
+
+`image` is the one leaf whose content is a *reference* rather than a value, and it draws it:
+
+```vela
+screen gallery(item):
+    column:
+        image bg.room        # a name written here
+        image item.icon      # a name the screen was given
+```
+
+- **A path whose head is not in scope is the picture's own name**; one the screen was *given* is a
+  lookup. So `bg.room` names an asset and `item.icon` reads the element a `for` bound (§2.4) — the same
+  question `theme.bg` asks of a token, and the reason an image is not the one thing in a screen that
+  cannot come from data.
+- **Its size comes from the platform.** A screen cannot know how big a picture is, so the table that maps
+  a name to a texture also carries its dimensions, and layout measures from that. A name the platform
+  says nothing about measures to nothing and draws nothing: a picture that has not been built yet is a
+  build in progress rather than a broken screen, and a guess would be a picture nobody asked for.
+- **The table is injected, not compiled** (`vela_ui::images`). Only the party that uploaded a picture
+  knows which texture it became, and `vela build` compiles screens rather than pixels — so a set is built
+  without one and told where its pictures are once a window (or a capture) exists. That is also why the
+  screen pack does not carry pictures and its version did not move.
+
+> **Implemented (M12.1).** `image` draws, from a written path or a value, with the size coming from the
+> platform's table. Until this it laid out at nothing and painted nothing — a registered widget with no
+> behaviour, which the tables above had implied otherwise. `crates/vela-ui/tests/images.rs` pins the
+> resolution, `tests/paint.rs` that the texture and rectangle reach the draw list, and
+> `crates/vela-cli/src/tests/ui_tests.rs` that a name nobody uploaded is left out of the table.
+
 ## 4. Layout
 
 ### 4.1 Model

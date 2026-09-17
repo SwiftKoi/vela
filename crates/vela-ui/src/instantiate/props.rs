@@ -13,9 +13,10 @@ use vela_syntax::{Expr, ScreenArg, ScreenNode};
 
 use crate::actions::Action;
 use crate::eval::{
-    Args, Ctx, Value, anchor_of, anchor_word, color_of, name_of, number, style_paint, text_of,
-    value_of,
+    Args, Ctx, Value, anchor_of, anchor_word, color_of, image_of, name_of, number, style_paint,
+    text_of, value_of,
 };
+use crate::images::ImageTable;
 use crate::props::{Anchor, SizeSpec};
 use crate::tree::{Kind, Node, Size, State};
 
@@ -244,23 +245,36 @@ pub(super) fn action_from(expr: &Expr, values: &Args) -> Option<Action> {
     }
 }
 
-/// Sets a leaf's text content from a value expression, e.g. `text "hi"`.
+/// Sets a leaf's content from a value expression, by what the leaf is.
+///
+/// `text "hi"` is content and `image bg.room` is a reference to a picture: one word — the leaf's first
+/// value — and two meanings, because a text leaf draws a string and an image leaf samples a texture.
 fn set_content(node: &mut Node, expr: &Expr, values: &Args) {
-    set_text(node, text_of(expr, values));
+    match &mut node.kind {
+        Kind::Text { text, .. } if text.is_empty() => *text = text_of(expr, values),
+        Kind::Image { name, .. } => *name = image_of(expr, values).unwrap_or_default(),
+        _ => {}
+    }
 }
 
 /// Sets a leaf's text content from a bare parameter name, e.g. `text line`.
 fn set_content_name(node: &mut Node, name: &str, values: &Args) {
-    let text = values.get(name).map(Value::as_text).unwrap_or_default();
-    set_text(node, text);
-}
-
-/// Writes resolved text into a text leaf, if it has none yet.
-fn set_text(node: &mut Node, content: String) {
-    if let Kind::Text { text, .. } = &mut node.kind {
-        if text.is_empty() {
-            *text = content;
+    match &mut node.kind {
+        Kind::Text { text, .. } if text.is_empty() => {
+            *text = values.get(name).map(Value::as_text).unwrap_or_default();
         }
+        // A bare name is the picture's name unless the screen was *given* one by that name — the same
+        // question `image_of` asks of a path, and the same answer `text line` gives: a bound name is
+        // the value.
+        Kind::Image {
+            name: reference, ..
+        } => {
+            *reference = values
+                .get(name)
+                .map(Value::as_text)
+                .unwrap_or_else(|| name.to_string());
+        }
+        _ => {}
     }
 }
 
@@ -285,6 +299,21 @@ pub(super) fn measure_text(
     let font = crate::paint::resolve_font(text, node.paint.font.as_deref(), font);
     if let Some(layout) = text.layout(font, size_px, content, Some(max_width)) {
         *size = Size::new(layout.width, layout.height);
+    }
+}
+
+/// Measures a picture once its name is resolved, from the table the platform supplied.
+///
+/// Called for every node rather than only the ones that turn out to be pictures, like [`measure_text`]:
+/// the dispatcher has already decided what a node is, and asking twice would be two places to keep in
+/// step. A name the table does not hold leaves the size at nothing, which is the honest answer while a
+/// picture is missing — the alternative is a guess no one asked for.
+pub(super) fn measure_image(node: &mut Node, images: &ImageTable) {
+    let Kind::Image { name, size } = &mut node.kind else {
+        return;
+    };
+    if let Some(picture) = images.get(name) {
+        *size = Size::new(picture.width as f32, picture.height as f32);
     }
 }
 

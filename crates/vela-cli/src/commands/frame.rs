@@ -40,7 +40,7 @@ pub(crate) fn capture(
     path: &str,
     args: &[String],
     out: &mut dyn Write,
-    screens: &Screens,
+    screens: &mut Screens,
     images: Vec<(String, u32, u32, Vec<u8>)>,
 ) -> Result<(), Error> {
     let size = parse_size(args).unwrap_or((1280, 720));
@@ -60,9 +60,11 @@ pub(crate) fn capture(
         .unwrap_or(commands.len().saturating_sub(1));
 
     let mut presenter = vela_render::Presenter::new(text, FACE_NAME, size);
-    for (name, width, height, rgba) in images {
-        presenter.stage_image(name, width, height, rgba);
-    }
+
+    // The sizes are kept and the bytes handed over: a screen needs a picture's dimensions to lay out and
+    // its texture to draw, and the texture only exists after the upload below.
+    let sizes = stage_pictures(&mut presenter, images);
+
     for command in commands.iter().take(chosen + 1) {
         presenter.apply(command);
     }
@@ -78,7 +80,7 @@ pub(crate) fn capture(
     // presenter needs their texture ids *while* it builds; glyphs are rasterised *by* building,
     // so their atlas cannot exist until it has.
     presenter.upload_images(capture.renderer_mut());
-
+    install_pictures(&sizes, &presenter, screens);
     // The draw list first, the atlas second. Building is what *rasterises* glyphs, so an
     // upload before it sends an empty image and every glyph samples nothing — which renders
     // as a perfectly good dialogue box with no text in it.
@@ -108,6 +110,39 @@ pub(crate) fn capture(
         .map_err(|error| Error::internal(format!("cannot write {}: {error}", path.display())))?;
     report_capture(out, path, screen, chosen, commands.len());
     Ok(())
+}
+
+/// Hands the pictures to the presenter, and keeps what a screen will need to lay one out.
+///
+/// A picture is two facts — how big it is, and which texture it became — and only the second is the
+/// presenter's. The sizes come back rather than being asked for later, because the bytes are consumed
+/// here and a screen measures before anything is uploaded.
+fn stage_pictures(
+    presenter: &mut vela_render::Presenter,
+    images: Vec<(String, u32, u32, Vec<u8>)>,
+) -> Vec<(String, u32, u32)> {
+    let sizes = images
+        .iter()
+        .map(|(name, width, height, _)| (name.clone(), *width, *height))
+        .collect();
+    for (name, width, height, rgba) in images {
+        presenter.stage_image(name, width, height, rgba);
+    }
+    sizes
+}
+
+/// Tells the screens where their pictures are, now that the platform has uploaded them.
+///
+/// The same table the windowed player builds, from the same two sources — so a capture and a window
+/// agree about what a screen draws, which is the only reason a screenshot is worth taking.
+fn install_pictures(
+    sizes: &[(String, u32, u32)],
+    presenter: &vela_render::Presenter,
+    screens: &mut Screens,
+) {
+    screens.set_images(crate::commands::play::images::table(sizes, |name| {
+        presenter.texture_of(name)
+    }));
 }
 
 /// The screen `--screen` names, checked against the project so a bad name is a usage error

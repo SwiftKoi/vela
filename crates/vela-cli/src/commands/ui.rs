@@ -96,6 +96,18 @@ impl Screens {
         &self.paths
     }
 
+    /// Tells every set where its pictures are, once the platform has uploaded them.
+    ///
+    /// A second step rather than a constructor argument because the two halves happen at different
+    /// moments: a set is compiled before a window exists, and a texture exists only after one has
+    /// uploaded it (`SCREENS.md §3`). A set nobody tells draws no pictures and is otherwise correct,
+    /// which is what a headless run is.
+    pub fn set_images(&mut self, images: vela_ui::ImageTable) {
+        for set in &mut self.sets {
+            set.set_images(images.clone());
+        }
+    }
+
     /// How many screens are compiled.
     #[must_use]
     pub fn count(&self) -> usize {
@@ -380,7 +392,13 @@ impl Stack {
     /// Only the topmost screen is given the focus cursor, because only the topmost one can be
     /// navigated — a screen underneath draws as it stands, and its `selected` values stay unseen
     /// until it is the one on top (`SCREENS.md §5`).
-    pub fn paint(&self, text: &mut TextEngine, font: &str, draw: &mut DrawList) {
+    pub fn paint(
+        &self,
+        text: &mut TextEngine,
+        font: &str,
+        draw: &mut DrawList,
+        images: &vela_ui::ImageTable,
+    ) {
         let top = self.overlays.len().saturating_sub(1);
         for (index, overlay) in self.overlays.iter().enumerate() {
             let focused = (index == top).then_some(overlay.focus);
@@ -391,6 +409,7 @@ impl Stack {
                 font,
                 draw,
                 focused,
+                images,
             );
         }
         if let Some(rect) = self.focus_rect() {

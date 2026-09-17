@@ -180,7 +180,7 @@ fn a_screen_stack_opens_focuses_and_paints() {
 
     // Painting draws the screen's background and the runtime's focus highlight.
     let mut draw = vela_render::DrawList::new();
-    stack.paint(&mut text, "sans", &mut draw);
+    stack.paint(&mut text, "sans", &mut draw, &vela_ui::ImageTable::new());
     assert!(
         draw.rects()
             .any(|rect| rect.color == vela_render::Color::rgb(0x10, 0x12, 0x1a)),
@@ -298,6 +298,32 @@ label start:
             .map(|action| action.name.as_str()),
         Some("close_screen"),
         "closing the top screen did not uncover the one under it"
+    );
+}
+
+/// The pictures a player can draw are the ones the platform actually uploaded.
+///
+/// A build says how big a picture is and the platform says which texture it became, and neither knows
+/// about the other — so the joining is where a picture can go missing. A name with no texture is left
+/// out rather than given id zero, because id zero is a real texture and would draw the wrong picture
+/// confidently (`SCREENS.md §3`).
+#[test]
+fn the_image_table_holds_only_uploaded_pictures() {
+    let sizes = [
+        ("bg.room".to_string(), 320, 180),
+        ("art.cave".to_string(), 64, 48),
+    ];
+    // The platform uploaded one of the two: the other is a name the build knows and nothing draws.
+    let table =
+        crate::commands::play::images::table(&sizes, |name| (name == "bg.room").then_some(7));
+
+    assert_eq!(table.len(), 1, "{:?}", table.names());
+    let picture = table.get("bg.room").expect("the uploaded picture");
+    assert_eq!(picture.texture, 7);
+    assert_eq!((picture.width, picture.height), (320, 180));
+    assert!(
+        table.get("art.cave").is_none(),
+        "a picture nobody uploaded entered the table"
     );
 }
 

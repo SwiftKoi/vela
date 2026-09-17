@@ -8,7 +8,7 @@ use vela_render::{Color, DrawList};
 use vela_span::FileId;
 use vela_syntax::parse;
 use vela_text::{Font, TextEngine};
-use vela_ui::{Args, ScreenSet, Value};
+use vela_ui::{Args, ImageTable, Picture, ScreenSet, Value};
 
 fn engine() -> TextEngine {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -153,7 +153,15 @@ screen menu:
     assert_eq!(laid.hotspots.len(), 2, "one hotspot per button");
 
     let mut plain = DrawList::new();
-    vela_ui::paint(&laid.node, &laid.frame, &mut text, "sans", &mut plain, None);
+    vela_ui::paint(
+        &laid.node,
+        &laid.frame,
+        &mut text,
+        "sans",
+        &mut plain,
+        None,
+        &ImageTable::new(),
+    );
     assert!(plain.glyph_count() > 0, "the buttons drew no text");
     assert!(
         plain.glyphs().all(|glyph| glyph.color == off),
@@ -168,6 +176,7 @@ screen menu:
         "sans",
         &mut focused,
         Some(1),
+        &ImageTable::new(),
     );
     let colours: Vec<Color> = focused.glyphs().map(|glyph| glyph.color).collect();
     assert!(
@@ -240,6 +249,82 @@ screen s:
     let drawn = set(source).draw("s", &Args::new(), (1280, 720), &mut text, "sans", &mut draw);
     assert!(drawn, "the screen was not found");
     assert!(draw.glyph_count() > 0, "the text vanished with its font");
+}
+
+/// A picture is drawn at the rectangle layout gave it, sampling the texture the platform supplied.
+///
+/// The name belongs to the screen and the texture to the platform, and this is the one place the two
+/// meet (`SCREENS.md §3`, `images.rs`). The size comes from the table rather than from the node because
+/// the picture is pixels: a screen cannot know how big it is, and the party that uploaded it does.
+#[test]
+fn a_picture_paints_its_texture() {
+    let images = ImageTable::from_entries([(
+        "bg.room".to_string(),
+        Picture {
+            texture: 7,
+            width: 320,
+            height: 180,
+        },
+    )]);
+    let source = "screen s:\n    image bg.room\n";
+    let mut text = engine();
+    let laid = set(source)
+        .with_images(images.clone())
+        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .expect("the screen is declared");
+
+    let mut draw = DrawList::new();
+    vela_ui::paint(
+        &laid.node,
+        &laid.frame,
+        &mut text,
+        "sans",
+        &mut draw,
+        None,
+        &images,
+    );
+
+    assert_eq!(draw.image_count(), 1, "the picture was not drawn");
+    let quad = draw.images().next().expect("the picture");
+    assert_eq!(quad.image, 7, "the texture the platform supplied");
+    assert_eq!(
+        (quad.width, quad.height),
+        (320.0, 180.0),
+        "its measured size"
+    );
+}
+
+/// A picture the platform knows nothing about draws nothing, and the screen around it is still drawn.
+///
+/// A missing picture is a build in progress rather than a broken screen: the presenter answers a scene
+/// whose image was never built the same way, and a guess would be a picture nobody asked for.
+#[test]
+fn a_picture_with_no_texture_draws_nothing() {
+    let source =
+        "screen s:\n    column:\n        image missing.thing\n        text \"Still here.\"\n";
+    let images = ImageTable::new();
+    let mut text = engine();
+    let laid = set(source)
+        .with_images(images.clone())
+        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .expect("the screen is declared");
+
+    let mut draw = DrawList::new();
+    vela_ui::paint(
+        &laid.node,
+        &laid.frame,
+        &mut text,
+        "sans",
+        &mut draw,
+        None,
+        &images,
+    );
+
+    assert_eq!(draw.image_count(), 0, "a picture nobody supplied was drawn");
+    assert!(
+        draw.glyph_count() > 0,
+        "the rest of the screen was lost too"
+    );
 }
 
 /// Building the same screen twice produces the same draw list, byte for byte.

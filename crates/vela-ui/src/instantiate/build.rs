@@ -12,7 +12,7 @@
 use vela_syntax::{ScreenArg, ScreenLine, ScreenNode};
 
 use super::compose::Compose;
-use super::props::{apply_args, apply_bare_prop, apply_style, measure_text};
+use super::props::{apply_args, apply_bare_prop, apply_style, measure_image, measure_text};
 use crate::eval::{Args, Ctx, Value, eval, number, value_of};
 use crate::props::SizeSpec;
 use crate::tree::{Kind, Node, Size};
@@ -133,6 +133,7 @@ fn build_node(
     }
 
     measure_text(&mut built, text, font, max_width);
+    measure_image(&mut built, ctx.images);
     built
 }
 
@@ -229,9 +230,16 @@ fn kind_of(node: &ScreenNode) -> Kind {
             text: String::new(),
             size: Size::ZERO,
         },
+        // A picture, whose name the arguments fill in and whose size the platform supplies. Both are
+        // blank here: the dispatcher says what a node *is* (`SCREENS.md §3`), and the prop pass and
+        // `measure_image` say what it holds.
+        "image" => Kind::Image {
+            name: String::new(),
+            size: Size::ZERO,
+        },
         "spacer" => Kind::Spacer,
-        // `image`, `bar`, `input`, and any plugin widget: a leaf whose size the paint layer
-        // will refine. They lay out as a measured box because nothing yet measures them.
+        // `bar`, `input`, and any plugin widget: a leaf whose size the paint layer will refine. They
+        // lay out as a measured box because nothing yet measures them.
         _ => Kind::Measured { size: Size::ZERO },
     }
 }
