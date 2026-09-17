@@ -44,13 +44,16 @@ Banned in **all** crates that affect program output:
 - `std::time::SystemTime::now`, `Instant::now` outside `vela-host` — time is injected.
 - `thread_rng`, `rand::random`, or any unseeded generator. RNG lives in `World`.
 - `f64::to_string` / `format!("{}")` on floats where output is persisted or compared — use
-  the pinned formatting helpers in `vela-world::fmt`.
+  `vela_world::format_float`, which keeps a float visibly a float (`str(1.0)` is `"1.0"`, not `"1"`).
 - Address-based identity (`ptr as usize`) anywhere in serialized or compared state.
 - Iterating a `rayon` result where collection order affects output.
 
-`vela-host` is the single registered exception for clocks; it exposes a `Clock` trait, and
-every other crate takes time as a value. `xtask check-determinism` scans source for these
-patterns and fails with the offending path and line.
+`vela-host` is the single registered exception for clocks: its window loop reads `Instant` for the idle
+tick it polls on, and every other crate takes time as a value. It exposes **no `Clock` trait** — this
+paragraph claimed one, and the crate has never had it. What it exposes is the window (`Window`,
+`Config`, `run`), the `App` trait a host consumer implements, and the input table (`Action`, `Bindings`,
+`Key`). A trait is what a *second* clock consumer would introduce, and there is one. `xtask
+check-determinism` scans source for these patterns and fails with the offending path and line.
 
 ### 2.3 API surface
 - Every public item has a doc comment. `#![warn(missing_docs)]` is on in every lib crate.
@@ -167,7 +170,7 @@ rows would be indirection with nothing behind it. Anything the match does not na
 | # | File | Change |
 | --- | --- | --- |
 | 1 | `crates/vela-vm/src/ops.rs` | One arm in `effect`, matching the name and its arguments |
-| 2 | `vela-host/` and the `Host` trait | The real implementation, when the effect needs the outside world |
+| 2 | `vela-host/` | The real implementation, when the effect needs the outside world. `Host` is already taken: `vela_vm::driver::Host` answers one suspension and is implemented in `vela-vm`. The platform surface this row means has no trait yet — the crate's own surface is `Window`, `App`, `Action` |
 | 3 | a `test` item using the effect | A story test asserting it is invoked with the arguments it was given |
 
 **This row is the matrix's known debt, stated rather than hidden.** `RUNTIME.md §3`'s capability
@@ -238,13 +241,16 @@ directly; the ones that need a real process are under `crates/vela-cli/tests/`.
 
 | # | File | Change |
 | --- | --- | --- |
-| 1 | `vela-host/src/<backend>.rs` | The backend: window, input, and a clock, behind the crate's traits |
+| 1 | `vela-host/src/<backend>.rs` | The backend: a window, its input events, and the idle tick they are polled on |
 | 2 | `vela-host/src/lib.rs` | Feature-gated selection of it |
 | 3 | `xtask check-layers` | Confirm it does not leak into a lower layer |
 
-`window.rs` is the only backend today, and it is one file rather than a directory because one
-platform is one case. A second is a module beside it and a line in `lib.rs`; the layer rule is what
-keeps either out of the compiler and the VM, and it is checked rather than trusted.
+`window.rs` is the only backend today, and it is one file rather than a directory because one platform
+is one case. **There is no backend trait yet** — a backend is concrete types (`Window`, `Config`) behind
+the one trait this crate does expose, `App`, which the *consumer* implements. A second platform is the
+point at which the boundary becomes a trait of its own, the same way §4.3's effect becomes a registry
+when a second implementation needs one; this table is updated then. The layer rule is what keeps a
+backend out of the compiler and the VM, and it is checked rather than trusted.
 
 ### 4.9 Add a save migration
 

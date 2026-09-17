@@ -31,7 +31,7 @@ rank  crates
 **Rule 1 — rank.** A crate may depend only on crates with a *strictly lower* rank. Edges
 never point up or sideways.
 
-**Rule 2 — adapters.** `vela-host` (windowing, input, filesystem, clock) and `vela-render`
+**Rule 2 — adapters.** `vela-host` (window, input, clock) and `vela-render`
 (GPU) are marked `*`: they are *adapters*. **No crate of rank ≤ 7 may depend on an adapter.**
 Ranks 8–10 may — `vela-ui` consumes the renderer, `vela-cli` consumes the platform host.
 
@@ -63,7 +63,7 @@ be below everything that reports through it.
 | `vela-world` | 1 | Runtime state: typed values, presentation commands, entities, RNG, serialization schema | `World`, `Value`, `Command` |
 | `vela-text` | 1 | Shaping, layout, glyph atlas, font subsetting hooks | `ShapedRun`, `TextLayout` |
 | `vela-audio` | 1 | Audio graph description (mixing is a host responsibility) | `AudioCommand`, `Bus` |
-| `vela-host` | 1 | **adapter** — platform traits + native impls (window, input, fs, time) | `Host`, `InputEvent`, `Clock` |
+| `vela-host` | 1 | **adapter** — the native window and the input table; the one crate that may read a clock | `Window`, `App`, `Action` |
 | `vela-hir` | 3 | Module definitions, aliases, name resolution, story graph | `Hir`, `DefId`, `StoryGraph` |
 | `vela-render` | 2 | **adapter** — `wgpu` renderer, render graph, shaders, command consumption | `Renderer`, `RenderGraph` |
 | `vela-assets` | 2 | Importers, transformers, content-addressed manifest | `Importer`, `Manifest`, `Digest` |
@@ -206,7 +206,7 @@ extension surface is a registry populated at link/startup time.
 | A new render stage | `RenderGraph` insertion | `vela-render` | **None** |
 | A new CLI command | `CommandRegistry` | `vela-cli` | **None** |
 | A new bytecode instruction | `OpSpec` table + handler struct | `vela-bytecode`, `vela-vm` | **One table module** |
-| A platform backend | `Host` trait impl | `vela-host` | **None** |
+| A platform backend | `vela-host`'s own surface — there is no backend trait yet (`CONVENTIONS.md §4.8`) | `vela-host` | **None** |
 
 The eighth row is the deliberate exception: the instruction set is a *closed* set for
 verification and performance reasons, so adding an op touches exactly one table file and one

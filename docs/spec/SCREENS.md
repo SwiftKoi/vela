@@ -426,6 +426,13 @@ transition dissolve(d = 0.3s):
   animation-skipping code paths, which is exactly why Ren'Py-style skip behaves consistently
   here.
 
+> **Not yet.** None of this exists, and the grammar above is the design rather than the surface:
+> `transform` is a declaration with an unparsed body (`LANGUAGE.md §3`), a screen's `at` reads an
+> anchor and nothing else (`§4.2`), and there is no animation clock at all — `World::clock` is read by
+> the `time.now` effect and **nothing advances it**. That last one is why a screen's `timer` is
+> carried and not fired (`§2.3`), and it is stated here because "all animation is driven by
+> `World::clock`" reads as a working mechanism. M13 owns it.
+
 ## 7. Actions
 
 Interaction produces typed actions; screens never mutate state directly.

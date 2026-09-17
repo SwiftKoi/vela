@@ -134,6 +134,12 @@ A capability a plugin did not declare is not callable — the registry returns
 `Fault::CapabilityDenied`, and the plugin host never links the symbol. This is the mechanism
 behind `ARCHITECTURE.md §6.3` and §6.4.
 
+> **Not yet.** Three effects exist and no more — `rand.int`, `rand.float` and `time.now`, all answered
+> from `World` with no host at all. The `Native impl` column names the owner each *other* effect would
+> have rather than a type that exists: there is no `vela-host::Input`, `vela-host::Audio`,
+> `vela-host::SaveDir` or `Host::Clock`, and `Audio` is a type in `vela-world` rather than a host
+> capability. `CONVENTIONS.md §4.3` records the same debt as the extension matrix's known one.
+
 ## 4. Determinism
 
 ### 4.1 The contract
@@ -145,7 +151,7 @@ behind `ARCHITECTURE.md §6.3` and §6.4.
 
 | Source | Treatment | Enforced by |
 | --- | --- | --- |
-| Wall clock | `World::clock: Tick`, advanced only by explicit `tick()` calls; `now` is an effect | `check-determinism`, no `Instant::now` outside `vela-host` |
+| Wall clock | `World::clock: Tick`, read by the `time.now` effect | `check-determinism`, no `Instant::now` outside `vela-host` |
 | `HashMap` order | Banned in output-affecting crates; `IndexMap`/`BTreeMap` only | `clippy::disallowed_types` |
 | RNG | Single `World::rng`, never reseeded outside New Game | Test: replay equality |
 | Float formatting/arithmetic | Pinned formatter; no fast-math; no FMA contraction | Platform test matrix: x86_64, aarch64, wasm |

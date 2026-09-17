@@ -1,8 +1,9 @@
-//! Adapter: platform traits and their native implementations - window, input, filesystem, clock.
+//! Adapter: the native window, the input table, and the idle tick they are polled on.
 //!
 //! # Owns
 //!
-//! The Host/Clock/Input/Fs traits, the native backend, the save directory.
+//! The window backend, the `App` trait its consumer implements, and the semantic actions input
+//! resolves to.
 //!
 //! # Does not own
 //!
