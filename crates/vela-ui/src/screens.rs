@@ -15,7 +15,7 @@ use vela_syntax::{Item, ScreenDecl, StyleDecl};
 use vela_text::TextEngine;
 
 use crate::actions::Action;
-use crate::eval::{Args, Ctx};
+use crate::eval::{Args, Ctx, ScreenState};
 use crate::focus::{self, Hotspot};
 use crate::images::ImageTable;
 use crate::instantiate;
@@ -39,6 +39,13 @@ pub struct Laid {
     pub keys: Vec<KeyBinding>,
     /// The deadlines it declares. Data, because nothing fires them yet — see [`Timer`].
     pub timers: Vec<Timer>,
+    /// The screen's own variables, after this layout (`SCREENS.md §2.5`).
+    ///
+    /// Carried here rather than kept by the runtime, because a layout is what *initializes* them: the
+    /// value of a name the caller already had is kept, and one it does not is its initializer. The
+    /// caller holds this and hands it back to the next `lay`, which is how `set_screen_variable` and a
+    /// hot reload both survive.
+    pub state: ScreenState,
 }
 
 impl Laid {
@@ -237,14 +244,15 @@ impl ScreenSet {
         &self,
         name: &str,
         args: &Args,
+        state: &mut ScreenState,
         text: &mut TextEngine,
         font: &str,
         max_width: f32,
     ) -> Option<Node> {
         let screen = self.screen(name)?;
-        Some(
-            self.with_ctx(|ctx| instantiate::build(&screen.body, ctx, args, text, font, max_width)),
-        )
+        Some(self.with_ctx(|ctx| {
+            instantiate::build(&screen.body, ctx, args, state, text, font, max_width)
+        }))
     }
 
     /// Evaluates and lays out a screen, collecting where it goes and what can be activated.
@@ -257,15 +265,19 @@ impl ScreenSet {
         &self,
         name: &str,
         args: &Args,
+        state: &ScreenState,
         size: (u32, u32),
         text: &mut TextEngine,
         font: &str,
     ) -> Option<Laid> {
         let (width, height) = (size.0 as f32, size.1 as f32);
         let screen = self.screen(name)?;
+        // The screen's variables start from what the caller kept: a write survives a layout, and a
+        // screen that has never been laid out initializes them from its own `default`s.
+        let mut state = state.clone();
         // One context, two questions: the tree, and the input bindings that are not part of it.
         let (node, keys, timers) = self.with_ctx(|ctx| {
-            let node = instantiate::build(&screen.body, ctx, args, text, font, width);
+            let node = instantiate::build(&screen.body, ctx, args, &mut state, text, font, width);
             let (keys, timers) = instantiate::bindings(&screen.body, ctx, args);
             (node, keys, timers)
         });
@@ -277,6 +289,7 @@ impl ScreenSet {
             hotspots,
             keys,
             timers,
+            state,
         })
     }
 
@@ -295,7 +308,7 @@ impl ScreenSet {
         font: &str,
         draw: &mut DrawList,
     ) -> bool {
-        let Some(laid) = self.lay(name, args, size, text, font) else {
+        let Some(laid) = self.lay(name, args, &ScreenState::new(), size, text, font) else {
             return false;
         };
         paint::paint(

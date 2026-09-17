@@ -56,7 +56,14 @@ screen s:
 fn a_viewport_keeps_its_content_whole() {
     let mut text = engine();
     let laid = set(CONTENT)
-        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "s",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
 
     let viewport = &laid.frame.children[0];
@@ -75,7 +82,14 @@ fn a_viewport_keeps_its_content_whole() {
 fn initial_selects_where_the_window_starts() {
     let mut text = engine();
     let bottom = set(CONTENT)
-        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "s",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
     let content_bottom = &bottom.frame.children[0].children[0];
     let travel = content_bottom.rect.height - 60.0;
@@ -88,7 +102,14 @@ fn initial_selects_where_the_window_starts() {
 
     // The same screen starting at the top: the content is not moved at all.
     let top = set(&CONTENT.replace("initial 1.0", "initial 0.0"))
-        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "s",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
     let content_top = &top.frame.children[0].children[0];
     assert!(
@@ -104,7 +125,14 @@ fn a_viewport_whose_content_fits_does_not_move_it() {
     let mut text = engine();
     let source = CONTENT.replace("size 60", "size 600");
     let laid = set(&source)
-        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "s",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
 
     let content = &laid.frame.children[0].children[0];

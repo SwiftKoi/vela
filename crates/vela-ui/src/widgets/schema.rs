@@ -23,6 +23,13 @@ pub enum PropType {
     Asset,
     /// A label or screen name, resolved by the checker rather than here.
     Target,
+    /// Any value: what to write into something (`set_screen_variable(device, "mouse")`).
+    ///
+    /// The one type that is not about *spelling*: an argument of this kind is resolved by the screen
+    /// before the runtime sees it, so `"mouse"` arrives as the string and `item.kind` as whatever the
+    /// element holds — which is the difference between a write that means what it says and one that
+    /// stores the text of the expression.
+    Value,
 }
 
 impl PropType {
@@ -37,6 +44,7 @@ impl PropType {
             Self::Text => "text",
             Self::Asset => "an asset",
             Self::Target => "a label or screen",
+            Self::Value => "a value",
         }
     }
 }

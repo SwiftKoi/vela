@@ -42,6 +42,7 @@ fn diagnostics(source: &str) -> Vec<Diagnostic> {
         .flat_map(|screen| {
             check_screen(
                 &screen.body,
+                &screen.params,
                 &registry,
                 &screens,
                 &actions,
@@ -116,7 +117,10 @@ fn an_action_says_whether_it_is_dispatched() {
             "quit",
             "quick_save",
             "quick_load",
-            "rollback"
+            "rollback",
+            // The one action that writes a screen's *own* store rather than the world's, and the first
+            // of them that is a *value* rather than a name (`SCREENS.md §2.5`).
+            "set_screen_variable"
         ]
     );
 
@@ -270,6 +274,7 @@ fn an_action_line_parses_and_checks() {
 
     let diagnostics = check_screen(
         &screen.body,
+        &screen.params,
         &WidgetRegistry::builtin(),
         &screens,
         &ActionRegistry::builtin(),

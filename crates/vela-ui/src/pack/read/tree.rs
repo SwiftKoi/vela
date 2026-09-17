@@ -142,6 +142,12 @@ impl Reader<'_> {
             6 => self.key_line(),
             7 => self.timer_line(),
             8 => self.loop_line(),
+            9 => {
+                let span = self.span();
+                let name = self.string();
+                let value = self.expr();
+                ScreenLine::Default { span, name, value }
+            }
             _ => ScreenLine::Node(self.node()),
         }
     }

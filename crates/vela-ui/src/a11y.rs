@@ -123,11 +123,13 @@ fn nodes(
         .filter_map(|line| match line {
             // A `layer` line and a `style_prefix` line place nothing: the first names where the
             // screen draws, the second how its widgets look — and a binding answers input rather
-            // than placing anything a screen reader could read.
+            // than placing anything a screen reader could read. A `default` is a variable, and
+            // reading it is what draws.
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
-            | ScreenLine::Timer { .. } => None,
+            | ScreenLine::Timer { .. }
+            | ScreenLine::Default { .. } => None,
             // A conditional contributes every arm's nodes, and a loop its body's: what a screen reader
             // reads is what is on screen, and which arm that is, or how many elements there are, is a
             // runtime question.
@@ -277,6 +279,7 @@ fn check_lines(lines: &[ScreenLine], registry: &WidgetRegistry, out: &mut Vec<Di
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
+            | ScreenLine::Default { .. }
             | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { .. } | ScreenLine::For { .. } => {
                 for body in line.bodies() {

@@ -2,49 +2,69 @@
 
 use std::fmt;
 
+use crate::value::Value;
 use crate::widgets::schema::PropDecl;
 
 use super::builtin::BUILTIN;
 
-/// One action a screen asks for, as written: `open_screen(settings)`.
+/// One action a screen asks for: `open_screen(settings)`.
 ///
 /// The *instance* an [`ActionDecl`] describes. A screen does not mutate state; it produces a
 /// description of a mutation (`SCREENS.md §7`), and this is that description — a name and its
-/// arguments as written. Arguments stay strings because resolving them (a label, a variable, a
-/// screen name) is the runtime's job, and a tree that half-resolved them would be a tree that
-/// cannot be re-read.
+/// arguments.
+///
+/// An argument is what the screen says it is, which is one of two things and both matter. A **name** —
+/// `settings`, `forest.confession` — is for the runtime to resolve: a screen cannot know what labels a
+/// project has. A **value** is what the screen already had, resolved against its own scope, because only
+/// the screen knows its scope and a runtime that re-resolved it could not: `set_screen_variable(device,
+/// "mouse")` has to write the string, and `set(trust, trust + 1)` the number, rather than the *words*.
+/// A name that is not in scope is a name; that is the whole of the difference (`§2.4`).
 ///
 /// An `Action` is also a *value*: a screen may take one as a parameter and hand it to a widget, which
 /// is what lets a caller supply the answer (`SCREENS.md §2.1`).
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Action {
     /// The action's name, e.g. `open_screen`.
     pub name: String,
-    /// Its arguments, as written: `settings`, `forest.confession`.
-    pub args: Vec<String>,
+    /// Its arguments, in order.
+    pub args: Vec<Value>,
 }
 
 impl Action {
     /// An action call.
     #[must_use]
-    pub fn new(name: impl Into<String>, args: Vec<String>) -> Self {
+    pub fn new(name: impl Into<String>, args: Vec<Value>) -> Self {
         Self {
             name: name.into(),
             args,
         }
     }
 
-    /// The first argument, if any.
+    /// The first argument's text, when it is a name or a string.
+    ///
+    /// What every action that takes a target or a variable reads — `open_screen(settings)`,
+    /// `hide(notify)`, `set_screen_variable(device, …)` — and `None` for an argument of another kind,
+    /// which is a value where a name was wanted.
     #[must_use]
     pub fn first(&self) -> Option<&str> {
-        self.args.first().map(String::as_str)
+        match self.args.first()? {
+            Value::Str(text) => Some(text),
+            _ => None,
+        }
     }
 }
 
 impl fmt::Display for Action {
     /// Renders the call the way a screen wrote it, for a log or a trace.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}({})", self.name, self.args.join(", "))
+        write!(f, "{}(", self.name)?;
+        for (index, arg) in self.args.iter().enumerate() {
+            if index > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", arg.as_text())?;
+        }
+        write!(f, ")")
     }
 }
 

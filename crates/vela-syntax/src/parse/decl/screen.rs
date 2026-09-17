@@ -43,6 +43,11 @@ impl Parser<'_> {
         if self.at(TokenKind::Keyword(Keyword::For)) {
             return self.parse_screen_for(start);
         }
+        // Reserved for the same reason, and already reserved by the module form: `default trust = 0`
+        // at the top of a file is the same word doing the same thing (`LANGUAGE.md §3`).
+        if self.at(TokenKind::Keyword(Keyword::Default)) {
+            return self.parse_screen_default(start);
+        }
         // `use` is a keyword, and the only position where it is not a module import is here.
         if self.at(TokenKind::Keyword(Keyword::Use)) {
             return self.parse_screen_use(start);

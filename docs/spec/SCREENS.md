@@ -225,6 +225,59 @@ screen choice(prompt, items):
 > the chain settles the ambiguity alone. The parser used to read `option` as a prop name and then have
 > nowhere to put `.caption` — which is what the sample's menu writes.
 
+### 2.5 Screen variables
+
+A screen may declare a variable of its own, and write it while it is shown:
+
+```vela
+screen help:
+    default device = "keyboard"
+
+    column:
+        text device
+        button:
+            text "Mouse"
+            action set_screen_variable(device, "mouse")
+```
+
+- **The shape is the module form's** (`LANGUAGE.md §3`): `default <name> = <expr>`. One word doing one
+  thing at two levels — a file's `default` is world state, a screen's is the screen's.
+- **The initializer runs once**, the first time that *instance* of the screen is laid out, and may read
+  a parameter or a variable declared above it. Afterwards the value the caller holds wins, which is what
+  makes a write survive the next layout rather than being undone by the line that declared it.
+- **A variable is the screen's own scope**, exactly as a `for`'s binding is: reading `device` is not a
+  read of world state, so the dependency set stays honest (§8.2) and the screen does not relay out when
+  an unrelated `device` changes.
+- **`set_screen_variable(name, value)` writes it** — an action of its own rather than `set`, because the
+  store is the screen's and `set` is the world's. Ren'Py's `SetScreenVariable`, the same words.
+- **The name is written as a name**, so the checker holds it to what this screen declares (`E5017`) and
+  `E5016` refuses a variable named after a parameter: two bindings of one name in one screen would be two
+  answers to one question, and the caller's is the one the screen would silently ignore.
+- **Declared at the top level** (`E5015`): *whether* a variable exists, and so what it starts as, cannot
+  depend on which arm drew.
+- **The value is a value.** `set_screen_variable(device, item.kind)` writes what that field holds rather
+  than the words `item.kind`, because the screen resolves its own arguments before the runtime sees them
+  (§7) — which is the one place an action's argument is a value rather than a name.
+- **It is per instance, not per declaration.** The runtime keeps one beside each screen it has open, so
+  closing a screen and opening it again starts from the initializers, and a hot reload of the source
+  leaves the values alone (§12).
+- **A variable is named state, not node state.** §13's "nodes with stable ids keep their state" is about
+  a *widget* carrying something across a rebuild — a scroll offset, an input buffer — and this is not
+  that mechanism: a variable is a name, and it survives a reload by living outside the screen rather than
+  by being matched to an old node.
+
+> **Not yet.** Nothing *feeds* a screen a value from the world: a variable starts from a literal or from a
+> parameter, and a read of `World` state is §8's work. A screen can therefore hold a choice the player
+> made and cannot yet hold a number the story is tracking — which is why the sample's second use of
+> `default` (`page_name_value`) is a *host displayable* rather than a variable (§7), and stays §7's.
+
+> **Implemented (M12.1).** `default` as a screen line and `set_screen_variable` dispatched; the screen
+> pack moved to version 10. `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape,
+> `crates/vela-ui/tests/variables.rs` that the initializer runs once, that a held value wins, and that a
+> name the body no longer declares is dropped, `tests/check.rs` the three codes,
+> `tests/reactivity.rs` that a variable is not a dependency, `crates/vela-ui/src/pack/tests.rs` the codec,
+> and `crates/vela-cli/src/tests/ui_tests.rs` the whole loop: a write re-lays the screen it wrote.
+
 ## 3. Widget tree
 
 The built-in node set. Each is a registered widget (`CONVENTIONS.md §4.2`), not a hardcoded
@@ -575,13 +628,21 @@ language's words for systems the later milestones build, named now because a scr
 to check now. And the set is not a list of Ren'Py's names: `ShowMenu`, `Start`, and `MainMenu` are
 absent because a menu is a screen (`open_screen`) and the beginning is a label (`jump`).
 
+An argument is either a **name** or a **value**, and the difference is who resolves it. A name —
+`open_screen(settings)`, `hide(notify)` — is for the runtime: a screen cannot know what screens a
+project declares. A value — `set_screen_variable(device, item.kind)` — is what the screen already had,
+resolved against its own scope before the runtime sees it, because only the screen knows its scope
+(§2.5). An argument whose name is *in* scope is a value and everything else is a name, which is the
+rule `image bg.room` and `image item.icon` are told apart by, and the registry's schema says which kind
+each one takes.
+
 > **Implemented (M12.1).** An action is a value a screen can be given and a widget can hold, and the
 > checker holds the vocabulary to the registry: `E5012` for a name that is not registered, `E5013` for
 > the wrong number of arguments, and a bare name that is a parameter is left alone because that is how
-> an action arrives. Of the twenty-six entries, seven are dispatched (`open_screen`, `close_screen`,
-> `hide`, `quit`, `quick_save`, `quick_load`, `rollback`) — the rest need the VM or `World`, and the
-> reference page, the hover, and an activation that reaches one all say so rather than doing nothing
-> quietly.
+> an action arrives. Of the twenty-six entries, eight are dispatched (`open_screen`, `close_screen`,
+> `hide`, `quit`, `quick_save`, `quick_load`, `rollback`, `set_screen_variable`) — the rest need the VM
+> or `World`, and the reference page, the hover, and an activation that reaches one all say so rather
+> than doing nothing quietly.
 
 ## 8. Reactivity
 
@@ -604,9 +665,10 @@ layout over the whole tree every frame.
 Dependency sets are computed **statically** at screen-compile time, so there is no runtime
 dependency-tracking machinery and no way for a binding to silently miss an update.
 
-A name a block *binds* is not a read. A lambda's parameters and a loop's binding (§2.4) are scoped, so
-the set holds what the body reads from *outside* — which is what keeps `for option in items` from making
-the screen depend on any unrelated field called `option`, forever.
+A name a block *binds* is not a read, and a name a screen *owns* is not either: a lambda's parameters, a
+loop's binding (§2.4) and a screen's variable (§2.5) are all scoped, so the set holds what the body reads
+from *outside* — which is what keeps `for option in items` from making the screen depend on any unrelated
+field called `option`, and a `default device` from making it depend on one called `device`, forever.
 
 ### 8.3 No implicit repaint
 
@@ -707,6 +769,11 @@ construction — there is no hidden mutation to lose. This is the payoff for §2
 > carries state — there is no scroll offset or input buffer to preserve — so the rebuild is
 > unconditional and node-id preservation has nothing to act on. It lands with the first stateful
 > widget, which is also what the `list` in §14 waits on. Stated rather than implied.
+>
+> A screen's **variables** are a different kind of state and are already carried: they live outside the
+> screen, in the runtime, so a reload re-lays out with them untouched (§2.5) rather than matching them to
+> an old node. The mechanism this paragraph waits for is a widget's *own* state — the offset a drag moved
+> — which is still to come.
 
 ## 13. The screen pack
 

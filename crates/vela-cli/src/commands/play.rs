@@ -19,6 +19,7 @@ use vela_world::Input;
 
 use crate::command::Error;
 use crate::commands::ui::{Screens, Stack, Watcher};
+use vela_ui::Value;
 use vela_ui::actions::Action as ScreenAction;
 
 pub(crate) mod images;
@@ -303,6 +304,28 @@ impl Player {
                 };
                 if self.overlays.close_named(name) {
                     println!("screen hide {name}");
+                }
+            }
+            // The one action whose argument is a *value* rather than a name (`SCREENS.md §2.5`): the
+            // screen resolved it, so what arrives is what the variable becomes — the string, or the
+            // number, rather than the words it was written with.
+            "set_screen_variable" => {
+                let (Some(Value::Str(name)), Some(value)) =
+                    (action.args.first(), action.args.get(1))
+                else {
+                    return;
+                };
+                if self.overlays.set_variable(
+                    &self.screens,
+                    name,
+                    value.clone(),
+                    self.size,
+                    self.presenter.text_mut(),
+                    FACE_NAME,
+                ) {
+                    println!("screen set {name}");
+                } else {
+                    println!("screen stale {name}");
                 }
             }
             // The rest need the VM or `World` and are not wired yet — `SCREENS.md §7` says which, and

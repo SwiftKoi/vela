@@ -12,6 +12,16 @@ use crate::widgets::PropType;
 
 use super::decl::ActionDecl;
 
+/// The action that writes one of a screen's *own* variables (`SCREENS.md §2.5`).
+///
+/// A constant because two crates have to agree about the string: `vela-ui` holds the written name to
+/// the variables the screen declares, and the runtime is what performs the write. A literal in each
+/// place would be a checker that validates one name while the runtime acts on another.
+///
+/// Ren'Py's `SetScreenVariable` in this language's spelling — the same words, because it is the same
+/// action: the store belongs to the screen rather than to the world, and `set` is the world's.
+pub const SET_SCREEN_VARIABLE: &str = "set_screen_variable";
+
 /// An argument a screen writes, in order.
 const fn arg(name: &'static str, ty: PropType, doc: &'static str) -> crate::widgets::PropDecl {
     crate::widgets::PropDecl {
@@ -166,13 +176,13 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
         dispatched: false,
     },
     ActionDecl {
-        name: "set_screen_variable",
+        name: SET_SCREEN_VARIABLE,
         args: &[
             arg("name", PropType::Word, "Which screen variable."),
-            arg("value", PropType::Word, "What to write into it."),
+            arg("value", PropType::Value, "What to write into it."),
         ],
         doc: "Assign a screen's own variable, rather than the world's.",
-        dispatched: false,
+        dispatched: true,
     },
     ActionDecl {
         name: "language",

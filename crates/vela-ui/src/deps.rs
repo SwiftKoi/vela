@@ -88,12 +88,19 @@ pub fn deps_of(screens: &[&ScreenDecl], lines: &[ScreenLine]) -> DepSet {
 ///
 /// `path` is the `use` chain being walked. A cycle is refused by the checker (`E5011`), so this is a
 /// bound on a crafted pack rather than on a file — the same backstop the accessibility walk keeps.
+///
+/// Collects into a set of its own and folds it into `out` at the end, because a body may *own* names: a
+/// `default` binds one for the whole body, and a name the screen owns is not a read of anything outside
+/// it. The fold has to come after the walk rather than during it, because which line reads a variable is
+/// a layout question (`§2.5`) — a removal that depended on the order would relay out for a change to a
+/// name the screen owns, which is the one thing a dependency set must never do.
 fn collect_lines(
     screens: &[&ScreenDecl],
     lines: &[ScreenLine],
     out: &mut DepSet,
     path: &mut Vec<String>,
 ) {
+    let mut here = DepSet::new();
     for line in lines {
         match line {
             ScreenLine::Layer { .. }
@@ -108,25 +115,28 @@ fn collect_lines(
                 else_body,
                 ..
             } => {
-                collect_expr(condition, out);
-                collect_lines(screens, body, out, path);
+                collect_expr(condition, &mut here);
+                collect_lines(screens, body, &mut here, path);
                 for clause in elifs {
-                    collect_expr(&clause.condition, out);
-                    collect_lines(screens, &clause.body, out, path);
+                    collect_expr(&clause.condition, &mut here);
+                    collect_lines(screens, &clause.body, &mut here, path);
                 }
                 if let Some(else_body) = else_body {
-                    collect_lines(screens, else_body, out, path);
+                    collect_lines(screens, else_body, &mut here, path);
                 }
             }
             // A binding's expressions are reads like any other: the action it names and the delay it
             // waits are names this screen mentions, so a change to either must stale its frame.
-            ScreenLine::Key { action, .. } => collect_expr(action, out),
+            ScreenLine::Key { action, .. } => collect_expr(action, &mut here),
             ScreenLine::Timer {
                 seconds, action, ..
             } => {
-                collect_expr(seconds, out);
-                collect_expr(action, out);
+                collect_expr(seconds, &mut here);
+                collect_expr(action, &mut here);
             }
+            // The *initializer* is a read — a variable that starts as something the screen read makes
+            // the screen depend on it. The name it binds is not, which is what the fold below removes.
+            ScreenLine::Default { value, .. } => collect_expr(value, &mut here),
             // The iterable is a read; the body is walked in a scope the binding owns, so a name the
             // loop bound is not a dependency on anything outside it. Without the removal, `for i in
             // items` would make the screen depend on a field called `i` — a screen that relays out
@@ -137,19 +147,29 @@ fn collect_lines(
                 body,
                 ..
             } => {
-                collect_expr(iterable, out);
+                collect_expr(iterable, &mut here);
                 let mut inner = DepSet::new();
                 collect_lines(screens, body, &mut inner, path);
                 for name in inner.names {
                     if name != *binding {
-                        out.insert(name);
+                        here.insert(name);
                     }
                 }
             }
             ScreenLine::Use {
                 name, args, body, ..
-            } => collect_use(screens, name, args, body, out, path),
-            ScreenLine::Node(node) => collect_node(screens, node, out, path),
+            } => collect_use(screens, name, args, body, &mut here, path),
+            ScreenLine::Node(node) => collect_node(screens, node, &mut here, path),
+        }
+    }
+
+    let owned: Vec<&str> = ScreenLine::declares(lines)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    for name in here.names {
+        if !owned.contains(&name.as_str()) {
+            out.insert(name);
         }
     }
 }

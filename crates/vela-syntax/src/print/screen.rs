@@ -56,6 +56,9 @@ fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
         }
         // A bare line, like `pass`: nothing follows it, and nothing can.
         ScreenLine::Transclude { .. } => writer.line("transclude"),
+        ScreenLine::Default { name, value, .. } => {
+            writer.line(&format!("default {name} = {}", expr::text(value)));
+        }
         ScreenLine::Key { name, action, .. } => {
             writer.line(&format!("key {name} action {}", expr::text(action)));
         }
@@ -181,6 +184,7 @@ fn start_of(line: &ScreenLine) -> u32 {
         | ScreenLine::Use { span, .. }
         | ScreenLine::Key { span, .. }
         | ScreenLine::Timer { span, .. }
+        | ScreenLine::Default { span, .. }
         | ScreenLine::Transclude { span } => span.start(),
         ScreenLine::Node(node) => node.span.start(),
     }

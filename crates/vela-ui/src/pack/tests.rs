@@ -190,6 +190,7 @@ screen dialogue(name: str?, line):
             text line style = body
 
 screen chooser(which):
+    default picked = \"A\"
     if which:
         text \"A\"
     elif which is not none:
@@ -200,9 +201,35 @@ screen chooser(which):
     timer 1.5 action hide(chooser)
     for option in options:
         text option.caption
+    button:
+        text picked
+        action set_screen_variable(picked, \"B\")
 ";
     let parsed = vela_syntax::parse(FileId::from_raw(0), source);
     ScreenPack::compile("main", &parsed.program.items)
+}
+
+/// A `default` survives the codec: the name it binds and the expression it starts as.
+///
+/// A version-9 reader would read the tag as a widget named `""` and then take the variable's *name* for
+/// the next line's tag — which is why the version moved. A screen that came back with its variables
+/// dropped would draw a different tree rather than refuse to load.
+#[test]
+fn a_screen_variable_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let set = ScreenPack::from_bytes(&bytes)
+        .expect("a pack decodes")
+        .into_set();
+
+    let chooser = set.screen("chooser").expect("the screen survives");
+    let Some(vela_syntax::ScreenLine::Default { name, .. }) = chooser
+        .body
+        .iter()
+        .find(|line| matches!(line, vela_syntax::ScreenLine::Default { .. }))
+    else {
+        panic!("expected a declared variable");
+    };
+    assert_eq!(name, "picked");
 }
 
 /// A style's per-state setting survives by its *key*, prefix and all.
@@ -252,9 +279,12 @@ fn an_if_chain_survives_the_round_trip() {
     let chooser = set.screen("chooser").expect("the screen survives");
     let Some(vela_syntax::ScreenLine::If {
         elifs, else_body, ..
-    }) = chooser.body.first()
+    }) = chooser
+        .body
+        .iter()
+        .find(|line| matches!(line, vela_syntax::ScreenLine::If { .. }))
     else {
-        panic!("expected the chain at the top of the screen");
+        panic!("expected an `if` chain");
     };
     assert_eq!(elifs.len(), 1, "the `elif` arm did not survive");
     assert!(else_body.is_some(), "the `else` arm did not survive");
@@ -301,8 +331,12 @@ fn a_loop_survives_the_round_trip() {
         .into_set();
 
     let chooser = set.screen("chooser").expect("the screen survives");
-    let Some(vela_syntax::ScreenLine::For { binding, body, .. }) = chooser.body.last() else {
-        panic!("expected the loop at the end of the screen");
+    let Some(vela_syntax::ScreenLine::For { binding, body, .. }) = chooser
+        .body
+        .iter()
+        .find(|line| matches!(line, vela_syntax::ScreenLine::For { .. }))
+    else {
+        panic!("expected a loop");
     };
     assert_eq!(binding, "option");
     assert_eq!(body.len(), 1, "the loop's body did not survive");

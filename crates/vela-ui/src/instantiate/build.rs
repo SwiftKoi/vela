@@ -13,30 +13,64 @@ use vela_syntax::{ScreenArg, ScreenLine, ScreenNode};
 
 use super::compose::Compose;
 use super::props::{apply_args, apply_bare_prop, apply_style, measure_image, measure_text};
-use crate::eval::{Args, Ctx, Value, eval, number, value_of};
+use crate::eval::{Args, Ctx, ScreenState, Value, eval, number, value_of};
 use crate::props::SizeSpec;
 use crate::tree::{Kind, Node, Size};
 use crate::widgets::{Category, Widget};
 
-/// Evaluates a screen body to a widget tree.
+/// Evaluates a screen body to a widget tree, updating the screen's variables in place.
 ///
 /// The result is a full-window `stack` holding the body's top-level nodes: a screen is placed
 /// in a layer that fills the frame, which is what lets a top-level `at bottom` mean the bottom
 /// of the screen rather than the bottom of its own content.
+///
+/// `state` is both an input and an output, because a layout is what *initializes* a variable
+/// (`SCREENS.md §2.5`): the value of a name it already holds is kept, and one it does not is the
+/// initializer. It is replaced rather than added to — a name the body no longer declares is not a
+/// variable of this screen any more.
 #[must_use]
 pub fn build(
     body: &[ScreenLine],
     ctx: &Ctx,
     args: &Args,
+    state: &mut ScreenState,
     text: &mut vela_text::TextEngine,
     font: &str,
     max_width: f32,
 ) -> Node {
-    let children = build_lines(body, ctx, args, Compose::default(), text, font, max_width);
+    // The variables first, so that every line reads them and so that an initializer can read the ones
+    // declared above it. Which value each starts at is `seed`'s question.
+    let (scope, seeded) = seed(body, args, state);
+    *state = seeded;
+    let children = build_lines(body, ctx, &scope, Compose::default(), text, font, max_width);
     let mut root = Node::new(Kind::Stack, children);
     root.props.width = SizeSpec::Percent(1.0);
     root.props.height = SizeSpec::Percent(1.0);
     root
+}
+
+/// Binds a screen's variables into its scope, and returns the state it ends with.
+///
+/// A value the caller still holds wins: that is what makes a write survive the next layout, and what
+/// makes a variable *a variable* rather than an argument spelled differently. A name this screen
+/// declares and the state does not have is new — a screen just opened, or one whose source gained a
+/// `default` — and starts from its own expression, evaluated in the scope built so far so that it can
+/// read an argument or a variable declared above it.
+///
+/// Pruned to what this body declares, which is what a *renamed* variable should do: the old name is not
+/// a variable of this screen any more, and a store nothing can read is worse than no store.
+fn seed(body: &[ScreenLine], args: &Args, state: &ScreenState) -> (Args, ScreenState) {
+    let mut scope = args.clone();
+    let mut seeded = ScreenState::new();
+    for (name, initial) in ScreenLine::declares(body) {
+        let value = match state.get(name) {
+            Some(kept) => kept.clone(),
+            None => value_of(initial, &scope),
+        };
+        scope.set(name, value.clone());
+        seeded.set(name, value);
+    }
+    (scope, seeded)
 }
 
 /// Builds the widget nodes of a block.
@@ -62,11 +96,13 @@ fn build_lines(
         match line {
             // A `layer` names where the screen draws and a `style_prefix` how its widgets look;
             // neither draws anything itself, and the prefix is read above. A binding places nothing
-            // either: `instantiate::bindings` is what collects those.
+            // either: `instantiate::bindings` is what collects those. A `default` draws nothing
+            // because it is a variable, and `state` is what has already read it.
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
-            | ScreenLine::Timer { .. } => {}
+            | ScreenLine::Timer { .. }
+            | ScreenLine::Default { .. } => {}
             ScreenLine::If { .. } => {
                 if let Some(arm) = arm_of(line, args) {
                     out.extend(build_lines(arm, ctx, args, compose, text, font, max_width));
@@ -154,7 +190,10 @@ fn apply_line(
         ScreenLine::Layer { .. }
         | ScreenLine::StylePrefix { .. }
         | ScreenLine::Key { .. }
-        | ScreenLine::Timer { .. } => {}
+        | ScreenLine::Timer { .. }
+        // A variable declared inside a widget is reported by the checker (`E5015`) and draws nothing
+        // here: the screen's state is read above, once, in `build_lines`.
+        | ScreenLine::Default { .. } => {}
         ScreenLine::If { .. } => {
             if let Some(arm) = arm_of(line, args) {
                 // A branch is a block, so a prefix declared inside it scopes to it — `build_lines`

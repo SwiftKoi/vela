@@ -148,7 +148,14 @@ screen menu:
     let screens = set(source);
     let mut text = engine();
     let laid = screens
-        .lay("menu", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "menu",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the menu is declared");
     assert_eq!(laid.hotspots.len(), 2, "one hotspot per button");
 
@@ -218,7 +225,14 @@ screen s:
     text.add_font("cjk", face);
 
     set(source)
-        .build("s", &Args::new(), &mut text, "sans", 1280.0)
+        .build(
+            "s",
+            &Args::new(),
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared");
     assert_eq!(
         text.cached_layouts(),
@@ -270,7 +284,14 @@ fn a_picture_paints_its_texture() {
     let mut text = engine();
     let laid = set(source)
         .with_images(images.clone())
-        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "s",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
 
     let mut draw = DrawList::new();
@@ -306,7 +327,14 @@ fn a_picture_with_no_texture_draws_nothing() {
     let mut text = engine();
     let laid = set(source)
         .with_images(images.clone())
-        .lay("s", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "s",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
 
     let mut draw = DrawList::new();

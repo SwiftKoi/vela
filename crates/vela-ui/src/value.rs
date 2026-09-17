@@ -105,7 +105,7 @@ impl Value {
 }
 
 /// The arguments a screen was called with, by parameter name, in call order.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Args {
     values: Vec<(String, Value)>,
 }
@@ -117,7 +117,11 @@ impl Args {
         Self::default()
     }
 
-    /// Binds a name, replacing any binding it already has.
+    /// Binds a name.
+    ///
+    /// A name already bound keeps the *earlier* value when read, because [`get`](Self::get) answers with
+    /// the first binding it finds: `set` adds a layer to a scope, and [`with`](Self::with) is what
+    /// replaces one.
     pub fn set(&mut self, name: impl Into<String>, value: Value) {
         self.values.push((name.into(), value));
     }
@@ -147,5 +151,58 @@ impl Args {
             .collect();
         values.push((name.to_string(), value));
         Self { values }
+    }
+}
+
+/// One screen instance's own variables (`SCREENS.md §2.5`).
+///
+/// What a `default` declares, and what `set_screen_variable` writes. Per *instance* rather than per
+/// declaration: the runtime keeps one beside each screen it has open, so closing a screen and opening it
+/// again starts from the initializers, and a hot reload of the screen's source leaves the values alone.
+///
+/// A distinct type over the shape [`Args`] has, because [`ScreenSet::lay`](crate::ScreenSet::lay) takes
+/// one after the other and they are both `name → value`: a caller that swapped them would pass a
+/// screen's state as its arguments, which type-checks and draws the wrong thing.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ScreenState {
+    bound: Args,
+}
+
+impl ScreenState {
+    /// A screen that has not been laid out yet: no variables.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The value bound to a variable, if the screen has one.
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<&Value> {
+        self.bound.get(name)
+    }
+
+    /// Binds a variable.
+    ///
+    /// Replaces rather than shadows, which is the difference between this and a scope: a store has one
+    /// value per name, and a write is the operation that changes it.
+    pub fn set(&mut self, name: &str, value: Value) {
+        self.bound = self.bound.with(name, value);
+    }
+
+    /// Every variable, in the order the screen declares them.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
+        self.bound.values.iter().map(|(name, value)| (name, value))
+    }
+
+    /// How many variables it holds.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.bound.values.len()
+    }
+
+    /// Whether it holds none — a screen with no `default`, which is most of them.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.bound.values.is_empty()
     }
 }

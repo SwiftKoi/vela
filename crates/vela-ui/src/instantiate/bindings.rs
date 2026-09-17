@@ -60,15 +60,14 @@ fn collect(
             } => {
                 // Both halves have to resolve: a deadline nothing measures and an action nothing
                 // names would be a timer that is never due and does nothing.
-                let (Some(seconds), Some(action)) = (number(seconds), action_from(action, args))
-                else {
-                    continue;
-                };
-                timers.push(Timer {
-                    seconds,
-                    action,
-                    repeat: *repeat,
-                });
+                if let (Some(seconds), Some(action)) = (number(seconds), action_from(action, args))
+                {
+                    timers.push(Timer {
+                        seconds,
+                        action,
+                        repeat: *repeat,
+                    });
+                }
             }
             ScreenLine::If { .. } => {
                 // The arm that *draws*, which is the arm whose input is live — the same decision the
@@ -107,8 +106,11 @@ fn collect(
                 }
             }
             ScreenLine::Node(node) => collect(&node.children, ctx, args, compose, keys, timers),
-            // Neither declares an input: a layer is where the screen draws, a prefix is how it looks.
-            ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
+            // Neither declares an input: a layer is where the screen draws, a prefix is how it looks,
+            // and a variable is what the screen owns rather than what input answers.
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Default { .. } => {}
         }
     }
 }

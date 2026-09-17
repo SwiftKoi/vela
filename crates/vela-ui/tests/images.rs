@@ -76,7 +76,14 @@ screen gallery(item):
     let mut text = engine();
     let root = set(source)
         .with_images(images)
-        .build("gallery", &args, &mut text, "sans", 1280.0)
+        .build(
+            "gallery",
+            &args,
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared");
     let column = &root.children[0];
 
@@ -102,7 +109,14 @@ screen gallery(item):
 fn an_unknown_picture_measures_to_nothing() {
     let mut text = engine();
     let root = set("screen s:\n    image missing.thing\n")
-        .build("s", &Args::new(), &mut text, "sans", 1280.0)
+        .build(
+            "s",
+            &Args::new(),
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared");
     let Kind::Image { name, size } = &root.children[0].kind else {
         panic!("expected a picture");

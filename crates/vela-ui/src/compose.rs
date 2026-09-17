@@ -66,11 +66,13 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
                 }
             }
             ScreenLine::Node(node) => uses_in(&node.children, out),
-            // A binding names no screen and holds no block: it is an input answer, not a placement.
+            // A binding names no screen and holds no block: it is an input answer, not a placement. A
+            // variable names no screen either.
             ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
             | ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Default { .. }
             | ScreenLine::Transclude { .. } => {}
         }
     }
@@ -97,7 +99,8 @@ pub(crate) fn transcludes(lines: &[ScreenLine]) -> bool {
         ScreenLine::Layer { .. }
         | ScreenLine::StylePrefix { .. }
         | ScreenLine::Key { .. }
-        | ScreenLine::Timer { .. } => false,
+        | ScreenLine::Timer { .. }
+        | ScreenLine::Default { .. } => false,
     })
 }
 
@@ -133,6 +136,7 @@ fn walk_uses(screens: &[&ScreenDecl], lines: &[ScreenLine], out: &mut Vec<Diagno
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
+            | ScreenLine::Default { .. }
             | ScreenLine::Transclude { .. } => {}
         }
     }

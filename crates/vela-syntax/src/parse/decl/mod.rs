@@ -5,6 +5,7 @@ mod params;
 mod screen;
 mod screen_args;
 mod screen_bindings;
+mod screen_default;
 mod screen_for;
 mod screen_use;
 mod test;

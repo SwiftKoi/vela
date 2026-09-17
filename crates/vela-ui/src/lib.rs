@@ -53,7 +53,7 @@ pub use cache::{Cached, ScreenCache};
 pub use check::check_screen;
 pub use deps::{DepSet, deps_of};
 pub use error::PackError;
-pub use eval::{Args, Value};
+pub use eval::{Args, ScreenState, Value};
 pub use focus::{Hotspot, hotspots};
 pub use images::{ImageTable, Picture};
 pub use input::SemanticActions;

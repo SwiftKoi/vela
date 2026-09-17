@@ -288,7 +288,14 @@ fn build(source: &str, screen: &str) -> Node {
     );
     let mut text = engine();
     ScreenSet::from_items(&parsed.program.items)
-        .build(screen, &Args::new(), &mut text, "sans", 1280.0)
+        .build(
+            screen,
+            &Args::new(),
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared")
 }
 
@@ -306,7 +313,14 @@ fn styled_paint(source: &str) -> vela_ui::Paint {
     );
     let mut text = engine();
     let root = ScreenSet::from_items(&parsed.program.items)
-        .build("s", &Args::new(), &mut text, "sans", 1280.0)
+        .build(
+            "s",
+            &Args::new(),
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared");
     root.children[0].paint.clone()
 }

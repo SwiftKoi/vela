@@ -387,6 +387,43 @@ fn a_for_line_binds_a_name_to_a_value() {
     assert_eq!(body.len(), 1, "the body");
 }
 
+/// A `default` binds a name inside the screen, in the same shape the module form uses.
+///
+/// One word doing one thing at two levels (`LANGUAGE.md §3`): a screen is a function, and this is where
+/// it keeps what it remembers between layouts (`SCREENS.md §2.5`).
+#[test]
+fn a_default_line_binds_a_screen_variable() {
+    let program =
+        parse_src("screen s(initial):\n    default device = initial\n    text device style body\n");
+    assert!(
+        program.diagnostics.is_empty(),
+        "{:?}",
+        program
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
+            .collect::<Vec<_>>()
+    );
+
+    let Some(Item::Screen(screen)) = program.program.items.first() else {
+        panic!("expected a screen");
+    };
+    let ScreenLine::Default { name, value, .. } = &screen.body[0] else {
+        panic!("expected a `default` line");
+    };
+    assert_eq!(name, "device");
+    assert!(
+        matches!(value, Expr::Name { name, .. } if name == "initial"),
+        "the initializer may read an argument: {value:?}"
+    );
+    // The line after it is a widget, not another variable: a `default` ends at the newline.
+    assert!(
+        matches!(&screen.body[1], ScreenLine::Node(_)),
+        "{:?}",
+        screen.body[1]
+    );
+}
+
 /// A dotted value at the head of a widget's line is the widget's *content*, not a prop name.
 ///
 /// `text option.caption` is the same shape as `text line` — a name where a value goes. No prop name

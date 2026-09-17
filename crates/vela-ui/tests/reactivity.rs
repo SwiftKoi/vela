@@ -260,6 +260,30 @@ fn a_loop_binding_is_not_a_dependency() {
     );
 }
 
+/// A screen variable is not a dependency; what its initializer reads is.
+///
+/// `SCREENS.md §8.2`: the set decides whether a screen relays out. A `default` names something the
+/// screen *owns*, so a read of it is not a read of world state — while the expression it starts as is a
+/// read like any other, and a change to what that mentions must stale the frame.
+#[test]
+fn a_screen_variable_is_not_a_dependency() {
+    let parsed = parse(
+        FileId::from_raw(0),
+        "screen s(start):\n    default count = start\n    text count\n    text elsewhere\n",
+    );
+    let deps = deps_of(&screens_of(&parsed), body_of(&parsed));
+    let read = names(&deps);
+    assert!(
+        deps.contains("start"),
+        "the initializer is a read: {read:?}"
+    );
+    assert!(deps.contains("elsewhere"), "and so is the body: {read:?}");
+    assert!(
+        !deps.contains("count"),
+        "the screen's own variable was recorded as a dependency: {read:?}"
+    );
+}
+
 /// An empty screen is a legal screen and depends on nothing.
 #[test]
 fn an_empty_screen_is_static() {

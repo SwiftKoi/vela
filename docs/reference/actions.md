@@ -149,12 +149,12 @@ Delete what is in a slot. Declared, not dispatched yet: the runtime does not act
 
 ## `set_screen_variable(name, value)`
 
-Assign a screen's own variable, rather than the world's. Declared, not dispatched yet: the runtime does not act on it.
+Assign a screen's own variable, rather than the world's.
 
 | argument | takes | meaning |
 | --- | --- | --- |
 | `name` | a word | Which screen variable. |
-| `value` | a word | What to write into it. |
+| `value` | a value | What to write into it. |
 
 ## `language(name)`
 

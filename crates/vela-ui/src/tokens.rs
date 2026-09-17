@@ -46,6 +46,7 @@ fn check_lines(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) {
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
+            | ScreenLine::Default { .. }
             | ScreenLine::Transclude { .. } => {}
             // An `if` and a `for` both hold bodies that are drawn, so a literal colour in either is
             // this screen's literal.

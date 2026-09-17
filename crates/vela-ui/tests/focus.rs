@@ -26,7 +26,14 @@ fn laid() -> Laid {
     assert!(parsed.diagnostics.is_empty(), "the fixture must parse");
     let mut text = engine();
     ScreenSet::from_items(&parsed.program.items)
-        .lay("pause", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "pause",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared")
 }
 
@@ -40,7 +47,9 @@ fn hotspots_are_buttons_in_tree_order_with_their_actions() {
         .map(|hotspot| hotspot.action.name.as_str())
         .collect();
     assert_eq!(names, vec!["close_screen", "open_screen", "quit"]);
-    assert_eq!(laid.hotspots[1].action.args, vec!["settings"]);
+    // An argument that names a screen is a *name*, for the runtime to resolve: nothing in the screen
+    // knows what screens a project declares (`SCREENS.md §7`).
+    assert_eq!(laid.hotspots[1].action.first(), Some("settings"));
 }
 
 /// A column of buttons stacks downward, and each has a real rectangle.
@@ -87,7 +96,14 @@ fn a_screen_without_buttons_has_no_hotspots() {
     );
     let mut text = engine();
     let laid = ScreenSet::from_items(&parsed.program.items)
-        .lay("plain", &Args::new(), (1280, 720), &mut text, "sans")
+        .lay(
+            "plain",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
     assert!(laid.hotspots.is_empty());
 }

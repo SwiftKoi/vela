@@ -149,6 +149,24 @@ pub enum ScreenLine {
         /// The lines drawn once per element.
         body: Vec<ScreenLine>,
     },
+    /// `default <name> = <expr>` — a variable of this screen instance (`SCREENS.md §2.5`).
+    ///
+    /// The one line in a body that *writes* something the body later reads: a screen is otherwise a
+    /// function of its arguments, and this is what makes it a function that remembers (`§2`). The
+    /// initializer runs the first time the instance is laid out and the value is kept from then on, so
+    /// closing and reopening a screen starts from the initializer again.
+    ///
+    /// The name is the screen's *own* — `set_screen` is what writes it after that — and it is a scope
+    /// for the body exactly as a `for`'s binding is, which is what keeps the static dependency set
+    /// honest: reading `device` is not a read of anything outside the screen.
+    Default {
+        /// The line's span.
+        span: Span,
+        /// The variable's name, as written.
+        name: String,
+        /// What it starts as, before anything writes it.
+        value: Expr,
+    },
     /// A widget, or a prop written on its own line.
     Node(ScreenNode),
 }
@@ -187,9 +205,33 @@ impl ScreenLine {
             | Self::Layer { .. }
             | Self::StylePrefix { .. }
             | Self::Transclude { .. }
+            | Self::Default { .. }
             | Self::Node(_)
             | Self::Use { .. } => Vec::new(),
         }
+    }
+
+    /// The screen variables a body declares, in order: each name and what it starts as (`SCREENS.md
+    /// §2.5`).
+    ///
+    /// A helper for the reason [`bodies`](Self::bodies) is one: three walks need the same list, and each
+    /// needs it for a different reason — the dependency set removes these names from what the screen
+    /// reads, the checker holds `set_screen_variable` to them, and the instantiator seeds them before the
+    /// body is built. A walk that missed one would be a screen whose own variable reads as something
+    /// outside it, or whose write goes nowhere.
+    ///
+    /// Top level only. A `default` in a conditional's arm would make *whether* the variable exists, and
+    /// so what it starts as, depend on which arm drew — which is not a thing a screen can be reasoned
+    /// about statically, and the checker says so (`E5015`).
+    #[must_use]
+    pub fn declares(lines: &[Self]) -> Vec<(&str, &Expr)> {
+        lines
+            .iter()
+            .filter_map(|line| match line {
+                Self::Default { name, value, .. } => Some((name.as_str(), value)),
+                _ => None,
+            })
+            .collect()
     }
 }
 

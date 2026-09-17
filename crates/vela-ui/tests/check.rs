@@ -23,8 +23,12 @@ fn screens_of(parsed: &vela_syntax::ParseResult) -> Vec<&ScreenDecl> {
 
 /// Checks a screen body and returns `(code, help)` for each diagnostic.
 fn diagnose(body: &str) -> Vec<(String, String)> {
-    let source = format!("screen s:\n{body}");
-    let parsed = parse(FileId::from_raw(0), &source);
+    diagnose_source(&format!("screen s:\n{body}"))
+}
+
+/// Checks whatever a source declares, so a fixture can give its screen parameters.
+fn diagnose_source(source: &str) -> Vec<(String, String)> {
+    let parsed = parse(FileId::from_raw(0), source);
     assert!(
         parsed.diagnostics.is_empty(),
         "the fixture must parse: {:?}",
@@ -40,6 +44,7 @@ fn diagnose(body: &str) -> Vec<(String, String)> {
     };
     check_screen(
         &screen.body,
+        &screen.params,
         &WidgetRegistry::builtin(),
         &screens,
         &ActionRegistry::builtin(),
@@ -66,6 +71,7 @@ fn a_valid_screen_is_clean() {
     };
     let diagnostics = check_screen(
         &screen.body,
+        &screen.params,
         &WidgetRegistry::builtin(),
         &screens,
         &ActionRegistry::builtin(),
@@ -223,4 +229,64 @@ fn a_mistake_in_a_loop_is_reported() {
     );
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
     assert_eq!(diagnostics[0].0, "E5012");
+}
+
+/// A screen variable is the screen's own, so a parameter cannot have its name (`E5016`).
+///
+/// Two bindings of one name in one screen are two answers to one question, and the caller's answer is
+/// the one the screen would silently ignore — the failure this check exists to prevent, because the
+/// screen would look like it worked.
+#[test]
+fn a_screen_variable_cannot_be_named_after_a_parameter() {
+    let diagnostics =
+        diagnose_source("screen s(device):\n    default device = \"keyboard\"\n    text device\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5016");
+    assert!(diagnostics[0].1.contains("rename"), "{diagnostics:?}");
+}
+
+/// And declaring one twice is the same mistake between two lines of the screen itself.
+#[test]
+fn a_screen_variable_is_declared_once() {
+    let diagnostics = diagnose("    default tab = \"keyboard\"\n    default tab = \"mouse\"\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5016");
+    assert!(diagnostics[0].1.contains("remove one"), "{diagnostics:?}");
+}
+
+/// A variable declared inside a widget or an arm is `E5015`: *whether* it exists cannot depend on what
+/// drew (`SCREENS.md §2.5`).
+#[test]
+fn a_screen_variable_declared_inside_a_block_is_reported() {
+    let diagnostics =
+        diagnose("    column:\n        default tab = \"keyboard\"\n        text tab\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5015");
+    assert!(
+        diagnostics[0].1.contains("move the `default`"),
+        "{diagnostics:?}"
+    );
+}
+
+/// A write names a variable this screen declares, or it is `E5017` with the nearest name offered.
+///
+/// The name is written as a *name*, which is the one thing Ren'Py's stringly-typed form cannot be held
+/// to: `set_screen_variable(devise, …)` is a button that writes a name nothing reads.
+#[test]
+fn a_write_to_an_undeclared_variable_is_reported() {
+    let diagnostics = diagnose(
+        "    default device = \"keyboard\"\n    button:\n        text \"Mouse\"\n        action set_screen_variable(devise, \"mouse\")\n",
+    );
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5017");
+    assert!(diagnostics[0].1.contains("device"), "{diagnostics:?}");
+}
+
+/// The vocabulary around a variable is clean: declared once, read, and written.
+#[test]
+fn a_valid_variable_is_clean() {
+    let diagnostics = diagnose(
+        "    default device = \"keyboard\"\n    column:\n        text device\n        button:\n            text \"Mouse\"\n            action set_screen_variable(device, \"mouse\")\n",
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }

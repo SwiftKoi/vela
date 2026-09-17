@@ -1,0 +1,245 @@
+use vela_diag::Diagnostic;
+use vela_span::Span;
+use vela_syntax::{Expr, ScreenArg, ScreenLine, StrPart};
+
+use crate::actions::{ActionRegistry, SET_SCREEN_VARIABLE};
+
+use super::diag;
+
+/// Checks every action a body calls against the registry.
+///
+/// A *walk over expressions* rather than a check of the `action` prop, because that prop is not the
+/// only place an action is written: `use confirm("Stop?", quit(), close_screen())` passes two of them
+/// as arguments, and a misspelled one there is the same mistake. The registry was a docs source
+/// before this — nothing consulted it, so `action quitt()` was accepted and did nothing at all.
+pub(super) fn check_actions(
+    lines: &[ScreenLine],
+    actions: &ActionRegistry,
+    declared: &[&str],
+    out: &mut Vec<Diagnostic>,
+) {
+    for line in lines {
+        match line {
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
+            ScreenLine::If {
+                condition, elifs, ..
+            } => {
+                // Every condition, and every arm's body: the arms are checked whether or not one
+                // holds, because which one holds is a runtime question.
+                check_action_expr(condition, actions, declared, out);
+                for clause in elifs {
+                    check_action_expr(&clause.condition, actions, declared, out);
+                }
+                for arm in line.bodies() {
+                    check_actions(arm, actions, declared, out);
+                }
+            }
+            // A loop's body is drawn, so its actions are checked like any other — and the iterable is
+            // an expression that may hold one.
+            ScreenLine::For { iterable, body, .. } => {
+                check_action_expr(iterable, actions, declared, out);
+                check_actions(body, actions, declared, out);
+            }
+            // A binding's action is an action like any other, so a misspelled one is the same
+            // mistake here as in an `action` prop — and the delay is an expression that may hold
+            // one too.
+            ScreenLine::Key { action, .. } => check_action_expr(action, actions, declared, out),
+            ScreenLine::Timer {
+                seconds, action, ..
+            } => {
+                check_action_expr(seconds, actions, declared, out);
+                check_action_expr(action, actions, declared, out);
+            }
+            // A variable's initializer is an expression like any other, and one may name an action —
+            // `default choice = close_screen()` is a screen whose first state is an action.
+            ScreenLine::Default { value, .. } => check_action_expr(value, actions, declared, out),
+            ScreenLine::Use { args, body, .. } => {
+                for arg in args {
+                    if let Some(value) = arg_value(arg) {
+                        check_action_expr(value, actions, declared, out);
+                    }
+                }
+                check_actions(body, actions, declared, out);
+            }
+            ScreenLine::Node(node) => {
+                for arg in &node.args {
+                    if let Some(value) = arg_value(arg) {
+                        check_action_expr(value, actions, declared, out);
+                    }
+                }
+                check_actions(&node.children, actions, declared, out);
+            }
+        }
+    }
+}
+
+/// The expression an argument carries, if it carries one.
+fn arg_value(arg: &ScreenArg) -> Option<&Expr> {
+    match arg {
+        ScreenArg::Value(value) => Some(value),
+        ScreenArg::Named {
+            value: Some(value), ..
+        } => Some(value),
+        // A bare name is a flag (`stretch_x`) or a leaf's content (`text line`) — not a value, and
+        // so not an action.
+        ScreenArg::Named { value: None, .. } => None,
+    }
+}
+
+/// Checks one expression, and every expression inside it.
+fn check_action_expr(
+    expr: &Expr,
+    actions: &ActionRegistry,
+    declared: &[&str],
+    out: &mut Vec<Diagnostic>,
+) {
+    match expr {
+        Expr::Call { callee, args, span } => {
+            // `foo.bar()` is a call on a value the screen holds, not a registry name: the language
+            // has no such action, so there is nothing here to check.
+            if let Expr::Name { name, .. } = callee.as_ref() {
+                check_action(name, args, *span, actions, declared, out);
+            }
+            check_action_expr(callee, actions, declared, out);
+            for arg in args {
+                check_action_expr(arg, actions, declared, out);
+            }
+        }
+        Expr::Str { parts, .. } => {
+            for part in parts {
+                if let vela_syntax::StrPart::Interpolation { expr, .. } = part {
+                    check_action_expr(expr, actions, declared, out);
+                }
+            }
+        }
+        Expr::Paren { inner, .. } | Expr::Field { base: inner, .. } => {
+            check_action_expr(inner, actions, declared, out);
+        }
+        Expr::Unary { operand, .. } => check_action_expr(operand, actions, declared, out),
+        Expr::Binary { lhs, rhs, .. } => {
+            check_action_expr(lhs, actions, declared, out);
+            check_action_expr(rhs, actions, declared, out);
+        }
+        Expr::Index { base, index, .. } => {
+            check_action_expr(base, actions, declared, out);
+            check_action_expr(index, actions, declared, out);
+        }
+        Expr::List { items, .. } => {
+            for item in items {
+                check_action_expr(item, actions, declared, out);
+            }
+        }
+        Expr::Map { entries, .. } => {
+            for (key, value) in entries {
+                check_action_expr(key, actions, declared, out);
+                check_action_expr(value, actions, declared, out);
+            }
+        }
+        Expr::If {
+            cond, then_, else_, ..
+        } => {
+            check_action_expr(cond, actions, declared, out);
+            check_action_expr(then_, actions, declared, out);
+            check_action_expr(else_, actions, declared, out);
+        }
+        Expr::Int { .. }
+        | Expr::Float { .. }
+        | Expr::Bool { .. }
+        | Expr::None { .. }
+        | Expr::Path { .. }
+        | Expr::Name { .. }
+        // A lambda's body runs when something calls it, which no screen does; an action cannot be
+        // written in one.
+        | Expr::Lambda { .. }
+        | Expr::Error { .. } => {}
+    }
+}
+
+/// One action call: the name is registered, and it takes this many arguments.
+fn check_action(
+    name: &str,
+    args: &[Expr],
+    span: Span,
+    actions: &ActionRegistry,
+    declared: &[&str],
+    out: &mut Vec<Diagnostic>,
+) {
+    let Some(action) = actions.get(name) else {
+        let mut diagnostic = diag(
+            "E5012",
+            format!("no action called `{name}`"),
+            span,
+            "no action by this name is registered",
+        );
+        if let Some(nearest) = actions.closest(name) {
+            diagnostic = diagnostic.with_help(format!("did you mean `{nearest}`?"));
+        }
+        out.push(diagnostic);
+        return;
+    };
+
+    if action.arity() != args.len() {
+        out.push(
+            diag(
+                "E5013",
+                format!(
+                    "`{}` takes {} argument(s), but was given {}",
+                    action.name,
+                    action.arity(),
+                    args.len()
+                ),
+                span,
+                "the arguments do not match the action",
+            )
+            .with_help(format!("write it as `{}`", action.signature())),
+        );
+    }
+
+    if name == SET_SCREEN_VARIABLE {
+        check_write(args.first(), declared, out);
+    }
+}
+
+/// `E5017` — a screen writes a variable it does not declare (`SCREENS.md §2.5`).
+///
+/// The store `set_screen` writes belongs to one screen *instance*, so the name must be something this
+/// screen declared: not a world variable, which a screen never mutates, and not a parameter, which is
+/// the caller's value. Checked because the alternative is a button that writes a name nothing reads —
+/// and because the name is written as a name, which is the one thing Ren'Py's stringly-typed form
+/// cannot be held to.
+fn check_write(first: Option<&Expr>, declared: &[&str], out: &mut Vec<Diagnostic>) {
+    let Some((variable, span)) = first.and_then(written_name) else {
+        return;
+    };
+    if declared.contains(&variable) {
+        return;
+    }
+    let mut diagnostic = diag(
+        "E5017",
+        format!("`{variable}` is not a variable of this screen"),
+        span,
+        "this screen declares no variable by that name",
+    );
+    if let Some(nearest) = vela_diag::closest(variable, declared.iter().copied()) {
+        diagnostic = diagnostic.with_help(format!("did you mean `{nearest}`?"));
+    }
+    out.push(diagnostic);
+}
+
+/// The name an argument writes, and where it is written, when it is written as a name.
+///
+/// A bare name is the variable's name — not a lookup, because the store it writes is named statically —
+/// and a single-literal string is the same thing, since a name is all it holds. An interpolated string
+/// or an expression is not a name and is not checked, which is the one case this cannot see.
+fn written_name(expr: &Expr) -> Option<(&str, Span)> {
+    match expr {
+        Expr::Name { name, span } => Some((name, *span)),
+        Expr::Str { parts, span } => match parts.as_slice() {
+            [StrPart::Literal { text, .. }] => Some((text, *span)),
+            _ => None,
+        },
+        _ => None,
+    }
+}

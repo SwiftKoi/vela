@@ -1,11 +1,93 @@
-//! Screens at the CLI boundary: loading, the stack, the accessibility sweep, hot reload.
+//! Screens at the CLI boundary: loading, the stack, the accessibility sweep, hot reload, variables.
 //!
 //! None of these need a window or a GPU — loading a screen is compiling it, and the stack is
 //! plain state — which is the part of the presenter that can be checked anywhere.
 
 use std::path::Path;
 
+use vela_ui::{Kind, Node, Value};
+
 use super::support::{cli, temp_project, text_engine};
+
+/// The text of the first `text` node, which is how a variable's value is visible in a laid screen.
+///
+/// The tree rather than the draw list, because a glyph in a draw list is an id in an atlas and not a
+/// string: what a screen *says* is the tree's business (`SCREENS.md §3`).
+fn first_text(node: &Node) -> Option<&str> {
+    if let Kind::Text { text, .. } = &node.kind {
+        return Some(text.as_str());
+    }
+    node.children.iter().find_map(first_text)
+}
+
+/// A screen's own variable is initialized by its `default`, written by the runtime, and drawn again
+/// (`SCREENS.md §2.5`).
+///
+/// The whole loop in one test. The declaration gives the screen a name; a button's action arrives as a
+/// *value* the screen resolved — `"mouse"`, not the word it was written as; the write lands in a store
+/// the runtime holds; and the screen is laid out again with it. Keeping that store outside the screen is
+/// what makes a write survive the next frame instead of being undone by the declaration that declared
+/// the variable.
+#[test]
+fn a_write_to_a_screen_variable_lays_the_screen_out_again() {
+    let source = "screen help:\n    default tab = \"keyboard\"\n    column:\n        text tab\n        button:\n            text \"Mouse\"\n            action set_screen_variable(tab, \"mouse\")\n\nlabel start:\n    \"Hi.\"\n    return\n";
+    let project = temp_project("variable", source);
+    let collected = crate::commands::check::collect(&project).expect("a valid project");
+    let screens = crate::commands::ui::Screens::load(&collected);
+
+    let mut text = text_engine();
+    let mut stack = crate::commands::ui::Stack::default();
+    assert!(stack.open(&screens, "help", (1280, 720), &mut text, "sans"));
+    let laid = |stack: &crate::commands::ui::Stack| {
+        let top = stack.top().expect("a screen is open");
+        first_text(&top.laid.node).map(str::to_string)
+    };
+    assert_eq!(laid(&stack).as_deref(), Some("keyboard"));
+
+    assert!(stack.set_variable(
+        &screens,
+        "tab",
+        Value::Str("mouse".to_string()),
+        (1280, 720),
+        &mut text,
+        "sans",
+    ));
+    assert_eq!(laid(&stack).as_deref(), Some("mouse"));
+
+    // A name the screen does not declare is not kept: the store is pruned to what the body declares, so
+    // a pack that carries a stale name cannot leave a variable nothing can read (`E5017` is the static
+    // half of the same rule).
+    assert!(stack.set_variable(
+        &screens,
+        "device",
+        Value::Str("mouse".to_string()),
+        (1280, 720),
+        &mut text,
+        "sans",
+    ));
+    assert!(
+        stack
+            .top()
+            .expect("open")
+            .laid
+            .state
+            .get("device")
+            .is_none(),
+        "an undeclared name was kept"
+    );
+    assert_eq!(laid(&stack).as_deref(), Some("mouse"));
+
+    // And a write with nothing open is refused rather than silently doing nothing.
+    assert_eq!(stack.close().as_deref(), Some("help"));
+    assert!(!stack.set_variable(
+        &screens,
+        "tab",
+        Value::Str("keyboard".to_string()),
+        (1280, 720),
+        &mut text,
+        "sans",
+    ));
+}
 
 /// A project's screens are compiled for the presenter, and the dialogue call binds the line.
 ///
@@ -100,6 +182,7 @@ fn a_reload_picks_up_an_edited_screen() {
         .lay(
             "menu",
             &vela_ui::Args::new(),
+            &vela_ui::ScreenState::new(),
             (1280, 720),
             &mut text,
             "sans",
@@ -117,6 +200,7 @@ fn a_reload_picks_up_an_edited_screen() {
         .lay(
             "menu",
             &vela_ui::Args::new(),
+            &vela_ui::ScreenState::new(),
             (1280, 720),
             &mut text,
             "sans",
@@ -204,6 +288,7 @@ fn the_examples_pause_menu_buttons_do_not_overlap() {
         .lay(
             "pause",
             &vela_ui::Args::new(),
+            &vela_ui::ScreenState::new(),
             (1280, 720),
             &mut text,
             "sans",

@@ -56,7 +56,14 @@ fn built(source: &str, args: &Args) -> Node {
 fn built_screen(source: &str, name: &str, args: &Args) -> Node {
     let mut text = engine();
     set(source)
-        .build(name, args, &mut text, "sans", 1280.0)
+        .build(
+            name,
+            args,
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared")
 }
 
@@ -162,8 +169,15 @@ fn an_undeclared_screen_builds_nothing() {
     assert!(set.has("dialogue"));
     assert_eq!(set.names(), vec!["dialogue"]);
     assert!(
-        set.build("settings", &Args::new(), &mut text, "sans", 1280.0)
-            .is_none()
+        set.build(
+            "settings",
+            &Args::new(),
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0
+        )
+        .is_none()
     );
 }
 
@@ -190,7 +204,7 @@ screen confirm(message, yes_action, no_action):
     args.set("yes_action", Value::Action(Action::new("quit", Vec::new())));
     args.set(
         "no_action",
-        Value::Action(Action::new("hide", vec!["confirm".to_string()])),
+        Value::Action(Action::new("hide", vec![Value::Str("confirm".to_string())])),
     );
 
     let root = built_screen(source, "confirm", &args);
@@ -229,7 +243,14 @@ fn a_grid_reads_its_column_count() {
     let source = "screen s:\n    grid columns 3:\n        text \"a\"\n        text \"b\"\n        text \"c\"\n        text \"d\"\n";
     let mut text = engine();
     let root = set(source)
-        .build("s", &Args::new(), &mut text, "sans", 1280.0)
+        .build(
+            "s",
+            &Args::new(),
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared");
     assert!(matches!(root.children[0].kind, Kind::Grid { columns: 3 }));
 }
@@ -300,12 +321,19 @@ screen confirm(message, no_action):
     args.set("message", Value::Str("Leave?".to_string()));
     args.set(
         "no_action",
-        Value::Action(Action::new("hide", vec!["confirm".to_string()])),
+        Value::Action(Action::new("hide", vec![Value::Str("confirm".to_string())])),
     );
 
     let mut text = engine();
     let laid = set(source)
-        .lay("confirm", &args, (1280, 720), &mut text, "sans")
+        .lay(
+            "confirm",
+            &args,
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
         .expect("the screen is declared");
 
     let bound = laid.key("cancel").expect("`cancel` is bound");
@@ -344,7 +372,14 @@ screen page(first: bool):
         let mut args = Args::new();
         args.set("first", Value::Bool(first));
         set(source)
-            .lay("page", &args, (1280, 720), text, "sans")
+            .lay(
+                "page",
+                &args,
+                &vela_ui::ScreenState::new(),
+                (1280, 720),
+                text,
+                "sans",
+            )
             .expect("the screen is declared")
     };
 
@@ -365,116 +400,4 @@ screen page(first: bool):
     let other = laid(false, &mut text);
     assert!(other.key("menu_down").is_some());
     assert!(other.key("menu_up").is_none());
-}
-
-/// A record with a caption and an action, as a menu's choices arrive.
-fn option(caption: &str, action: &str) -> Value {
-    Value::Record(vec![
-        ("caption".to_string(), Value::Str(caption.to_string())),
-        (
-            "action".to_string(),
-            Value::Action(Action::new(action, Vec::new())),
-        ),
-    ])
-}
-
-/// The text a node draws, if it is a text leaf.
-fn text_of(node: &Node) -> Option<&str> {
-    match &node.kind {
-        Kind::Text { text, .. } => Some(text.as_str()),
-        _ => None,
-    }
-}
-
-/// A `for` draws its body once per element, with the binding in scope (`SCREENS.md §2.4`).
-///
-/// Children from data: the elements are a value the caller handed the screen, and a field of one
-/// resolves like any other name — `option.caption` is the text, `option.action` is what the button
-/// does. That pair is the shape the sample's `choice(items)` screen is built from, and it was
-/// unwritable before this: the menu's choices are data, and a screen could not walk it.
-#[test]
-fn a_loop_draws_its_body_once_per_element() {
-    let source = "\
-screen choice(prompt, items):
-    column:
-        text prompt
-        for option in items:
-            button:
-                text option.caption
-                action option.action
-";
-    let mut args = Args::new();
-    args.set("prompt", Value::Str("Pick one.".to_string()));
-    args.set(
-        "items",
-        Value::List(vec![option("Yes", "quit"), option("No", "hide")]),
-    );
-
-    let mut text = engine();
-    let root = set(source)
-        .build("choice", &args, &mut text, "sans", 1280.0)
-        .expect("the screen is declared");
-    let column = &root.children[0];
-    assert_eq!(column.children.len(), 3, "the prompt and two buttons");
-
-    let first = &column.children[1];
-    assert_eq!(text_of(&first.children[0]), Some("Yes"));
-    assert_eq!(
-        first.action.as_ref().map(|action| action.name.as_str()),
-        Some("quit"),
-        "`option.action` did not resolve to the element's action"
-    );
-    let second = &column.children[2];
-    assert_eq!(text_of(&second.children[0]), Some("No"));
-    assert_eq!(
-        second.action.as_ref().map(|action| action.name.as_str()),
-        Some("hide")
-    );
-}
-
-/// A loop over nothing draws nothing, and its binding does not leak past it.
-///
-/// Two rules in one fixture, because they are the two ways a loop can be wrong: a screen handed no
-/// list has no children rather than an error — which is what makes it safe to open before the system
-/// that feeds it exists — and `for option in items` *shadows* an outer `option` rather than being
-/// shadowed by it.
-#[test]
-fn a_loop_over_nothing_is_empty_and_scopes_its_binding() {
-    let source = "\
-screen s(items, option):
-    column:
-        text option
-        for option in items:
-            text option
-";
-
-    let mut empty = Args::new();
-    empty.set("option", Value::Str("outer".to_string()));
-    let mut text = engine();
-    let root = set(source)
-        .build("s", &empty, &mut text, "sans", 1280.0)
-        .expect("the screen is declared");
-    let column = &root.children[0];
-    assert_eq!(
-        column.children.len(),
-        1,
-        "an unbound list drew something: {:?}",
-        column.children
-    );
-
-    let mut filled = Args::new();
-    filled.set("option", Value::Str("outer".to_string()));
-    filled.set("items", Value::List(vec![Value::Str("inner".to_string())]));
-    let mut text = engine();
-    let root = set(source)
-        .build("s", &filled, &mut text, "sans", 1280.0)
-        .expect("the screen is declared");
-    let column = &root.children[0];
-    assert_eq!(column.children.len(), 2);
-    assert_eq!(text_of(&column.children[0]), Some("outer"));
-    assert_eq!(
-        text_of(&column.children[1]),
-        Some("inner"),
-        "the loop's binding did not shadow the parameter of the same name"
-    );
 }

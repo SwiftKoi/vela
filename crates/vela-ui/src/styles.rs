@@ -146,6 +146,7 @@ fn check_lines(lines: &[ScreenLine], known: &[&str], out: &mut Vec<Diagnostic>) 
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
+            | ScreenLine::Default { .. }
             | ScreenLine::Transclude { .. } => {}
             // An `if` and a `for` both hold bodies that are drawn, so a style named in either is
             // checked. Which arm draws, or how many elements there are, is a runtime question.

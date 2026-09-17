@@ -132,6 +132,12 @@ impl Writer {
                 self.string(name);
             }
             ScreenLine::Key { .. } | ScreenLine::Timer { .. } => self.binding(line),
+            ScreenLine::Default { span, name, value } => {
+                self.u8(9);
+                self.span(*span);
+                self.string(name);
+                self.expr(value);
+            }
             ScreenLine::Node(node) => {
                 self.u8(2);
                 self.node(node);

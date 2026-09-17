@@ -39,7 +39,10 @@ use crate::theme::{Fonts, Palette};
 /// Version 9 adds `for` (`SCREENS.md §2.4`). A version-8 reader would read the tag as a widget named
 /// `""` and then take the binding for the next line's tag, so a screen with a loop would decode as a
 /// tree nobody wrote.
-pub const PACK_VERSION: u16 = 9;
+/// Version 10 adds `default` (`SCREENS.md §2.5`). A version-9 reader would read the tag as a widget
+/// named `""` and then take the variable's *name* for the next line's tag — so a screen that declared
+/// one would decode as a tree nobody wrote, rather than being refused.
+pub const PACK_VERSION: u16 = 10;
 
 /// The four bytes every pack starts with.
 ///

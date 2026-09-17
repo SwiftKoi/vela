@@ -108,6 +108,9 @@ fn screens(parsed: &ParseResult) -> Vec<Diagnostic> {
     for screen in &screens {
         diagnostics.extend(vela_ui::check_screen(
             &screen.body,
+            // The parameters are what a screen's own variables may not be named after: two bindings of
+            // one name in one screen is two answers to one question (`SCREENS.md §2.5`).
+            &screen.params,
             &registry,
             &screens,
             &actions,

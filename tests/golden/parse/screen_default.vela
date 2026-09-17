@@ -1,0 +1,22 @@
+screen help(initial):
+    default device = initial
+    default shown = 1
+
+    column:
+        text device
+        button:
+            text "Keyboard"
+            action set_screen_variable(device, "keyboard")
+        if shown is 1:
+            button:
+                text "Mouse"
+                action set_screen_variable(device, "mouse")
+
+screen counters:
+    default count = 0
+
+    box:
+        text count
+        button:
+            text "One more"
+            action set_screen_variable(count, 1)

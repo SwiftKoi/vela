@@ -57,6 +57,7 @@ fn diagnostics(source: &str) -> Vec<Diagnostic> {
         .flat_map(|screen| {
             check_screen(
                 &screen.body,
+                &screen.params,
                 &registry,
                 &screens,
                 &actions,
@@ -90,7 +91,14 @@ fn built(source: &str, name: &str, args: &Args) -> Node {
             .collect::<Vec<_>>()
     );
     ScreenSet::from_items(&parsed.program.items)
-        .build(name, args, &mut text, "sans", 1280.0)
+        .build(
+            name,
+            args,
+            &mut vela_ui::ScreenState::new(),
+            &mut text,
+            "sans",
+            1280.0,
+        )
         .expect("the screen is declared")
 }
 

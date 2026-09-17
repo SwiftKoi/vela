@@ -22,7 +22,7 @@ use crate::widgets::WidgetRegistry;
 // Re-exported because this is the module that *reads* them: every caller of the evaluator already
 // imports `Args` and `Value` from here, and moving the types without moving the path would be churn in
 // a dozen files for no reader's benefit.
-pub use crate::value::{Args, Value};
+pub use crate::value::{Args, ScreenState, Value};
 
 /// What a screen body reads when it is evaluated.
 pub struct Ctx<'a> {
@@ -95,7 +95,7 @@ pub(crate) fn name_of(expr: &Expr) -> Option<&str> {
 }
 
 /// An action call written as a value, e.g. `open_screen(settings)`.
-pub(crate) fn action_of(expr: &Expr) -> Option<Action> {
+pub(crate) fn action_of(expr: &Expr, values: &Args) -> Option<Action> {
     let Expr::Call { callee, args, .. } = expr else {
         return None;
     };
@@ -104,8 +104,37 @@ pub(crate) fn action_of(expr: &Expr) -> Option<Action> {
     };
     Some(Action::new(
         name.clone(),
-        args.iter().map(render_arg).collect(),
+        args.iter().map(|arg| action_arg(arg, values)).collect(),
     ))
+}
+
+/// One action argument: the value the screen holds, or the name it wrote.
+///
+/// A name that is *in scope* is the value bound to it, and everything else is what was written — a
+/// string, a number, a dotted path. That one rule is what makes an action mean the same thing however
+/// its argument was spelled: `open_screen(settings)` passes the name `settings` for the runtime to
+/// resolve, `set_screen_variable(device, "mouse")` passes the string `mouse`, and
+/// `set_screen_variable(device, item.kind)` passes whatever that element's field holds rather than the
+/// four words `item.kind`. The head of a path is what tells the two apart, which is the question
+/// `image_of` asks and answers the same way.
+fn action_arg(expr: &Expr, values: &Args) -> Value {
+    let bound = match expr {
+        Expr::Name { name, .. } => values.get(name).is_some(),
+        Expr::Field { base, .. } => {
+            matches!(base.as_ref(), Expr::Name { name, .. } if values.get(name).is_some())
+        }
+        _ => false,
+    };
+    if bound {
+        return value_of(expr, values);
+    }
+    match expr {
+        Expr::Int { value, .. } => Value::Num(*value as f64),
+        Expr::Float { value, .. } => Value::Num(*value),
+        Expr::Bool { value, .. } => Value::Bool(*value),
+        Expr::None { .. } => Value::None,
+        _ => Value::Str(render_arg(expr)),
+    }
 }
 
 /// One action argument, rendered as written.
@@ -223,7 +252,7 @@ pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
         // A call in a screen argument is an action (`SCREENS.md §7`). The vocabulary is words like
         // `quit` and `open_screen`, and a call is how one becomes a value a screen can pass on — as
         // the argument of a `use`, or into a parameter a widget then holds.
-        Expr::Call { .. } => action_of(expr).map_or(Value::None, Value::Action),
+        Expr::Call { .. } => action_of(expr, values).map_or(Value::None, Value::Action),
         // A list literal, and a record literal. These are how a screen makes its own data: nothing
         // outside it has to hand one over for `for` to have something to walk, which is what keeps a
         // loop testable before the systems that feed it exist (`SCREENS.md §2.4`).
