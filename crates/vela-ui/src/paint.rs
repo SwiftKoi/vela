@@ -10,7 +10,7 @@
 //! Rectangles first, then text, because that is the order the draw list keeps them in and the
 //! order a frame paints them.
 
-use vela_render::{Color, DrawList, GlyphQuad, ImageQuad, RectQuad};
+use vela_render::{Clip, Color, DrawList, GlyphQuad, ImageQuad, RectQuad};
 use vela_text::TextEngine;
 
 use crate::images::ImageTable;
@@ -144,11 +144,51 @@ fn paint_node(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, painter:
         });
     }
 
+    leaf_content(node, &paint, frame, left, top, painter);
+
+    // A viewport shows a *window* of its content: the children are laid out whole and the part outside
+    // the box is clipped rather than drawn over the neighbours below it. The clip is closed again after
+    // the subtree, so a sibling is unclipped whatever it is.
+    let clipping = matches!(node.kind, Kind::Viewport { .. })
+        && frame.rect.width > 0.0
+        && frame.rect.height > 0.0;
+    if clipping {
+        painter
+            .draw
+            .push_clip(Clip::rect(left, top, frame.rect.width, frame.rect.height));
+    }
+
+    for (child, child_frame) in node.children.iter().zip(&frame.children) {
+        paint_node(child, child_frame, left, top, painter);
+    }
+
+    if clipping {
+        painter.draw.pop_clip();
+    }
+
+    // The focused state is the *subtree's*, so a sibling of the focused control is not selected just
+    // because the walk has been through it.
+    painter.selected = enclosing;
+}
+
+/// Draws what a leaf holds: its text, or its picture.
+///
+/// One function because the two are the same question asked of different content — what does this
+/// rectangle show — and because the alternative is two blocks in the middle of the tree walk.
+fn leaf_content(
+    node: &Node,
+    paint: &Paint,
+    frame: &Frame,
+    left: f32,
+    top: f32,
+    painter: &mut Painter<'_>,
+) {
     if let Kind::Text { text: content, .. } = &node.kind
         && !content.is_empty()
         && frame.rect.width > 0.0
     {
-        paint_text(content, &paint, left, top, frame.rect.width, painter);
+        paint_text(content, paint, left, top, frame.rect.width, painter);
+        return;
     }
 
     // A picture, at the rectangle layout gave it. A name the platform says nothing about draws
@@ -174,14 +214,6 @@ fn paint_node(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, painter:
             },
         });
     }
-
-    for (child, child_frame) in node.children.iter().zip(&frame.children) {
-        paint_node(child, child_frame, left, top, painter);
-    }
-
-    // The focused state is the *subtree's*, so a sibling of the focused control is not selected just
-    // because the walk has been through it.
-    painter.selected = enclosing;
 }
 
 /// Shapes one run of text and emits its glyphs, wrapped to `max_width`.

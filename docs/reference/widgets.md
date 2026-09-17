@@ -95,6 +95,18 @@ It is a container, and takes exactly one child.
 
 Adds no props of its own.
 
+### `viewport`
+
+It is a container, and takes exactly one child.
+
+Adds:
+
+| prop | takes | | meaning |
+| --- | --- | --- | --- |
+| `pad` | a number |  | Space inside the container's edges. |
+| `align` | an anchor |  | Where children sit in the space they are given. |
+| `initial` | a number |  | Where the window starts, as a fraction of the travel: `0` the top, `1` the bottom. |
+
 ### `text`
 
 It draws, and holds nothing.

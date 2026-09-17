@@ -28,6 +28,14 @@ const GRID: &[PropDecl] = &[PropDecl {
     doc: "How many columns before wrapping to the next row.",
 }];
 
+/// Props a viewport accepts.
+const VIEWPORT: &[PropDecl] = &[PropDecl {
+    name: "initial",
+    ty: PropType::Number,
+    required: false,
+    doc: "Where the window starts, as a fraction of the travel: `0` the top, `1` the bottom.",
+}];
+
 /// The widgets every project starts with.
 pub const ALL: &[Widget] = &[
     Widget {
@@ -78,6 +86,13 @@ pub const ALL: &[Widget] = &[
         single_child: true,
         common: COMMON,
         own: &[],
+    },
+    Widget {
+        name: "viewport",
+        category: Category::Container,
+        single_child: true,
+        common: COMMON,
+        own: &[CONTAINER, VIEWPORT],
     },
     Widget {
         name: "text",

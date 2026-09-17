@@ -50,6 +50,17 @@ pub enum Kind {
         /// What the leaf would like to be.
         size: Size,
     },
+    /// A window onto content that is bigger than it (`SCREENS.md §3.2`).
+    ///
+    /// The child is measured against *no* limit along the scroll axis, so a column taller than the box
+    /// keeps its height instead of being squeezed to fit, and the part outside the box is clipped rather
+    /// than drawn over its neighbours. `initial` is where the window starts, as a fraction of the travel:
+    /// `0` the top, `1` the bottom — a fraction rather than a pixel offset for the reason §4.2 gives, that
+    /// a layout needing arithmetic on pixels is a layout missing a prop.
+    Viewport {
+        /// Where the window starts, `0.0`..=`1.0` of however far the content can travel.
+        initial: f32,
+    },
     /// A registered widget, by name, with a measured size.
     ///
     /// `CONVENTIONS.md §4.2`: a widget is a registry entry, not a variant. A plugin's widget

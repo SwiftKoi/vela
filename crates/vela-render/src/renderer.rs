@@ -23,6 +23,13 @@ pub struct Vertex {
     /// and not of the draw: the frame interleaves backgrounds, panels, and text, and a pipeline
     /// switch per run would be state to keep in step for no gain.
     pub mode: f32,
+    /// The rectangle this vertex may be drawn inside, `[left, top, right, bottom]` in pixels.
+    ///
+    /// A vertex attribute rather than a scissor rect, because a scissor is per draw call and a draw call
+    /// is a *run* of quads that share a texture: clipping one viewport by scissor would split every run
+    /// that crossed its edge and pay a state change per split. On the vertex it costs four floats and a
+    /// discard in the fragment stage, and the batching is untouched.
+    pub clip: [f32; 4],
 }
 
 /// The per-frame uniform block.

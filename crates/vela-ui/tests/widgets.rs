@@ -13,12 +13,12 @@ use vela_ui::{Category, Widget, WidgetRegistry};
 fn the_default_set_has_the_documented_widgets() {
     let registry = WidgetRegistry::builtin();
     for name in [
-        "box", "row", "column", "stack", "flow", "grid", "absolute", "text", "image", "spacer",
-        "button", "bar", "input",
+        "box", "row", "column", "stack", "flow", "grid", "absolute", "viewport", "text", "image",
+        "spacer", "button", "bar", "input",
     ] {
         assert!(registry.get(name).is_some(), "`{name}` is missing");
     }
-    assert_eq!(registry.len(), 13);
+    assert_eq!(registry.len(), 14);
 }
 
 /// The order is the registration order, not a hash order: a completion list, a docs page, and
@@ -97,7 +97,7 @@ fn a_replacement_keeps_its_place() {
     });
 
     assert_eq!(registry.names(), before, "the order changed");
-    assert_eq!(registry.len(), 13, "a duplicate was added");
+    assert_eq!(registry.len(), 14, "a duplicate was added");
     assert!(registry.get("text").unwrap().accepts("font"));
     assert!(!registry.get("image").unwrap().accepts("font"));
 }
@@ -114,7 +114,7 @@ fn a_new_widget_is_appended() {
         own: &[],
     });
 
-    assert_eq!(registry.len(), 14);
+    assert_eq!(registry.len(), 15);
     assert_eq!(registry.names().last(), Some(&"live2d"));
     assert!(registry.get("live2d").is_some());
 }

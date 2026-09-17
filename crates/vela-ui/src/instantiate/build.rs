@@ -238,6 +238,11 @@ fn kind_of(node: &ScreenNode) -> Kind {
             size: Size::ZERO,
         },
         "spacer" => Kind::Spacer,
+        // A window onto content bigger than it. Where it starts is `initial`; how far it can travel is
+        // the child's own height against the box, which the layout answers rather than this.
+        "viewport" => Kind::Viewport {
+            initial: number_prop(node, "initial"),
+        },
         // `bar`, `input`, and any plugin widget: a leaf whose size the paint layer will refine. They
         // lay out as a measured box because nothing yet measures them.
         _ => Kind::Measured { size: Size::ZERO },
@@ -365,6 +370,15 @@ fn prefixed_style<'a>(ctx: &'a Ctx, prefix: Option<&str>, widget: &str) -> Optio
 
 /// A grid's declared column count.
 fn columns_of(node: &ScreenNode) -> usize {
+    number_prop(node, "columns").max(1.0) as usize
+}
+
+/// A numeric prop, as written — the parser's words rather than a resolved value.
+///
+/// A prop that decides a node's *kind* is read here rather than in the prop pass, because the kind is
+/// chosen before any prop is applied. A grid's `columns` and a viewport's `initial` are the two that do,
+/// and both take a literal: what a screen argument holds is a runtime question, and a kind is not.
+fn number_prop(node: &ScreenNode, wanted: &str) -> f32 {
     for arg in &node.args {
         let ScreenArg::Named {
             name,
@@ -374,11 +388,11 @@ fn columns_of(node: &ScreenNode) -> usize {
         else {
             continue;
         };
-        if name == "columns" {
-            if let Some(count) = number(value) {
-                return count.max(1.0) as usize;
-            }
+        if name == wanted
+            && let Some(number) = number(value)
+        {
+            return number;
         }
     }
-    1
+    0.0
 }

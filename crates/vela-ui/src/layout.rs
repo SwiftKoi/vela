@@ -149,6 +149,19 @@ pub(crate) fn measure(node: &Node, constraints: Constraints) -> (Size, Vec<Size>
                 .collect();
             (children.first().copied().unwrap_or(Size::ZERO), children)
         }
+        // A window: the child is measured against no limit downwards, so a column taller than the box
+        // keeps its height — and the viewport asks for the space it was *offered*, because a window that
+        // sized itself to its content would never have anything to scroll.
+        Kind::Viewport { .. } => {
+            let unbounded = Constraints::new(inner.max_width, f32::INFINITY);
+            let children: Vec<Size> = node
+                .children
+                .iter()
+                .map(|child| measure(child, unbounded).0)
+                .collect();
+            let content = Size::new(inner.max_width, inner.max_height);
+            (content, children)
+        }
         Kind::Row => measure_linear(node, inner, true),
         Kind::Column => measure_linear(node, inner, false),
         Kind::Grid { columns } => measure_grid(node, inner, *columns),
@@ -257,6 +270,28 @@ fn arrange(node: &Node, measured: &[Size], size: Size) -> Vec<Frame> {
                 place(
                     child,
                     align(inner, *child_size, placement(node.props.align, child)),
+                )
+            })
+            .into_iter()
+            .collect(),
+        // The child keeps the size it asked for — *not* clamped to the box, which is what `align` would
+        // do and what would leave nothing to scroll — and is moved up by however far the window has
+        // travelled. `initial` is the fraction of that travel, so `1.0` shows the bottom.
+        Kind::Viewport { initial } => node
+            .children
+            .first()
+            .zip(measured.first())
+            .map(|(child, child_size)| {
+                let travel = (child_size.height - inner.height).max(0.0);
+                let offset = travel * initial.clamp(0.0, 1.0);
+                place(
+                    child,
+                    Rect {
+                        x: inner.x,
+                        y: inner.y - offset,
+                        width: child_size.width,
+                        height: child_size.height,
+                    },
                 )
             })
             .into_iter()

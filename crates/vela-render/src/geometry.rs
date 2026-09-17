@@ -4,7 +4,7 @@
 //! how the bowtie in the first triangulation was found exactly, rather than guessed at from
 //! a screenshot.
 
-use crate::draw::{Color, DrawList, GlyphQuad, ImageQuad, Quad, RectQuad, Source};
+use crate::draw::{Clip, Color, DrawList, GlyphQuad, ImageQuad, Op, Quad, RectQuad, Source};
 use crate::renderer::{Renderer, Vertex};
 
 impl Renderer {
@@ -14,7 +14,9 @@ impl Renderer {
         if vertices.is_empty() {
             return;
         }
-        let indices: Vec<u32> = (0..(vertices.len() / 4) as u32)
+        let quad_count = draw.len();
+        let quads: Vec<&Quad> = draw.quads().collect();
+        let indices: Vec<u32> = (0..quad_count as u32)
             .flat_map(|quad| {
                 let base = quad * 4;
                 // TL,TR,BL and TR,BR,BL — two triangles sharing the anti-diagonal.
@@ -62,7 +64,7 @@ impl Renderer {
 
         emit_runs(
             &mut pass,
-            draw.quads(),
+            &quads,
             self.atlas.as_ref().map(|(_, atlas)| atlas),
             &self.white,
             &self.images,
@@ -76,9 +78,12 @@ impl Renderer {
 /// Runs rather than fixed batches, because submission order is the picture and a frame may
 /// interleave all three kinds — a background, a panel, a portrait, the dialogue over them.
 /// Quads of one source share a bind group; a change of source is a new draw call.
+///
+/// A clip between two quads does not end a run: the clip is a vertex attribute, so the quads either
+/// side of it still share a bind group and a draw call covers both.
 fn emit_runs(
     pass: &mut wgpu::RenderPass<'_>,
-    quads: &[Quad],
+    quads: &[&Quad],
     atlas: Option<&wgpu::BindGroup>,
     white: &wgpu::BindGroup,
     images: &[(wgpu::Texture, wgpu::BindGroup)],
@@ -113,14 +118,35 @@ fn emit_runs(
 /// Turns a draw list into a vertex array: four vertices per quad, in submission order.
 ///
 /// The public form of this exists for tests, which can then assert on geometry without a GPU.
+///
+/// Clips are replayed rather than stored per quad: a clip is a *region* of the submission order, so the
+/// walk keeps a stack and stamps each quad with the clip in force when it is reached. A pop with nothing
+/// pushed leaves the clip alone, matching the draw list's own tolerance.
 #[must_use]
 pub fn build_vertices(draw: &DrawList) -> Vec<Vertex> {
     let mut vertices = Vec::with_capacity(draw.len() * 4);
-    for quad in draw.quads() {
-        match quad {
-            Quad::Rect(rect) => vertices.extend(rect_vertices(rect)),
-            Quad::Glyph(glyph) => vertices.extend(glyph_vertices(glyph)),
-            Quad::Image(image) => vertices.extend(image_vertices(image)),
+    let mut clip = Clip::UNBOUNDED;
+    let mut enclosing: Vec<Clip> = Vec::new();
+
+    for op in draw.ops() {
+        match op {
+            Op::Clip(narrowed) => {
+                enclosing.push(clip);
+                clip = *narrowed;
+            }
+            Op::Unclip => {
+                if let Some(outer) = enclosing.pop() {
+                    clip = outer;
+                }
+            }
+            Op::Quad(quad) => {
+                let bounds = clip.bounds();
+                vertices.extend(match quad {
+                    Quad::Rect(rect) => rect_vertices(rect, bounds),
+                    Quad::Glyph(glyph) => glyph_vertices(glyph, bounds),
+                    Quad::Image(image) => image_vertices(image, bounds),
+                });
+            }
         }
     }
     vertices
@@ -128,7 +154,7 @@ pub fn build_vertices(draw: &DrawList) -> Vec<Vertex> {
 
 /// The four corners of a filled rectangle, in triangle-strip-free order (TL, TR, BL, BR as
 /// the index buffer expects: 0,1,2, 0,2,3).
-fn rect_vertices(rect: &RectQuad) -> [Vertex; 4] {
+fn rect_vertices(rect: &RectQuad, clip: [f32; 4]) -> [Vertex; 4] {
     let (l, t) = (rect.x, rect.y);
     let (r, b) = (rect.x + rect.width, rect.y + rect.height);
     let color = [rect.color.r, rect.color.g, rect.color.b, rect.color.a];
@@ -138,51 +164,51 @@ fn rect_vertices(rect: &RectQuad) -> [Vertex; 4] {
             uv: [0.5, 0.5],
             color,
             mode: MASK,
+            clip,
         },
         Vertex {
             position: [r, t],
             uv: [0.5, 0.5],
             color,
             mode: MASK,
+            clip,
         },
         Vertex {
             position: [l, b],
             uv: [0.5, 0.5],
             color,
             mode: MASK,
+            clip,
         },
         Vertex {
             position: [r, b],
             uv: [0.5, 0.5],
             color,
             mode: MASK,
+            clip,
         },
     ]
 }
 
 /// The four corners of a glyph quad, carrying the atlas rectangle.
-fn glyph_vertices(glyph: &GlyphQuad) -> [Vertex; 4] {
+fn glyph_vertices(glyph: &GlyphQuad, clip: [f32; 4]) -> [Vertex; 4] {
     textured_vertices(
-        glyph.x,
-        glyph.y,
-        glyph.width,
-        glyph.height,
+        [glyph.x, glyph.y, glyph.width, glyph.height],
         glyph.uv,
         glyph.color,
         MASK,
+        clip,
     )
 }
 
 /// The four corners of an image quad, carrying the part of the image it shows.
-fn image_vertices(image: &ImageQuad) -> [Vertex; 4] {
+fn image_vertices(image: &ImageQuad, clip: [f32; 4]) -> [Vertex; 4] {
     textured_vertices(
-        image.x,
-        image.y,
-        image.width,
-        image.height,
+        [image.x, image.y, image.width, image.height],
         image.uv,
         image.color,
         COLOUR,
+        clip,
     )
 }
 
@@ -196,15 +222,17 @@ const COLOUR: f32 = 1.0;
 ///
 /// One function for both texturers: a glyph and a picture differ in which texture they sample
 /// and in nothing else, and two copies of this would be two places for a corner order to drift.
+///
+/// `rect` is `[x, y, width, height]`, bundled because a corner list is five things and a signature that
+/// spelled them all out would be a signature nobody reads.
 fn textured_vertices(
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
+    rect: [f32; 4],
     uv: [f32; 4],
     color: Color,
     mode: f32,
+    clip: [f32; 4],
 ) -> [Vertex; 4] {
+    let [x, y, width, height] = rect;
     let (l, t) = (x, y);
     let (r, b) = (x + width, y + height);
     let [u0, v0, u1, v1] = uv;
@@ -215,24 +243,28 @@ fn textured_vertices(
             uv: [u0, v0],
             color,
             mode,
+            clip,
         },
         Vertex {
             position: [r, t],
             uv: [u1, v0],
             color,
             mode,
+            clip,
         },
         Vertex {
             position: [l, b],
             uv: [u0, v1],
             color,
             mode,
+            clip,
         },
         Vertex {
             position: [r, b],
             uv: [u1, v1],
             color,
             mode,
+            clip,
         },
     ]
 }

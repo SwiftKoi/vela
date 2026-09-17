@@ -41,7 +41,7 @@ pub mod text;
 pub mod texture;
 
 pub use capture::{CAPTURE_FORMAT, Capture};
-pub use draw::{Color, DrawList, GlyphQuad, ImageQuad, Quad, RectQuad};
+pub use draw::{Clip, Color, DrawList, GlyphQuad, ImageQuad, Op, Quad, RectQuad};
 pub use geometry::build_vertices;
 pub use graph::{Frame, RenderGraph, Stage};
 pub use menu::Menu;

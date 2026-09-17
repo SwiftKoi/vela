@@ -23,13 +23,19 @@ struct VertexInput {
     @location(2) color: vec4<f32>,
     // 0 = the texture is a coverage mask; 1 = the texture is colour.
     @location(3) mode: f32,
+    // The rectangle this vertex may be drawn inside, as [left, top, right, bottom] in pixels.
+    @location(4) clip: vec4<f32>,
 };
 
 struct VertexOutput {
-    @builtin(position) clip: vec4<f32>,
+    // The vertex writes the clip-space position here, and the fragment reads the *pixel* position out
+    // of the same builtin — which is exactly what a clip test needs. Passing `@builtin(position)` as a
+    // fragment parameter as well would declare it twice and fail validation.
+    @builtin(position) at: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
     @location(2) mode: f32,
+    @location(3) bounds: vec4<f32>,
 };
 
 @vertex
@@ -41,15 +47,23 @@ fn vs_main(input: VertexInput) -> VertexOutput {
         input.position.x / uniforms.viewport.x * 2.0 - 1.0,
         1.0 - input.position.y / uniforms.viewport.y * 2.0,
     );
-    output.clip = vec4<f32>(ndc, 0.0, 1.0);
+    output.at = vec4<f32>(ndc, 0.0, 1.0);
     output.uv = input.uv;
     output.color = input.color;
     output.mode = input.mode;
+    output.bounds = input.clip;
     return output;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    // What falls outside the clip is not drawn. A viewport is the reason: its content is laid out
+    // whole and only a window of it is shown, so the part outside has to go somewhere — and the
+    // honest place is nowhere, rather than under whatever is drawn next.
+    if (input.at.x < input.bounds.x || input.at.y < input.bounds.y ||
+        input.at.x >= input.bounds.z || input.at.y >= input.bounds.w) {
+        discard;
+    }
     let texel = textureSample(mask_texture, mask_sampler, input.uv);
     // A mask contributes coverage and takes its colour from the vertex. A picture contributes
     // colour and is tinted by the vertex — white meaning "draw it as it is".

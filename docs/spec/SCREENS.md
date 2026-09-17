@@ -276,6 +276,44 @@ screen gallery(item):
 > resolution, `tests/paint.rs` that the texture and rectangle reach the draw list, and
 > `crates/vela-cli/src/tests/ui_tests.rs` that a name nobody uploaded is left out of the table.
 
+### 3.2 Viewports
+
+A viewport is a window onto content bigger than it:
+
+```vela
+screen log(lines):
+    viewport size 400, initial 1.0:
+        column gap 8:
+            for line in lines:
+                text line
+```
+
+- **The child keeps the size it asks for.** It is measured against *no* limit along the scroll axis, so
+  a column taller than the box is not squeezed to fit — which is the whole difference between a viewport
+  and a plain container, and what makes scrolling mean anything.
+- **`initial` is a fraction of the travel**: `0` the top, `1` the bottom. A fraction and not an offset in
+  pixels, for §4.2's reason — a pixel number is a layout that did the arithmetic the layout system should
+  have done. Content that fits has no travel, so every fraction moves nothing.
+- **The subtree is clipped to the box.** The renderer carries a clip rectangle on the vertices and drops
+  what falls outside it, so content beyond the window is not drawn over its neighbours. Nested clips
+  **intersect**, so a viewport inside a viewport shows what both admit.
+- **It takes the space it is offered**, unless told otherwise: a window that sized itself to its content
+  would never have anything to scroll.
+
+> **Implemented (M12.1).** `viewport` as a container kind, the `initial` prop, and clipping in the
+> renderer — a clip rectangle per vertex, so the batching by texture is untouched. Pinned by
+> `crates/vela-ui/tests/viewport.rs` (the content is not squeezed; `initial` selects the start; the
+> subtree is clipped and the clip is closed) and `crates/vela-render/tests/draw.rs` (a clip is stamped
+> on the quads inside it and nowhere else; nested clips intersect).
+
+> **Not yet.** Scrolling is *positioned*, not *driven*: nothing moves an offset after layout, so
+> `mousewheel`, `draggable`, `pagekeys` and a draggable `scrollbar` thumb are M12.3's. They need the input
+> map (§11), which resolves device events to semantic actions, and a **stateful** widget — which no widget
+> is yet, and which §12's reload diff is waiting on. `vpgrid` is a viewport around a `grid` and is the
+> migrator's translation (§2 is the same kind of move); `scrollbar` is written nowhere in the sample, so
+> it stays **C**. Virtualization is open as §14 says: a viewport lays its whole content out and clips the
+> drawing, which is not the same as materializing only the visible window.
+
 ## 4. Layout
 
 ### 4.1 Model
