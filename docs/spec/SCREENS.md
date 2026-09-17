@@ -132,16 +132,43 @@ screen status(ready: bool, waiting: bool):
 - **A `transclude` in any arm places the caller's block** (§2.1), which is what lets a wrapper put
   content in one of several places.
 
-> **Note.** An arm is only as live as its condition can be. The screen evaluator reads the screen's
-> parameters and a comparison of them — nothing else yet — so a condition over data the runtime has not
-> bound is false, and a chain over one draws its `else`. That is §8's work, stated so a chain that
-> always takes one arm is a known limit rather than a puzzle.
+A condition is a **comparison over what the screen has** — its parameters, its variables (§2.5), what a
+loop bound, and the literals it writes:
+
+```vela
+if device == "keyboard" and shown < 2:
+    text "Keys"
+elif device != "mouse" or not ready:
+    text "Other"
+```
+
+- **`==` and `!=` compare by value**, and never coerce: `1 == "1"` is false, because a number and the
+  string that spells it are different values. `is` is equality too, and both spellings answer the same
+  way — `none == none` is true, and `value is none` is how a screen asks whether it got one.
+- **`<`, `<=`, `>` and `>=` order numbers and strings**, and report false for anything else: there is no
+  order between a number and a string, so `1 < "a"` is false rather than a coercion nobody asked for.
+- **`and`, `or` and `not` combine conditions**, with the same meanings and precedence the language gives
+  them (`LANGUAGE.md §3`) — so the platform test Ren'Py writes as
+  `A or (B and not C)` says what it looks like it says.
+- **Comparisons are not a read of anything outside the screen**, which is why they are here rather than
+  in §8's work: `if device == "keyboard"` is a decision about a value the screen holds. What §8 adds is
+  the *state*, not the operator.
+
+> **Note.** An arm is only as live as its condition can be. A condition is decided from the screen's own
+> values, so one over data the runtime has not bound is false, and a chain over one draws its `else` —
+> that is §8's work, stated so a chain that always takes one arm is a known limit rather than a puzzle.
+> A condition that *calls* something is the other shape, and it is `W4013`: a screen cannot call anything
+> yet, so `if GamepadExists():` is false and the sample's `renpy.variant("small")` needs §7's host
+> systems. The difference matters — one is data the screen is waiting for, the other is a question
+> nothing can answer — so the second is reported rather than left to look like a condition that simply
+> did not hold.
 
 > **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the screen pack moved to
 > version 7. `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/instantiate.rs` that
-> the first arm to hold is the one drawn, `tests/check.rs` that an arm's mistakes are reported,
-> `tests/compose.rs` that a `transclude` in an `elif` places the block, and `tests/reactivity.rs` that
-> an `elif`'s reads are the screen's.
+> the first arm to hold is the one drawn, `tests/check.rs` that an arm's mistakes are reported and that a
+> call in a condition is `W4013`, `tests/compose.rs` that a `transclude` in an `elif` places the block,
+> `tests/reactivity.rs` that an `elif`'s reads are the screen's, and `tests/conditions.rs` the
+> operators — by kind, against `none`, and the chain the sample writes.
 
 ### 2.3 Input: `key` and `timer`
 

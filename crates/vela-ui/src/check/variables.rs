@@ -2,6 +2,7 @@ use vela_diag::Diagnostic;
 use vela_syntax::{Param, ScreenLine};
 
 use super::diag;
+use super::walk::nested;
 
 /// `E5015`, `E5016` — where a screen variable may be declared, and how often.
 ///
@@ -54,12 +55,7 @@ pub(super) fn check_declares(lines: &[ScreenLine], params: &[Param], out: &mut V
 
 /// Reports every `default` below a screen's top level.
 fn check_nested_defaults(line: &ScreenLine, out: &mut Vec<Diagnostic>) {
-    let nested: Vec<&[ScreenLine]> = match line {
-        ScreenLine::Use { body, .. } => vec![body],
-        ScreenLine::Node(node) => vec![&node.children],
-        other => other.bodies(),
-    };
-    for body in nested {
+    for body in nested(line) {
         for line in body {
             if let ScreenLine::Default { span, name, .. } = line {
                 out.push(

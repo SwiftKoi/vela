@@ -81,3 +81,4 @@ W4009|warning|a foreground and background have too little contrast
 W4010|warning|an interactive widget has no label
 W4011|warning|a formatting pragma leaves a region as written
 W4012|warning|a block is passed to a screen that does not transclude
+W4013|warning|a screen condition calls something

@@ -149,6 +149,45 @@ fn a_bare_prop_line_is_not_an_unknown_widget() {
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
+/// A condition that calls something cannot be decided, and says so (`W4013`).
+///
+/// A screen decides from what it has (`SCREENS.md §2.2`). A call reads like a decision and is not one —
+/// it is false — so the screen draws the wrong arm while saying nothing, which is the failure this
+/// warning exists to make loud. The sample's `renpy.variant(...)` and `GamepadExists()` are both this
+/// shape and both are §7's host systems, rather than mistakes in the screen.
+#[test]
+fn a_condition_that_calls_something_is_reported() {
+    let diagnostics = diagnose("    if GamepadExists():\n        text \"pad\"\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "W4013");
+    assert!(diagnostics[0].1.contains("parameter"), "{diagnostics:?}");
+}
+
+/// Each call is reported, and every nesting is walked: an `elif` and a loop both hold conditions a
+/// reader would otherwise not be told about.
+#[test]
+fn every_call_in_every_condition_is_reported() {
+    let diagnostics = diagnose(
+        "    if One() or Two():\n        text \"a\"\n    elif Three():\n        text \"b\"\n    for item in items:\n        if Four():\n            text \"c\"\n",
+    );
+    let codes: Vec<&str> = diagnostics.iter().map(|(code, _)| code.as_str()).collect();
+    assert_eq!(
+        codes,
+        vec!["W4013", "W4013", "W4013", "W4013"],
+        "{diagnostics:?}"
+    );
+}
+
+/// A condition made of comparisons is clean: that is what a screen decides with, and the point of the
+/// operators is that a screen can now ask its own questions.
+#[test]
+fn a_condition_made_of_comparisons_is_clean() {
+    let diagnostics = diagnose(
+        "    default device = \"keyboard\"\n    if device == \"keyboard\" or device != \"mouse\":\n        text device\n",
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+}
+
 /// A prop line under a widget that does *not* take it is still a mistake — and the mistake is
 /// an unknown widget, because that is what it looks like from here.
 #[test]

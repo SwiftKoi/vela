@@ -23,15 +23,11 @@ pub(super) fn check_actions(
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If {
-                condition, elifs, ..
-            } => {
-                // Every condition, and every arm's body: the arms are checked whether or not one
-                // holds, because which one holds is a runtime question.
-                check_action_expr(condition, actions, declared, out);
-                for clause in elifs {
-                    check_action_expr(&clause.condition, actions, declared, out);
-                }
+            // The *bodies* of an `if`, and not its conditions: a condition is decided by truthiness
+            // rather than read as a value, so a call in one is not an action — it is a condition that
+            // cannot be decided, and `conditions.rs` is what reports it (`W4013`). Reporting both would
+            // be two diagnostics for one mistake, and `E5012` would be the wrong one.
+            ScreenLine::If { .. } => {
                 for arm in line.bodies() {
                     check_actions(arm, actions, declared, out);
                 }

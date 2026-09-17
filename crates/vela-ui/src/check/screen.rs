@@ -14,6 +14,7 @@ use crate::input::SemanticActions;
 use crate::widgets::WidgetRegistry;
 
 use super::actions::check_actions;
+use super::conditions::check_conditions;
 use super::keys::check_keys;
 use super::variables::check_declares;
 use super::widgets::check_lines;
@@ -72,5 +73,7 @@ pub fn check_screen(
     check_actions(lines, actions, &declared, &mut diagnostics);
     // Every `key` names a semantic action (`§11`), and the vocabulary is what says so.
     check_keys(lines, inputs, &mut diagnostics);
+    // And a condition has to be decidable: a screen decides from what it has, not from a call (`§2.2`).
+    check_conditions(lines, &mut diagnostics);
     diagnostics
 }

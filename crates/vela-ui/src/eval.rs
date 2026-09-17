@@ -225,13 +225,63 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
             operand,
             ..
         } => !eval(operand, values),
-        Expr::Binary { op, lhs, rhs, .. } => match op {
-            BinOp::Is | BinOp::IsNot => {
-                let equal = value_of(lhs, values) == value_of(rhs, values);
-                if *op == BinOp::Is { equal } else { !equal }
+        Expr::Binary { op, lhs, rhs, .. } => compare(*op, lhs, rhs, values),
+        _ => false,
+    }
+}
+
+/// A binary operator, over the values its two sides have.
+///
+/// The comparison half of what a screen condition needs (`SCREENS.md §2.2`). A binding, a parameter and
+/// a literal are all the screen *has*, and comparing two of them is not a read of anything outside it —
+/// which is why this is here rather than in §8's work: `if device == "keyboard"` is a decision about a
+/// value the screen holds, and it draws the wrong arm if the comparison is missing.
+///
+/// Comparisons do not coerce. `1 == "1"` is false because a number and a string are different values,
+/// `1 < "a"` is false because there is no order between them, and `none == none` is true — the same
+/// answer `is` gives, which is the whole relation for values that have no order.
+///
+/// `and` and `or` are the language's short-circuit operators (`&&`/`||`, `LANGUAGE.md §3`). Nothing a
+/// screen can write today has an effect, so the two spellings agree on every expression this evaluator
+/// accepts; they are written the way the VM writes them because that is what the operators *mean*.
+fn compare(op: BinOp, lhs: &Expr, rhs: &Expr, values: &Args) -> bool {
+    match op {
+        BinOp::And => eval(lhs, values) && eval(rhs, values),
+        BinOp::Or => eval(lhs, values) || eval(rhs, values),
+        BinOp::Eq | BinOp::Ne => {
+            let equal = value_of(lhs, values) == value_of(rhs, values);
+            if op == BinOp::Eq { equal } else { !equal }
+        }
+        // `is` is equality too, and it is here rather than beside the comparisons because the two are
+        // spelled apart: `is` is the identity a reader means by "is nothing there", and a screen that
+        // writes it should keep working when the value on one side is a word rather than a reference.
+        BinOp::Is | BinOp::IsNot => {
+            let equal = value_of(lhs, values) == value_of(rhs, values);
+            if op == BinOp::Is { equal } else { !equal }
+        }
+        BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+            // Two numbers or two strings, and never one of each: a screen comparing `1 < "a"` has a
+            // mistake rather than an order to compute, and false is the answer every other comparison
+            // that cannot be made gets. A `NaN` on either side is the same answer, because there is no
+            // order to report — which is what `partial_cmp` is for.
+            let ordering = match (value_of(lhs, values), value_of(rhs, values)) {
+                (Value::Num(a), Value::Num(b)) => a.partial_cmp(&b),
+                (Value::Str(a), Value::Str(b)) => Some(a.cmp(&b)),
+                _ => None,
+            };
+            let Some(ordering) = ordering else {
+                return false;
+            };
+            match op {
+                BinOp::Lt => ordering.is_lt(),
+                BinOp::Le => ordering.is_le(),
+                BinOp::Gt => ordering.is_gt(),
+                _ => ordering.is_ge(),
             }
-            _ => false,
-        },
+        }
+        // Arithmetic is a *value* question rather than a condition one, and it is not implemented: this
+        // is the same answer an unrecognised condition gets, and the checker reports the shape that
+        // needs it (`W4013`).
         _ => false,
     }
 }

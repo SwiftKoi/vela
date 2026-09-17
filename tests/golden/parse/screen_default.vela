@@ -7,10 +7,12 @@ screen help(initial):
         button:
             text "Keyboard"
             action set_screen_variable(device, "keyboard")
-        if shown is 1:
+        if device == "keyboard" and shown == 1:
             button:
                 text "Mouse"
                 action set_screen_variable(device, "mouse")
+        elif device != "mouse" or shown < 2:
+            text "Other"
 
 screen counters:
     default count = 0
