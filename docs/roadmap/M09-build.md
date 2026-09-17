@@ -76,8 +76,11 @@ item 7.
   recompilation" an observation rather than a claim.
 - Item 5, the target drivers: `vela build --target win,mac,linux,web` writes one self-contained
   bundle per target with its own `target.json` descriptor and launcher. What §4's four dimensions
-  actually do today — variants **not implemented**, backend recorded, input profile *consumed*,
+  actually did at M9 — variants **not implemented**, backend recorded, input profile *consumed*,
   packaging a declared hook — is written down in `BUILD_AND_ASSETS.md §4` rather than implied.
+  M12.1 later made the descriptor's variant set live for *screens* (`SCREENS.md §2.6`); §4 now
+  separates that meaning of the word from an **artifact** variant, which is still not
+  implemented.
 - The launcher per target: `launch.sh` / `launch.cmd` / `index.html`.
 - The **screen pack** (`SCREENS.md §13`): `vela build` compiles each module's screens into
   `screens/<module>.velspk` and the manifest records the `images` mapping, so a windowed bundle

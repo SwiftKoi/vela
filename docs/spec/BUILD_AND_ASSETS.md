@@ -194,11 +194,16 @@ what the layer rules in `REPO_LAYOUT.md §1` protect.
 >
 > What of the four dimensions §4 names is live, stated rather than implied:
 >
-> * **(a) variants** — **not implemented.** `target.json` records an empty variant set, because
->   there is nothing to record: no importer emits a variant (§3.1's `ktx2`/`ogg` need
->   transcoders this build does not have), and a `Variant` carries a digest with no path beside
->   it, so a selector could not name a file to pack even if one existed. Every target packs the
->   default artifact.
+> * **(a) variants** — **recorded, and consumed since M12.1** — with the word meaning two things
+>   that this document never separates, so it does here:
+>   * **A screen's variants** (`SCREENS.md §2.6`): the descriptor lists the *platform names* a
+>     bundle answers to (`"variants": ["pc"]` for `win`/`mac`/`linux`, `["web"]` for `web`),
+>     `vela run <bundle>` reads them, and they reach a condition as `variant("pc")` — so a screen
+>     can ask where it is running and draw the shape that fits.
+>   * **An artifact variant** — **not implemented.** A `Variant` carries a digest with no path
+>     beside it, so a selector could not name a file to pack even if one existed, and §3.1's
+>     `ktx2`/`ogg` need transcoders this build does not have. Every target packs the default
+>     artifact.
 > * **(b) backend** — recorded (`vulkan`, `metal`, `dx12`, `webgpu-webgl2`). The renderer does
 >   not choose a backend from it yet.
 > * **(c) input profile** — recorded *and consumed*: `vela run <bundle>` reads it and installs
@@ -208,8 +213,9 @@ what the layer rules in `REPO_LAYOUT.md §1` protect.
 >   and §8 keeps those out of the project tree.
 >
 > A flag that produced the same bytes for every target would be cosmetic. This one does not —
-> but the honest account is that it is not cosmetic because of the *launcher and descriptor*, not
-> because variants or backends are being selected yet.
+> but the honest account is that it is not cosmetic because of the *launcher, the descriptor, the
+> input profile, and a screen's variants*, not because artifact variants or backends are being
+> selected yet.
 
 ## 5. Web specifics
 

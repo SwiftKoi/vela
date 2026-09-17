@@ -20,6 +20,7 @@ use crate::commands::bundle_run;
 use crate::commands::check::{Project, collect, module_path};
 use crate::commands::frame;
 use crate::commands::ui::Screens;
+use vela_ui::{Variant, Variants};
 
 /// The `vela run` command.
 pub struct Run {
@@ -69,6 +70,11 @@ impl Command for Run {
         // the rank reason `commands::ui` records: the CLI is the lowest layer that can see both
         // a screen and the widget registry.
         let mut screens = Screens::load(&project);
+        // A source run is a desktop run: there is no bundle and so no descriptor to ask, and the
+        // platform the process is on *is* the answer (`SCREENS.md §2.6`). A bundle takes its answer
+        // from `target.json` instead (`commands/target.rs`), which is what makes `--target web`
+        // reach a condition.
+        screens.set_variants(Variants::new().with(Variant::Pc));
         let images = stage_images(&project, out);
 
         if wants_a_window(args) {

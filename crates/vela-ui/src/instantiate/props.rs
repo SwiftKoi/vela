@@ -13,10 +13,10 @@ use vela_syntax::{Expr, ScreenArg, ScreenNode};
 
 use crate::actions::Action;
 use crate::eval::{
-    Args, Ctx, Value, anchor_of, anchor_word, color_of, image_of, name_of, number, style_paint,
-    text_of, value_of,
+    Args, Ctx, Value, anchor_of, anchor_word, image_of, name_of, number, text_of, value_of,
 };
 use crate::images::ImageTable;
+use crate::paint::{color_of, style_paint};
 use crate::props::{Anchor, SizeSpec};
 use crate::tree::{Kind, Node, Size, State};
 

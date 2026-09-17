@@ -157,11 +157,11 @@ elif device != "mouse" or not ready:
 > **Note.** An arm is only as live as its condition can be. A condition is decided from the screen's own
 > values, so one over data the runtime has not bound is false, and a chain over one draws its `else` —
 > that is §8's work, stated so a chain that always takes one arm is a known limit rather than a puzzle.
-> A condition that *calls* something is the other shape, and it is `W4013`: a screen cannot call anything
-> yet, so `if GamepadExists():` is false and the sample's `renpy.variant("small")` needs §7's host
-> systems. The difference matters — one is data the screen is waiting for, the other is a question
-> nothing can answer — so the second is reported rather than left to look like a condition that simply
-> did not hold.
+> A condition that *calls* something is the other shape, and it is `W4013`: `if GamepadExists():` is
+> false, and a screen cannot call anything that is not a question the host answers (§2.6). The
+> difference matters — one is data the screen is waiting for, the other is a question nothing can
+> answer — so the second is reported rather than left to look like a condition that simply did not
+> hold.
 
 > **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the screen pack moved to
 > version 7. `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/instantiate.rs` that
@@ -304,6 +304,47 @@ screen help:
 > name the body no longer declares is dropped, `tests/check.rs` the three codes,
 > `tests/reactivity.rs` that a variable is not a dependency, `crates/vela-ui/src/pack/tests.rs` the codec,
 > and `crates/vela-cli/src/tests/ui_tests.rs` the whole loop: a write re-lays the screen it wrote.
+
+### 2.6 Variants: where this screen is running
+
+A screen may ask **where it is being drawn** — which platform the bundle was built for, and whether the
+frame it is being laid out in has room:
+
+```vela
+screen main_menu:
+    vbox:
+        if variant("pc") or (variant("web") and not variant("mobile")):
+            textbutton _("Help") action open_screen("help")
+        if not variant("small"):
+            add SideImage() xalign 0.0
+```
+
+- **A variant is a question the host answers, not an action.** `variant("pc")` is a *value* — `true` or
+  `false` — so it belongs in a condition (§2.2), in a `text`, or as an argument to `set`. It is a call
+  because that is how a screen names a host thing everywhere else (§7's `jump(…)`, `set(…)`), and
+  because Ren'Py writes it that way, so `renpy.variant("pc")` migrates unchanged.
+- **The vocabulary is closed**: `pc`, `web`, `mobile`, `small`. A name outside it is **`E5018`** at the
+  call, not Ren'Py's silent `False` — a migration that writes `tablet` or `touch` hears about it now
+  rather than drawing the `else` arm forever. The name has to be written out, because a name the engine
+  cannot see whole cannot be checked.
+- **Two sources, one set.** `pc`, `web` and `mobile` come from the bundle's descriptor
+  (`target.json`'s `variants`, written per target by `commands/target.rs`; a *source* run declares `pc`,
+  because the platform the process is on is the answer). `small` comes from the **frame** the screen is
+  laid out in: below three quarters of the reference frame on either side (960×540 against 1280×720).
+  Ren'Py decides `small` from the *physical diagonal* of the device; Vela's is the room the frame has,
+  because that is the question the sample's own use is asking — "there's no room" for the side image —
+  and because a desktop build has no diagonal to measure. Vela owns that number and says so here rather
+  than deriving it from something unmeasurable.
+- **The size class is per layout, not per run.** It is added where the frame is known
+  (`ScreenSet::lay`), so a window that is resized asks again with the new answer; the platform half
+  travels with the screen set, beside its pictures and fonts.
+- **A question is decidable, so `W4013` does not fire.** That warning is for a condition that *calls*
+  something nothing can answer (`§2.2`); a variant is a call that can be.
+
+> **Implemented (M12.1).** `Variant`/`Variants` in `crates/vela-ui/src/variants.rs`; the descriptor's
+> `variants` field, which existed and was empty since M9, now carries a target's platform names.
+> `tests/variants.rs` pins both sources and the sample's merged condition, `tests/check.rs` that a
+> question is clean, an unknown name is `E5018` and `W4013` still fires beside one.
 
 ## 3. Widget tree
 

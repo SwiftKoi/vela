@@ -188,6 +188,59 @@ fn a_condition_made_of_comparisons_is_clean() {
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
 
+/// A question the host answers is not an action and not an undecidable condition (`SCREENS.md §2.6`).
+///
+/// The call is checked against the *vocabulary of names* instead — an action registry has nothing to say
+/// about `variant`, and `W4013` is for conditions that cannot be decided at all, which this one can.
+#[test]
+fn a_variant_question_is_clean() {
+    let diagnostics = diagnose(
+        "    if variant(\"pc\") or variant(\"web\"):\n        text \"Help\"\n    text variant(\"small\")\n",
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+}
+
+/// A variant name the engine does not know is an error rather than Ren'Py's silent `False`.
+///
+/// This is the whole reason the vocabulary is closed: `tablet` is a variant Ren'Py has and Vela does
+/// not, and a migration that writes it should hear about it now rather than draw the `else` arm.
+#[test]
+fn an_unknown_variant_is_an_error() {
+    let diagnostics = diagnose("    if variant(\"tablet\"):\n        text \"Tablet\"\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5018");
+    assert!(
+        diagnostics[0].1.contains("names the platform"),
+        "{diagnostics:?}"
+    );
+}
+
+/// A name that is not written out cannot be checked, so it is an error too.
+///
+/// The vocabulary is closed and the check happens where the name is — a computed name would make the
+/// question unanswerable at check time, which is the trade the closed vocabulary buys.
+#[test]
+fn a_computed_variant_name_is_an_error() {
+    let diagnostics =
+        diagnose("    default device = \"pc\"\n    if variant(device):\n        text \"Help\"\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5018");
+    assert!(
+        diagnostics[0].1.contains("pc, web, mobile, small"),
+        "{diagnostics:?}"
+    );
+}
+
+/// A variant question inside a condition is *not* reported as undecidable, and one nested in a call
+/// that is undecidable still is.
+#[test]
+fn a_variant_question_narrows_w4013() {
+    let diagnostics =
+        diagnose("    if variant(\"pc\") and GamepadExists():\n        text \"Help\"\n");
+    let codes: Vec<&str> = diagnostics.iter().map(|(code, _)| code.as_str()).collect();
+    assert_eq!(codes, vec!["W4013"], "{diagnostics:?}");
+}
+
 /// A prop line under a widget that does *not* take it is still a mistake — and the mistake is
 /// an unknown widget, because that is what it looks like from here.
 #[test]

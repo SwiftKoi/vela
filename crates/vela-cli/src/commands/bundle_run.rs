@@ -29,6 +29,7 @@ use crate::commands::run::{play, saves_dir, wants_a_window};
 use crate::commands::target;
 use crate::commands::ui::Screens;
 use crate::commands::{frame, run};
+use vela_ui::Variants;
 
 /// Whether a path is a built bundle rather than a project.
 ///
@@ -97,12 +98,25 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
     )
 }
 
-/// A bundle's compiled screens.
+/// A bundle's compiled screens, told what its descriptor says about where it runs.
 ///
 /// A pack this build cannot read is fatal rather than skipped: a screen that quietly fails to
 /// load is a dialogue box with no text, which is worse than not starting.
 fn screens(dir: &Path) -> Result<Screens, Error> {
-    Screens::load_bundle(dir).map_err(|error| Error::diagnostics(error.to_string()))
+    let mut screens =
+        Screens::load_bundle(dir).map_err(|error| Error::diagnostics(error.to_string()))?;
+    if let Some(installed) = target::read(dir) {
+        let (variants, unknown) = Variants::declared(&installed.variants);
+        for name in &unknown {
+            eprintln!(
+                "vela run: the {} bundle declares a variant `{name}` this build does not have; \
+                 ignoring it",
+                installed.target
+            );
+        }
+        screens.set_variants(variants);
+    }
+    Ok(screens)
 }
 
 /// Reads a bundle's manifest.

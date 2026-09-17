@@ -11,11 +11,13 @@
 //! A flag that produced the same bytes for every target would be cosmetic, so this file is
 //! explicit about the four dimensions §4 names — including the two that are not live yet:
 //!
-//! * **(a) variants** — **not implemented.** The descriptor records an empty variant set,
-//!   because there is nothing to record: no importer emits a variant. §3.1's `ktx2` and `ogg`
-//!   need transcoders this build does not have, and the manifest's `Variant` carries a digest
-//!   with no path beside it, so a selector could not name a file to pack even if a variant
-//!   existed. Every target packs the default artifact.
+//! * **(a) variants** — **recorded, and consumed** since M12.1: the descriptor lists the platform
+//!   names a screen may ask about (`SCREENS.md §2.6`), `vela run <bundle>` reads them, and they
+//!   reach a condition as `variant("pc")`. What is still not implemented is the *other* meaning of
+//!   the word in §4 — §3.1's `ktx2` and `ogg` **artifact** variants, which no importer emits: the
+//!   manifest's `Variant` carries a digest with no path beside it, so a selector could not name a
+//!   file to pack even if one existed. Every target packs the default artifact. The two are
+//!   different things that share a word, and this field is the first.
 //! * **(b) backend** — recorded per target (`vulkan`, `metal`, `dx12`, `webgpu-webgl2`). The
 //!   renderer does not yet choose a backend from it; the bundle run is headless or uses the
 //!   built-in presenter.
@@ -59,6 +61,13 @@ pub struct Target {
     launcher: &'static str,
     /// How that launcher is written.
     shape: Launcher,
+    /// The platform variants a screen may ask about in a bundle built for this target
+    /// (`SCREENS.md §2.6`).
+    ///
+    /// `pc` for the three desktop targets rather than `linux`/`win`/`mac`, because that is the question
+    /// a screen is asking: none of the sample's screens vary by *which* desktop, and a name per platform
+    /// would invite screens that do. The target's own name is in the descriptor beside it.
+    variants: &'static [&'static str],
 }
 
 /// Every target, in the order `BUILD_AND_ASSETS.md §4` lists them.
@@ -73,6 +82,7 @@ pub const TARGETS: &[Target] = &[
         packaging: "codesign",
         launcher: "launch.cmd",
         shape: Launcher::Batch,
+        variants: &["pc"],
     },
     Target {
         name: "mac",
@@ -81,6 +91,7 @@ pub const TARGETS: &[Target] = &[
         packaging: "notarize",
         launcher: "launch.sh",
         shape: Launcher::Shell,
+        variants: &["pc"],
     },
     Target {
         name: "linux",
@@ -89,6 +100,7 @@ pub const TARGETS: &[Target] = &[
         packaging: "appimage",
         launcher: "launch.sh",
         shape: Launcher::Shell,
+        variants: &["pc"],
     },
     Target {
         name: "web",
@@ -97,6 +109,7 @@ pub const TARGETS: &[Target] = &[
         packaging: "browser",
         launcher: "index.html",
         shape: Launcher::Page,
+        variants: &["web"],
     },
 ];
 
@@ -113,6 +126,8 @@ pub struct Installed {
     pub target: String,
     /// The input profile `vela run <bundle>` installs.
     pub input_profile: String,
+    /// The platform variants a screen may ask about (`SCREENS.md §2.6`).
+    pub variants: Vec<String>,
 }
 
 /// The descriptor a built bundle carries, if it has one.
@@ -152,7 +167,7 @@ impl Target {
             backend: &'a str,
             input_profile: &'a str,
             packaging: &'a str,
-            variants: [&'a str; 0],
+            variants: &'a [&'a str],
         }
 
         let descriptor = Descriptor {
@@ -163,7 +178,7 @@ impl Target {
             backend: self.backend,
             input_profile: self.input_profile,
             packaging: self.packaging,
-            variants: [],
+            variants: self.variants,
         };
         let text = serde_json::to_string_pretty(&descriptor).map_err(|error| {
             Error::internal(format!("cannot write a target descriptor: {error}"))

@@ -28,6 +28,7 @@ mod conditions;
 mod keys;
 mod screen;
 mod variables;
+mod variants;
 mod walk;
 mod widgets;
 

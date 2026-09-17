@@ -45,6 +45,7 @@ pub mod theme;
 pub mod tokens;
 pub mod tree;
 pub mod value;
+pub mod variants;
 pub mod widgets;
 
 pub use a11y::{A11yNode, Role, check_labels, tree};
@@ -67,4 +68,5 @@ pub use styles::{check_inheritance, check_screen_styles, resolve};
 pub use theme::{Fonts, Palette, Rgb, check_contrast, fonts, palette};
 pub use tokens::check_magic_colours;
 pub use tree::{Kind, Node, Paint, Size, State};
+pub use variants::{Variant, Variants};
 pub use widgets::{Category, Widget, WidgetRegistry};

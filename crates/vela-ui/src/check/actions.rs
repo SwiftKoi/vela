@@ -3,8 +3,10 @@ use vela_span::Span;
 use vela_syntax::{Expr, ScreenArg, ScreenLine, StrPart};
 
 use crate::actions::{ActionRegistry, SET_SCREEN_VARIABLE};
+use crate::eval::is_question_call;
 
 use super::diag;
+use super::variants::check_variant;
 
 /// Checks every action a body calls against the registry.
 ///
@@ -96,7 +98,14 @@ fn check_action_expr(
             // `foo.bar()` is a call on a value the screen holds, not a registry name: the language
             // has no such action, so there is nothing here to check.
             if let Expr::Name { name, .. } = callee.as_ref() {
-                check_action(name, args, *span, actions, declared, out);
+                if is_question_call(callee) {
+                    // A question the host answers is not an action (`SCREENS.md §2.6`): `variant("pc")`
+                    // is a value, and the registry has nothing to say about it. What has something to
+                    // say is the *vocabulary of names*, which `check/variants.rs` asks about.
+                    check_variant(args, *span, out);
+                } else {
+                    check_action(name, args, *span, actions, declared, out);
+                }
             }
             check_action_expr(callee, actions, declared, out);
             for arg in args {

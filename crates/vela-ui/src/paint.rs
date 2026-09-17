@@ -9,12 +9,21 @@
 //!
 //! Rectangles first, then text, because that is the order the draw list keeps them in and the
 //! order a frame paints them.
+//!
+//! It also resolves **what a style paints** — the colour, size and font a `style` sets in each
+//! interaction state, through its inheritance chain (`SCREENS.md §5`). That arrived here from
+//! `eval.rs` when variants made the evaluator's file exceed `REPO_LAYOUT.md §3.1`'s budget, and it
+//! belongs here rather than there for the same reason it was in one file to begin with: it *produces*
+//! a [`Paint`], which is the thing this module exists to fill in.
 
 use vela_render::{Clip, Color, DrawList, GlyphQuad, ImageQuad, RectQuad};
+use vela_syntax::{Expr, StyleDecl};
 use vela_text::TextEngine;
 
+use crate::eval::{Ctx, number};
 use crate::images::ImageTable;
 use crate::layout::Frame;
+use crate::theme::string_literal;
 use crate::tree::{Kind, Node, Paint, State};
 
 /// The size text is drawn at when no `style` sets one.
@@ -258,4 +267,126 @@ fn paint_text(
             });
         }
     }
+}
+
+/// A colour from a `theme.<token>` reference or a literal.
+pub(crate) fn color_of(expr: &Expr, ctx: &Ctx) -> Option<Color> {
+    match expr {
+        Expr::Field { base, name, .. } => {
+            let Expr::Name { name: base, .. } = base.as_ref() else {
+                return None;
+            };
+            if base == "theme" {
+                ctx.palette.color(name)
+            } else {
+                None
+            }
+        }
+        Expr::Name { name, .. } => ctx.palette.color(name),
+        Expr::Int { value, .. } => hex_color(*value),
+        Expr::Paren { inner, .. } => color_of(inner, ctx),
+        _ => None,
+    }
+}
+
+/// A font name from a `theme.<token>` reference, or a literal.
+///
+/// Mirrors [`color_of`]: the value a style writes is a token of the active theme, and resolving it
+/// here is what keeps a style independent of which theme is selected (`SCREENS.md §5`).
+pub(crate) fn font_of(expr: &Expr, ctx: &Ctx) -> Option<String> {
+    match expr {
+        Expr::Field { base, name, .. } => {
+            let Expr::Name { name: base, .. } = base.as_ref() else {
+                return None;
+            };
+            if base == "theme" {
+                ctx.fonts.get(name).map(str::to_string)
+            } else {
+                None
+            }
+        }
+        Expr::Str { .. } => string_literal(expr),
+        Expr::Paren { inner, .. } => font_of(inner, ctx),
+        _ => None,
+    }
+}
+
+/// A `0xRRGGBB` integer as a colour.
+fn hex_color(value: i64) -> Option<Color> {
+    let value = u32::try_from(value).ok()?;
+    if value > 0xFF_FFFF {
+        return None;
+    }
+    Some(Color::rgb(
+        ((value >> 16) & 0xFF) as u8,
+        ((value >> 8) & 0xFF) as u8,
+        (value & 0xFF) as u8,
+    ))
+}
+
+/// What a style draws with, in every state it names, through its inheritance chain.
+///
+/// A setting's key is a state applied to a property (`State::split`): `color` and `idle_color` are the
+/// values themselves, `hover_color` is what `hover` overrides. An unknown key is ignored rather than
+/// reported — a setting body is `key = value` (`LANGUAGE.md §7`) and the language does not fix which
+/// keys exist, which is also why a style can name a property the painter does not read yet.
+pub(crate) fn style_paint(name: &str, ctx: &Ctx) -> Paint {
+    let mut paint = Paint::default();
+    for style in chain(name, ctx.styles) {
+        for setting in &style.settings {
+            let (state, key) = State::split(&setting.key);
+            let target = paint.state_mut(state);
+            match key {
+                "color" => set_colour(&mut target.color, &setting.value, ctx),
+                "background" => set_colour(&mut target.background, &setting.value, ctx),
+                "size" => set_size(&mut target.size, &setting.value),
+                "font" => set_font(&mut target.font, &setting.value, ctx),
+                _ => {}
+            }
+        }
+    }
+    paint
+}
+
+/// Resolves a colour expression into a slot, leaving it alone when it does not resolve.
+fn set_colour(slot: &mut Option<Color>, expr: &Expr, ctx: &Ctx) {
+    if let Some(colour) = color_of(expr, ctx) {
+        *slot = Some(colour);
+    }
+}
+
+/// Resolves a numeric expression into a slot, leaving it alone when it does not resolve.
+fn set_size(slot: &mut Option<f32>, expr: &Expr) {
+    if let Some(size) = number(expr) {
+        *slot = Some(size);
+    }
+}
+
+/// Resolves a font expression into a slot, leaving it alone when it does not resolve.
+fn set_font(slot: &mut Option<String>, expr: &Expr, ctx: &Ctx) {
+    if let Some(font) = font_of(expr, ctx) {
+        *slot = Some(font);
+    }
+}
+
+/// A style and its ancestors, base first.
+///
+/// A `from` chain is linear, and the walk is bounded by the declaration count: a longer walk
+/// has visited a style twice, which is a cycle the checker already rejects — the bound is a
+/// guard against hanging on one that slipped through, not an expected outcome.
+fn chain<'a>(name: &str, styles: &'a [StyleDecl]) -> Vec<&'a StyleDecl> {
+    let mut collected: Vec<&StyleDecl> = Vec::new();
+    let mut current = name.to_string();
+    for _ in 0..=styles.len() {
+        let Some(style) = styles.iter().find(|style| style.name == current) else {
+            break;
+        };
+        collected.push(style);
+        match &style.from {
+            Some(base) => current = base.clone(),
+            None => break,
+        }
+    }
+    collected.reverse();
+    collected
 }

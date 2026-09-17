@@ -93,6 +93,16 @@ impl Screens {
         }
     }
 
+    /// Tells every set where it is running, from the bundle's descriptor (`SCREENS.md §2.6`).
+    ///
+    /// The size class is not here: a frame is what decides that, and every set receives one when it is
+    /// laid out — so a window that is resized asks the question again with the new answer.
+    pub fn set_variants(&mut self, variants: vela_ui::Variants) {
+        for set in &mut self.sets {
+            set.set_variants(variants);
+        }
+    }
+
     /// How many screens are compiled.
     #[must_use]
     pub fn count(&self) -> usize {

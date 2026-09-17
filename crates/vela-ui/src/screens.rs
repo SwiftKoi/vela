@@ -24,6 +24,7 @@ use crate::pack::PackedSet;
 use crate::paint;
 use crate::theme::{self, Fonts, Palette};
 use crate::tree::{Node, Size};
+use crate::variants::Variants;
 use crate::widgets::WidgetRegistry;
 
 /// A screen evaluated and laid out, ready to paint and to be navigated.
@@ -95,6 +96,7 @@ pub struct ScreenSet {
     palette: Palette,
     fonts: Fonts,
     images: ImageTable,
+    variants: Variants,
     registry: WidgetRegistry,
 }
 
@@ -130,6 +132,9 @@ impl ScreenSet {
             palette,
             fonts,
             images: ImageTable::new(),
+            // No bundle has said where this runs, and no frame has been laid out yet (`§2.6`): a
+            // `variant(...)` question is false until a runner that knows the answer supplies one.
+            variants: Variants::new(),
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -158,6 +163,30 @@ impl ScreenSet {
     #[must_use]
     pub fn images(&self) -> &ImageTable {
         &self.images
+    }
+
+    /// Replaces what the host says about where these screens are running (`SCREENS.md §2.6`).
+    ///
+    /// The platform half of the variant set, from the bundle's descriptor
+    /// (`commands/target.rs`); the size class is added per frame by [`lay`](Self::lay), which is the
+    /// only place a frame is known.
+    pub fn set_variants(&mut self, variants: Variants) {
+        self.variants = variants;
+    }
+
+    /// Replaces what the host says about where these screens are running.
+    ///
+    /// The in-place half of this, for a caller holding a `Vec` of sets rather than building them.
+    #[must_use]
+    pub fn with_variants(mut self, variants: Variants) -> Self {
+        self.set_variants(variants);
+        self
+    }
+
+    /// What the host says about where these screens are running.
+    #[must_use]
+    pub fn variants(&self) -> Variants {
+        self.variants
     }
 
     /// Replaces the widget vocabulary, which a plugin extends.
@@ -193,6 +222,9 @@ impl ScreenSet {
             // From a bundle nobody has uploaded anything yet, so the pictures arrive the same way they
             // do for a project: `set_images`, once a window exists (`SCREENS.md §3`).
             images: ImageTable::new(),
+            // Likewise the variants: the descriptor carries them (`§2.6`), and the runner that read the
+            // bundle is what knows them.
+            variants: Variants::new(),
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -272,13 +304,18 @@ impl ScreenSet {
     ) -> Option<Laid> {
         let (width, height) = (size.0 as f32, size.1 as f32);
         let screen = self.screen(name)?;
+        // The variants this frame adds to what the bundle declared (`§2.6`): a screen laid out in a frame
+        // with no room is `small`, and the frame is the only thing that knows.
+        let args = args
+            .clone()
+            .with_variants(self.variants.for_frame(width, height));
         // The screen's variables start from what the caller kept: a write survives a layout, and a
         // screen that has never been laid out initializes them from its own `default`s.
         let mut state = state.clone();
         // One context, two questions: the tree, and the input bindings that are not part of it.
         let (node, keys, timers) = self.with_ctx(|ctx| {
-            let node = instantiate::build(&screen.body, ctx, args, &mut state, text, font, width);
-            let (keys, timers) = instantiate::bindings(&screen.body, ctx, args);
+            let node = instantiate::build(&screen.body, ctx, &args, &mut state, text, font, width);
+            let (keys, timers) = instantiate::bindings(&screen.body, ctx, &args);
             (node, keys, timers)
         });
         let frame = layout(&node, Constraints::exact(Size::new(width, height)));

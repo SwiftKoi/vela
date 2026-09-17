@@ -9,14 +9,13 @@
 //! Kept apart from [`crate::instantiate`] so that the decision "what does this expression
 //! mean" does not live in the same file as "what node does this line build".
 
-use vela_render::Color;
 use vela_syntax::{BinOp, Expr, ScreenDecl, StrPart, StyleDecl, UnOp};
 
 use crate::actions::Action;
 use crate::images::ImageTable;
 use crate::props::Anchor;
-use crate::theme::{Fonts, Palette, string_literal};
-use crate::tree::{Paint, State};
+use crate::theme::{Fonts, Palette};
+use crate::variants::{self, Variant};
 use crate::widgets::WidgetRegistry;
 
 // Re-exported because this is the module that *reads* them: every caller of the evaluator already
@@ -108,6 +107,39 @@ pub(crate) fn action_of(expr: &Expr, values: &Args) -> Option<Action> {
     ))
 }
 
+/// Whether a callee is one of the questions a screen may ask the host (`SCREENS.md §2.6`).
+pub(crate) fn is_question_call(callee: &Expr) -> bool {
+    matches!(callee, Expr::Name { name, .. } if variants::is_question(name))
+}
+
+/// The answer a call gives, if the call is a question (`SCREENS.md §2.6`).
+///
+/// `None` for every other call, which is how the one `Call` arm in [`value_of`] tells the two apart
+/// without a second pattern for it.
+fn question_of(expr: &Expr, values: &Args) -> Option<Value> {
+    let Expr::Call { callee, args, .. } = expr else {
+        return None;
+    };
+    is_question_call(callee).then(|| Value::Bool(variant_answer(args, values)))
+}
+
+/// The answer to a `variant("name")` call.
+///
+/// A name the engine does not know, an argument that is not a string literal, and a call with no
+/// argument all answer `false` — which is the same answer an unknown variant gets, and the checker is
+/// what tells the author that the call cannot mean anything (`E5018`). Answering false here rather than
+/// refusing keeps the evaluator total: every expression a screen body can hold has a value, which is
+/// what lets a screen be laid out while it is being written.
+fn variant_answer(args: &[Expr], values: &Args) -> bool {
+    let [name, ..] = args else {
+        return false;
+    };
+    let Value::Str(name) = value_of(name, values) else {
+        return false;
+    };
+    Variant::named(&name).is_some_and(|variant| values.variants().has(variant))
+}
+
 /// One action argument: the value the screen holds, or the name it wrote.
 ///
 /// A name that is *in scope* is the value bound to it, and everything else is what was written — a
@@ -193,6 +225,13 @@ pub(crate) fn text_of(expr: &Expr, values: &Args) -> String {
         // `text d.who` is whoever said it.
         Expr::Field { .. } => value_of(expr, values).as_text(),
         Expr::None { .. } => String::new(),
+        // A question the host answers reads as its answer (`SCREENS.md §2.6`), because a question is a
+        // value: `text variant("pc")` says `true` or `false`. Any *other* call in a text position is an
+        // action in the wrong place, and stays empty rather than drawing the name of something that is
+        // not a string.
+        Expr::Call { callee, args, .. } if is_question_call(callee) => {
+            Value::Bool(variant_answer(args, values)).as_text()
+        }
         _ => String::new(),
     }
 }
@@ -226,6 +265,9 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
             ..
         } => !eval(operand, values),
         Expr::Binary { op, lhs, rhs, .. } => compare(*op, lhs, rhs, values),
+        // A question the host answers, in a condition: `if variant("pc")` is decided by the answer rather
+        // than by `value_of` having found an action, which is the other half of `§2.6`.
+        Expr::Call { callee, args, .. } if is_question_call(callee) => variant_answer(args, values),
         _ => false,
     }
 }
@@ -299,10 +341,14 @@ pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
         Expr::Bool { value, .. } => Value::Bool(*value),
         Expr::Int { value, .. } => Value::Num(*value as f64),
         Expr::Str { parts, .. } => Value::Str(parts_text(parts, values)),
-        // A call in a screen argument is an action (`SCREENS.md §7`). The vocabulary is words like
-        // `quit` and `open_screen`, and a call is how one becomes a value a screen can pass on — as
-        // the argument of a `use`, or into a parameter a widget then holds.
-        Expr::Call { .. } => action_of(expr, values).map_or(Value::None, Value::Action),
+        // A call is one of two things, and which one is [`variants::is_question`]'s answer rather than a
+        // second arm: a *question* the host answers (`SCREENS.md §2.6`), which is a value like any other
+        // — `variant("pc")` can be a condition, a text, or the argument of a `set` — or an *action*
+        // (`§7`), whose vocabulary is words like `quit` and `open_screen`, and which a screen passes on
+        // as the argument of a `use` or into a parameter a widget then holds.
+        Expr::Call { .. } => question_of(expr, values)
+            .or_else(|| action_of(expr, values).map(Value::Action))
+            .unwrap_or(Value::None),
         // A list literal, and a record literal. These are how a screen makes its own data: nothing
         // outside it has to hand one over for `for` to have something to walk, which is what keeps a
         // loop testable before the systems that feed it exist (`SCREENS.md §2.4`).
@@ -337,126 +383,4 @@ fn key_text(key: &Expr, values: &Args) -> String {
         Expr::Name { name, .. } => name.clone(),
         other => text_of(other, values),
     }
-}
-
-/// A colour from a `theme.<token>` reference or a literal.
-pub(crate) fn color_of(expr: &Expr, ctx: &Ctx) -> Option<Color> {
-    match expr {
-        Expr::Field { base, name, .. } => {
-            let Expr::Name { name: base, .. } = base.as_ref() else {
-                return None;
-            };
-            if base == "theme" {
-                ctx.palette.color(name)
-            } else {
-                None
-            }
-        }
-        Expr::Name { name, .. } => ctx.palette.color(name),
-        Expr::Int { value, .. } => hex_color(*value),
-        Expr::Paren { inner, .. } => color_of(inner, ctx),
-        _ => None,
-    }
-}
-
-/// A font name from a `theme.<token>` reference, or a literal.
-///
-/// Mirrors [`color_of`]: the value a style writes is a token of the active theme, and resolving it
-/// here is what keeps a style independent of which theme is selected (`SCREENS.md §5`).
-pub(crate) fn font_of(expr: &Expr, ctx: &Ctx) -> Option<String> {
-    match expr {
-        Expr::Field { base, name, .. } => {
-            let Expr::Name { name: base, .. } = base.as_ref() else {
-                return None;
-            };
-            if base == "theme" {
-                ctx.fonts.get(name).map(str::to_string)
-            } else {
-                None
-            }
-        }
-        Expr::Str { .. } => string_literal(expr),
-        Expr::Paren { inner, .. } => font_of(inner, ctx),
-        _ => None,
-    }
-}
-
-/// A `0xRRGGBB` integer as a colour.
-fn hex_color(value: i64) -> Option<Color> {
-    let value = u32::try_from(value).ok()?;
-    if value > 0xFF_FFFF {
-        return None;
-    }
-    Some(Color::rgb(
-        ((value >> 16) & 0xFF) as u8,
-        ((value >> 8) & 0xFF) as u8,
-        (value & 0xFF) as u8,
-    ))
-}
-
-/// What a style draws with, in every state it names, through its inheritance chain.
-///
-/// A setting's key is a state applied to a property (`State::split`): `color` and `idle_color` are the
-/// values themselves, `hover_color` is what `hover` overrides. An unknown key is ignored rather than
-/// reported — a setting body is `key = value` (`LANGUAGE.md §7`) and the language does not fix which
-/// keys exist, which is also why a style can name a property the painter does not read yet.
-pub(crate) fn style_paint(name: &str, ctx: &Ctx) -> Paint {
-    let mut paint = Paint::default();
-    for style in chain(name, ctx.styles) {
-        for setting in &style.settings {
-            let (state, key) = State::split(&setting.key);
-            let target = paint.state_mut(state);
-            match key {
-                "color" => set_colour(&mut target.color, &setting.value, ctx),
-                "background" => set_colour(&mut target.background, &setting.value, ctx),
-                "size" => set_size(&mut target.size, &setting.value),
-                "font" => set_font(&mut target.font, &setting.value, ctx),
-                _ => {}
-            }
-        }
-    }
-    paint
-}
-
-/// Resolves a colour expression into a slot, leaving it alone when it does not resolve.
-fn set_colour(slot: &mut Option<Color>, expr: &Expr, ctx: &Ctx) {
-    if let Some(colour) = color_of(expr, ctx) {
-        *slot = Some(colour);
-    }
-}
-
-/// Resolves a numeric expression into a slot, leaving it alone when it does not resolve.
-fn set_size(slot: &mut Option<f32>, expr: &Expr) {
-    if let Some(size) = number(expr) {
-        *slot = Some(size);
-    }
-}
-
-/// Resolves a font expression into a slot, leaving it alone when it does not resolve.
-fn set_font(slot: &mut Option<String>, expr: &Expr, ctx: &Ctx) {
-    if let Some(font) = font_of(expr, ctx) {
-        *slot = Some(font);
-    }
-}
-
-/// A style and its ancestors, base first.
-///
-/// A `from` chain is linear, and the walk is bounded by the declaration count: a longer walk
-/// has visited a style twice, which is a cycle the checker already rejects — the bound is a
-/// guard against hanging on one that slipped through, not an expected outcome.
-fn chain<'a>(name: &str, styles: &'a [StyleDecl]) -> Vec<&'a StyleDecl> {
-    let mut collected: Vec<&StyleDecl> = Vec::new();
-    let mut current = name.to_string();
-    for _ in 0..=styles.len() {
-        let Some(style) = styles.iter().find(|style| style.name == current) else {
-            break;
-        };
-        collected.push(style);
-        match &style.from {
-            Some(base) => current = base.clone(),
-            None => break,
-        }
-    }
-    collected.reverse();
-    collected
 }

@@ -6,6 +6,7 @@
 //! one from an expression.
 
 use crate::actions::Action;
+use crate::variants::Variants;
 
 /// A value a screen argument can hold.
 ///
@@ -105,9 +106,15 @@ impl Value {
 }
 
 /// The arguments a screen was called with, by parameter name, in call order.
+///
+/// Also carries what the host says about *where* the screen is running ([`Variants`]), because that is
+/// the one other thing a condition may decide from (`SCREENS.md §2.6`): it has to reach an arm, a loop
+/// body and a `use` argument exactly the way a name does, and those all travel in a scope. A scope that
+/// carried values and not variants would make `variant(...)` depend on which walk was asking.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Args {
     values: Vec<(String, Value)>,
+    variants: Variants,
 }
 
 impl Args {
@@ -115,6 +122,24 @@ impl Args {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// What the host says about where this screen is running.
+    #[must_use]
+    pub fn variants(&self) -> Variants {
+        self.variants
+    }
+
+    /// Sets the variants this scope decides with.
+    pub fn set_variants(&mut self, variants: Variants) {
+        self.variants = variants;
+    }
+
+    /// This scope, with the variants the host reports.
+    #[must_use]
+    pub fn with_variants(mut self, variants: Variants) -> Self {
+        self.set_variants(variants);
+        self
     }
 
     /// Binds a name.
@@ -150,7 +175,10 @@ impl Args {
             .cloned()
             .collect();
         values.push((name.to_string(), value));
-        Self { values }
+        Self {
+            values,
+            variants: self.variants,
+        }
     }
 }
 

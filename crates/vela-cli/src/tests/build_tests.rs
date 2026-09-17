@@ -451,6 +451,13 @@ fn a_target_builds_one_bundle_with_a_descriptor_and_a_launcher() {
     assert!(linux.contains("\"backend\": \"vulkan\""), "{linux}");
     assert!(web.contains("\"backend\": \"webgpu-webgl2\""), "{web}");
     assert_ne!(linux, web, "two targets wrote the same descriptor");
+    // And the platform a screen can ask about (`SCREENS.md §2.6`): the desktop targets answer `pc`,
+    // because a menu that varies by *which* desktop is a menu nobody meant to write.
+    assert!(
+        linux.contains("\"variants\": [\n    \"pc\"\n  ]"),
+        "{linux}"
+    );
+    assert!(web.contains("\"variants\": [\n    \"web\"\n  ]"), "{web}");
 
     // The web launcher is a page; the desktop one is a shell script that runs the engine on
     // this very bundle.
