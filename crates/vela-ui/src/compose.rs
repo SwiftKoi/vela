@@ -60,7 +60,9 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
             }
             ScreenLine::If { body, .. } => uses_in(body, out),
             ScreenLine::Node(node) => uses_in(&node.children, out),
-            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
         }
     }
 }
@@ -78,7 +80,7 @@ pub(crate) fn transcludes(lines: &[ScreenLine]) -> bool {
         ScreenLine::If { body, .. }
         | ScreenLine::Use { body, .. }
         | ScreenLine::Node(vela_syntax::ScreenNode { children: body, .. }) => transcludes(body),
-        ScreenLine::Layer { .. } => false,
+        ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => false,
     })
 }
 
@@ -106,7 +108,9 @@ fn walk_uses(screens: &[&ScreenDecl], lines: &[ScreenLine], out: &mut Vec<Diagno
             }
             ScreenLine::If { body, .. } => walk_uses(screens, body, out),
             ScreenLine::Node(node) => walk_uses(screens, &node.children, out),
-            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
         }
     }
 }

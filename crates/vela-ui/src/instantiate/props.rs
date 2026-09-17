@@ -181,18 +181,7 @@ fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx, valu
         }
         "style" => {
             if let Some(style) = value.name() {
-                // The style's idle values, and whatever it says each state overrides (`SCREENS.md §5`).
-                // The node keeps the two apart: which one is drawn depends on the focus cursor, and that
-                // moves without the layout changing.
-                let paint = style_paint(style, ctx);
-                node.paint.background = paint.background.or(node.paint.background);
-                node.paint.color = paint.color.or(node.paint.color);
-                node.paint.size = paint.size.or(node.paint.size);
-                for state in [State::Hover, State::Selected, State::Insensitive] {
-                    if let Some(values) = paint.over(state).cloned() {
-                        *node.paint.state_mut(state) = values;
-                    }
-                }
+                apply_style(node, style, ctx);
             }
         }
         "action" => {
@@ -201,6 +190,24 @@ fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx, valu
             }
         }
         _ => {}
+    }
+}
+
+/// Applies a style to a node: its idle values, and whatever it says each state overrides.
+///
+/// Reached two ways, which is why it is a function rather than an arm of `apply_prop`: the `style`
+/// prop applies one the node wrote, and a screen's `style_prefix` applies one it did not
+/// (`SCREENS.md §5.2`). The node keeps the state values apart, because which one is drawn depends on
+/// the focus cursor and that moves without the layout changing.
+pub(super) fn apply_style(node: &mut Node, style: &str, ctx: &Ctx) {
+    let paint = style_paint(style, ctx);
+    node.paint.background = paint.background.or(node.paint.background);
+    node.paint.color = paint.color.or(node.paint.color);
+    node.paint.size = paint.size.or(node.paint.size);
+    for state in [State::Hover, State::Selected, State::Insensitive] {
+        if let Some(values) = paint.over(state).cloned() {
+            *node.paint.state_mut(state) = values;
+        }
     }
 }
 

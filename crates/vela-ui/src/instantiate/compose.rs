@@ -28,14 +28,20 @@ pub(super) struct Compose<'a> {
     /// The scope is the *caller's*, not this body's: the block is the caller's code, so a name in it
     /// reads what the caller passed, which is what makes `use game_menu(title): text page_name` mean
     /// anything.
-    pane: Option<Pane<'a>>,
+    pub(super) pane: Option<Pane<'a>>,
     /// How many `use` steps down this body is.
-    depth: usize,
+    pub(super) depth: usize,
+    /// The style prefix in effect for this block, if any (`SCREENS.md §5.2`).
+    ///
+    /// Carried because it is a *scope*, like the pane: a block declares it once and every widget under
+    /// it falls back to `{prefix}_{widget}`. A `use`d screen starts without one — a screen is a
+    /// function, so it must not look different depending on who called it (`§2.1`).
+    pub(super) prefix: Option<&'a str>,
 }
 
 /// A block handed to a `use`.
 #[derive(Clone, Copy)]
-struct Pane<'a> {
+pub(super) struct Pane<'a> {
     /// The lines to place.
     lines: &'a [ScreenLine],
     /// The scope they were written in.
@@ -70,6 +76,9 @@ impl<'a> Compose<'a> {
                     args: caller,
                 }),
                 depth: self.depth + 1,
+                // Not the caller's prefix: a screen's look is its own, or it would depend on where it
+                // was used — the thing `§2.1`'s "a screen is a function" decision rules out.
+                prefix: None,
             },
         ))
     }

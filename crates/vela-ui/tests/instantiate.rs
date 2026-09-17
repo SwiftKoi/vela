@@ -316,6 +316,153 @@ fn a_state_override_is_a_diff_not_a_replacement() {
     );
 }
 
+/// `style_prefix` gives every widget in a block a style named for it (`SCREENS.md §5.2`).
+///
+/// This is how one line skins a screen's whole contents: `say` and a `text` are `say_text`, and the
+/// screen never names that style itself.
+#[test]
+fn a_style_prefix_gives_each_widget_its_style() {
+    let source = "\
+theme dusk:
+    color on = 0x111111
+
+style say_text:
+    color = theme.on
+
+screen s:
+    style_prefix say
+    text \"x\"
+";
+    assert_eq!(text_colour(source, "s"), Some(Color::rgb(0x11, 0x11, 0x11)));
+}
+
+/// A widget's own `style = …` is applied after the prefix, so it wins — the prefix is a fallback.
+#[test]
+fn a_widgets_own_style_beats_the_prefix() {
+    let source = "\
+theme dusk:
+    color a = 0x111111
+    color b = 0x222222
+
+style say_text:
+    color = theme.a
+
+style mine:
+    color = theme.b
+
+screen s:
+    style_prefix say
+    text \"x\" style = mine
+";
+    assert_eq!(text_colour(source, "s"), Some(Color::rgb(0x22, 0x22, 0x22)));
+}
+
+/// A prefix naming styles a project has not written is a fallback, not an error — which is what makes
+/// it safe to write a prefix before every style it names exists.
+#[test]
+fn a_prefix_that_names_nothing_falls_back() {
+    let source = "screen s:\n    style_prefix nowhere\n    text \"x\"\n";
+    assert_eq!(text_colour(source, "s"), None);
+}
+
+/// A nested block's prefix wins inside itself, and only there.
+#[test]
+fn a_nested_prefix_overrides_the_enclosing_one() {
+    let source = "\
+theme dusk:
+    color a = 0x111111
+    color b = 0x222222
+
+style out_text:
+    color = theme.a
+
+style in_text:
+    color = theme.b
+
+screen s:
+    style_prefix out
+    column:
+        style_prefix in
+        text \"inner\"
+    text \"outer\"
+";
+    let colours = text_colours(source, "s");
+    assert_eq!(
+        colours,
+        vec![
+            Some(Color::rgb(0x22, 0x22, 0x22)),
+            Some(Color::rgb(0x11, 0x11, 0x11))
+        ],
+        "the inner block's prefix did not scope to the inner block"
+    );
+}
+
+/// A used screen does not inherit the caller's prefix: a screen is a function (`§2.1`), so its look
+/// cannot depend on where it was used.
+#[test]
+fn a_used_screen_does_not_inherit_the_callers_prefix() {
+    let source = "\
+theme dusk:
+    color a = 0x111111
+
+style out_text:
+    color = theme.a
+
+screen inner:
+    text \"from the used screen\"
+
+screen s:
+    style_prefix out
+    text \"from the caller\"
+    use inner
+";
+    let colours = text_colours(source, "s");
+    assert_eq!(
+        colours,
+        vec![Some(Color::rgb(0x11, 0x11, 0x11)), None],
+        "the used screen's text picked up the caller's prefix"
+    );
+}
+
+/// Every `text` leaf's colour, in tree order.
+fn text_colours(source: &str, screen: &str) -> Vec<Option<Color>> {
+    let root = build(source, screen);
+    let mut out = Vec::new();
+    fn walk(node: &Node, out: &mut Vec<Option<Color>>) {
+        if matches!(node.kind, Kind::Text { .. }) {
+            out.push(node.paint.color);
+        }
+        for child in &node.children {
+            walk(child, out);
+        }
+    }
+    walk(&root, &mut out);
+    out
+}
+
+/// The colour the first `text` leaf draws with, if it has one.
+fn text_colour(source: &str, screen: &str) -> Option<Color> {
+    text_colours(source, screen).first().copied().flatten()
+}
+
+/// Builds a screen from a fixture, asserting it parses.
+fn build(source: &str, screen: &str) -> Node {
+    let parsed = parse(FileId::from_raw(0), source);
+    assert!(
+        parsed.diagnostics.is_empty(),
+        "the fixture must parse: {:?}",
+        parsed
+            .diagnostics
+            .iter()
+            .map(|d| d.message.clone())
+            .collect::<Vec<_>>()
+    );
+    let mut text = engine();
+    ScreenSet::from_items(&parsed.program.items)
+        .build(screen, &Args::new(), &mut text, "sans", 1280.0)
+        .expect("the screen is declared")
+}
+
 /// The paint of the one text leaf a fixture declares.
 fn styled_paint(source: &str) -> vela_ui::Paint {
     let parsed = parse(FileId::from_raw(0), source);

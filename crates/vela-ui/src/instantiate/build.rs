@@ -12,7 +12,7 @@
 use vela_syntax::{ScreenArg, ScreenLine, ScreenNode};
 
 use super::compose::Compose;
-use super::props::{apply_args, apply_bare_prop, measure_text};
+use super::props::{apply_args, apply_bare_prop, apply_style, measure_text};
 use crate::eval::{Args, Ctx, eval, number};
 use crate::props::SizeSpec;
 use crate::tree::{Kind, Node, Size};
@@ -49,10 +49,20 @@ fn build_lines(
     font: &str,
     max_width: f32,
 ) -> Vec<Node> {
+    // The style prefix this block's widgets fall back to (`SCREENS.md §5.2`): its own if it declares
+    // one, otherwise the one it inherited. A block is the scope, so a nested `style_prefix` wins
+    // inside itself and nowhere else.
+    let compose = Compose {
+        prefix: declared_prefix(lines).or(compose.prefix),
+        ..compose
+    };
+
     let mut out = Vec::new();
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } => {}
+            // A `layer` names where the screen draws and a `style_prefix` how its widgets look;
+            // neither draws anything itself, and the prefix is read above.
+            ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
             ScreenLine::If {
                 condition, body, ..
             } => {
@@ -60,43 +70,9 @@ fn build_lines(
                     out.extend(build_lines(body, ctx, args, compose, text, font, max_width));
                 }
             }
-            // Composition's two halves. `use` expands a screen here, with its own parameters bound
-            // from this call's arguments; `transclude` is where the block *this* body was handed is
-            // placed. Which of the two a screen has is what makes it a caller or a wrapper.
-            ScreenLine::Use {
-                name,
-                args: call,
-                body,
-                ..
-            } => {
-                if let Some((callee, bound, inner)) =
-                    compose.expand(ctx.screens, name, call, args, body)
-                {
-                    out.extend(build_lines(
-                        &callee.body,
-                        ctx,
-                        &bound,
-                        inner,
-                        text,
-                        font,
-                        max_width,
-                    ));
-                }
-            }
-            ScreenLine::Transclude { .. } => {
-                // The block is built with the scope it was written in, and with no pane of its own:
-                // it *is* the pane, so a `transclude` written inside a block places nothing. Nesting
-                // one that far is a chain three `use`s deep, and nothing asks for it.
-                if let Some((lines, pane_args)) = compose.block() {
-                    out.extend(build_lines(
-                        lines,
-                        ctx,
-                        pane_args,
-                        Compose::default(),
-                        text,
-                        font,
-                        max_width,
-                    ));
+            ScreenLine::Use { .. } | ScreenLine::Transclude { .. } => {
+                if let Some(nodes) = composed(line, compose, ctx, args, text, font, max_width) {
+                    out.extend(nodes);
                 }
             }
             ScreenLine::Node(node) => {
@@ -122,8 +98,22 @@ fn build_node(
     let widget = ctx.registry.get(&node.name);
     let leaf = widget.is_some_and(|widget| widget.category == Category::Leaf);
     let mut built = Node::new(kind_of(node), Vec::new());
+
+    // The style the screen's prefix gives this widget, when the project declares one (`SCREENS.md
+    // §5.2`). Applied *before* the arguments, so a `style = …` written on the node is applied after
+    // and wins — which is the order the rule is stated in: the prefix is what a widget falls back to.
+    if let Some(style) = prefixed_style(ctx, compose.prefix, &node.name) {
+        apply_style(&mut built, style, ctx);
+    }
     apply_args(&mut built, &node.args, ctx, args, leaf);
 
+    // A widget's children are a block of their own, so a `style_prefix` among them scopes to them —
+    // the same rule as any other block, and the reason the prefix is resolved here rather than only at
+    // the top of a screen.
+    let compose = Compose {
+        prefix: declared_prefix(&node.children).or(compose.prefix),
+        ..compose
+    };
     for line in &node.children {
         apply_line(
             line, widget, &mut built, ctx, args, compose, text, font, max_width,
@@ -148,11 +138,17 @@ fn apply_line(
     max_width: f32,
 ) {
     match line {
-        ScreenLine::Layer { .. } => {}
+        ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
         ScreenLine::If {
             condition, body, ..
         } => {
             if eval(condition, args) {
+                // A branch is a block, so a prefix declared inside it scopes to it — `build_lines`
+                // re-reads a block it is handed, and this is the path that does not go through it.
+                let compose = Compose {
+                    prefix: declared_prefix(body).or(compose.prefix),
+                    ..compose
+                };
                 for child in body {
                     apply_line(
                         child,
@@ -168,39 +164,9 @@ fn apply_line(
                 }
             }
         }
-        // A widget's children may be a composition, which expands to however many nodes the used
-        // screen draws — so it is built as a list and appended, not turned into one child.
-        ScreenLine::Use {
-            name,
-            args: call,
-            body,
-            ..
-        } => {
-            if let Some((callee, bound, inner)) =
-                compose.expand(ctx.screens, name, call, args, body)
-            {
-                parent.children.extend(build_lines(
-                    &callee.body,
-                    ctx,
-                    &bound,
-                    inner,
-                    text,
-                    font,
-                    max_width,
-                ));
-            }
-        }
-        ScreenLine::Transclude { .. } => {
-            if let Some((lines, pane_args)) = compose.block() {
-                parent.children.extend(build_lines(
-                    lines,
-                    ctx,
-                    pane_args,
-                    Compose::default(),
-                    text,
-                    font,
-                    max_width,
-                ));
+        ScreenLine::Use { .. } | ScreenLine::Transclude { .. } => {
+            if let Some(nodes) = composed(line, compose, ctx, args, text, font, max_width) {
+                parent.children.extend(nodes);
             }
         }
         ScreenLine::Node(child) => {
@@ -235,6 +201,83 @@ fn kind_of(node: &ScreenNode) -> Kind {
         // will refine. They lay out as a measured box because nothing yet measures them.
         _ => Kind::Measured { size: Size::ZERO },
     }
+}
+
+/// The nodes a composition line draws, if it is one.
+///
+/// Composition's two halves: `use` expands the screen it names, with its own parameters bound from
+/// this call's arguments, and `transclude` places the block *this* body was handed. Which of the two a
+/// screen has is what makes it a caller or a wrapper. A list rather than a node, because either draws
+/// however many nodes there are — which is why the two callers append instead of pushing.
+fn composed(
+    line: &ScreenLine,
+    compose: Compose<'_>,
+    ctx: &Ctx,
+    args: &Args,
+    text: &mut vela_text::TextEngine,
+    font: &str,
+    max_width: f32,
+) -> Option<Vec<Node>> {
+    match line {
+        ScreenLine::Use {
+            name,
+            args: call,
+            body,
+            ..
+        } => {
+            let (callee, bound, inner) = compose.expand(ctx.screens, name, call, args, body)?;
+            Some(build_lines(
+                &callee.body,
+                ctx,
+                &bound,
+                inner,
+                text,
+                font,
+                max_width,
+            ))
+        }
+        ScreenLine::Transclude { .. } => {
+            // The block is built with the scope it was written in, and with no pane of its own: it
+            // *is* the pane, so a `transclude` written inside a block places nothing. Nesting one that
+            // far is a chain three `use`s deep, and nothing asks for it.
+            let (lines, pane_args) = compose.block()?;
+            Some(build_lines(
+                lines,
+                ctx,
+                pane_args,
+                Compose::default(),
+                text,
+                font,
+                max_width,
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// The style prefix a block declares, if it declares one (`SCREENS.md §5.2`).
+///
+/// The first line wins: a block that declares two prefixes is a mistake nothing reports — a
+/// `style_prefix` is an ordinary line — and taking the first is the one a reader sees.
+fn declared_prefix(lines: &[ScreenLine]) -> Option<&str> {
+    lines.iter().find_map(|line| match line {
+        ScreenLine::StylePrefix { name, .. } => Some(name.as_str()),
+        _ => None,
+    })
+}
+
+/// The style a prefix gives a widget, when the project declares one.
+///
+/// `say` and a `text` give `say_text`. A project that declares no such style falls back to the
+/// widget's own defaults rather than being an error — which is what makes a prefix safe to write
+/// before every style it names exists, and it is the rule Ren'Py has.
+fn prefixed_style<'a>(ctx: &'a Ctx, prefix: Option<&str>, widget: &str) -> Option<&'a str> {
+    let prefix = prefix?;
+    let name = format!("{prefix}_{widget}");
+    ctx.styles
+        .iter()
+        .find(|style| style.name == name)
+        .map(|style| style.name.as_str())
 }
 
 /// A grid's declared column count.

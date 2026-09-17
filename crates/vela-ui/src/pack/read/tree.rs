@@ -140,6 +140,11 @@ impl Reader<'_> {
                 }
             }
             4 => ScreenLine::Transclude { span: self.span() },
+            5 => {
+                let span = self.span();
+                let name = self.string();
+                ScreenLine::StylePrefix { span, name }
+            }
             _ => ScreenLine::Node(self.node()),
         }
     }

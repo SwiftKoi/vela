@@ -96,7 +96,9 @@ fn collect_lines(
 ) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
             ScreenLine::If {
                 condition, body, ..
             } => {

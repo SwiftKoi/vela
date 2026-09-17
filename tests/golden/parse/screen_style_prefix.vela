@@ -1,0 +1,14 @@
+screen say:
+    style_prefix say
+
+    window:
+        text "The rain had stopped."
+
+screen menu:
+    style_prefix menu
+
+    column:
+        style_prefix sub
+        text "Inner"
+    text "Outer"
+    text "Own", style = body

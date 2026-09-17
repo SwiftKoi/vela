@@ -23,7 +23,10 @@ use crate::theme::Palette;
 /// Version 4 adds the two composition lines — `use` and `transclude` (`SCREENS.md §2`). A
 /// version-3 reader would read either tag as a widget, which is a *different* tree, so an old
 /// runtime must refuse rather than misread it.
-pub const PACK_VERSION: u16 = 4;
+/// Version 5 adds `style_prefix` (`SCREENS.md §5.2`). A version-4 reader would read it as a widget
+/// named `""`, which draws nothing and would leave the screens it skins unskinned — a wrong screen
+/// rather than a refused one.
+pub const PACK_VERSION: u16 = 5;
 
 /// The four bytes every pack starts with.
 ///

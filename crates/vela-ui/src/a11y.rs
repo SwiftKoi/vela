@@ -121,7 +121,9 @@ fn nodes(
     lines
         .iter()
         .filter_map(|line| match line {
-            ScreenLine::Layer { .. } => None,
+            // A `layer` line and a `style_prefix` line place nothing: the first names where the
+            // screen draws, the second how its widgets look.
+            ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => None,
             // A conditional contributes its branches' nodes: what a screen reader reads is what
             // is on screen, and which branch that is is a runtime question.
             ScreenLine::If { body, .. } => Some(nodes(body, registry, screens, pane, depth, focus)),
@@ -261,7 +263,9 @@ pub fn check_labels(lines: &[ScreenLine], registry: &WidgetRegistry) -> Vec<Diag
 fn check_lines(lines: &[ScreenLine], registry: &WidgetRegistry, out: &mut Vec<Diagnostic>) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { body, .. } => check_lines(body, registry, out),
             // The block is this screen's own code, so a button written in it is checked here. The
             // used screen's body is checked when that screen is checked — per screen, like every

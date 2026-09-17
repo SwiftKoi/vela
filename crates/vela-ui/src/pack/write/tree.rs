@@ -134,6 +134,11 @@ impl Writer {
                 self.u8(4);
                 self.span(*span);
             }
+            ScreenLine::StylePrefix { span, name } => {
+                self.u8(5);
+                self.span(*span);
+                self.string(name);
+            }
             ScreenLine::Node(node) => {
                 self.u8(2);
                 self.node(node);

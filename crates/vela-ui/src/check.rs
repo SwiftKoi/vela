@@ -77,7 +77,9 @@ pub fn check_screen(
 fn check_actions(lines: &[ScreenLine], actions: &ActionRegistry, out: &mut Vec<Diagnostic>) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
             ScreenLine::If {
                 condition, body, ..
             } => {
@@ -229,7 +231,9 @@ fn check_lines(
 ) {
     for line in lines {
         match line {
-            ScreenLine::Layer { .. } | ScreenLine::Transclude { .. } => {}
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { body, .. } => check_lines(body, parent, registry, out),
             // A `use`'s block is this screen's own code, sitting where the `use` is — so it is
             // checked against the same parent widget, and its own widgets and props are checked

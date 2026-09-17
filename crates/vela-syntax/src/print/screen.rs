@@ -31,6 +31,7 @@ fn each(writer: &mut Writer<'_>, lines: &[ScreenLine]) {
 fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
     match line {
         ScreenLine::Layer { name, .. } => writer.line(&format!("layer {name}")),
+        ScreenLine::StylePrefix { name, .. } => writer.line(&format!("style_prefix {name}")),
         ScreenLine::If {
             span,
             condition,
@@ -113,6 +114,7 @@ fn arg_text(arg: &ScreenArg) -> String {
 fn start_of(line: &ScreenLine) -> u32 {
     match line {
         ScreenLine::Layer { span, .. }
+        | ScreenLine::StylePrefix { span, .. }
         | ScreenLine::If { span, .. }
         | ScreenLine::Use { span, .. }
         | ScreenLine::Transclude { span } => span.start(),

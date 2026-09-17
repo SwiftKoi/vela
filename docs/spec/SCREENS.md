@@ -254,6 +254,38 @@ needs `enable_if` evaluated, which no phase does. A state nothing can select is 
 > `tests/paint.rs` pins that the focused control's subtree is the one that changes, which is also what
 > holds the painter's focus numbering to the one `focus::hotspots` produces.
 
+### 5.2 Style prefixes
+
+A screen gives its widgets a style without naming one on each of them:
+
+```vela
+screen say:
+    style_prefix say
+
+    window:
+        text "The rain has stopped."
+```
+
+`style_prefix say` means every widget in the block falls back to `say_<widget>` — `say_window` for the
+`window`, `say_text` for the `text` — when the project declares that style. Ren'Py writes the prefix as
+a string; here it is a **name**, because Vela names a style the way it names anything else (`style =
+body`) and dropping the quotes is the migrator's job.
+
+- **A widget's own `style = …` wins.** The prefix is what a widget falls back to, not what it is given,
+  so a node that names a style keeps it and the rest of the screen still gets the skin.
+- **A prefix that names nothing is not an error.** It falls back to the widget's own defaults, which is
+  what makes a prefix safe to write before every style it names exists.
+- **The block is the scope.** A nested block that declares its own prefix overrides the enclosing one
+  inside itself and nowhere else — an `if` branch and a widget's children are blocks like any other.
+- **A `use`d screen does not inherit the caller's prefix.** A screen is a function (§2.1): its look
+  cannot depend on where it was used, and a prefix that leaked across a `use` would make it do exactly
+  that.
+
+> **Implemented (M12.1).** `style_prefix` as a screen line, resolved per widget with the fallback above,
+> and carried in the screen pack (version 5). `crates/vela-ui/tests/instantiate.rs` pins each rule: the
+> prefixed style per widget, an explicit `style =` winning, the silent fallback, a nested override
+> scoping to its block, and a used screen starting unsuffixed.
+
 ## 6. Animation
 
 Animation is declarative over state, which is what makes it deterministic and skippable.

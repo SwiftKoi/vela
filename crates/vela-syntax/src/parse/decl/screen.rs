@@ -45,6 +45,10 @@ impl Parser<'_> {
         if self.at_keyword_word("layer") {
             return self.parse_screen_layer(start);
         }
+        // Contextual, like `layer`: a word only special in this position.
+        if self.at_keyword_word("style_prefix") {
+            return self.parse_style_prefix(start);
+        }
         // Composition's other half: where a caller's block lands. Contextual like `layer` — the
         // word is only special in this position, so a project keeps it as a name everywhere else.
         if self.at_keyword_word("transclude") {
@@ -72,6 +76,20 @@ impl Parser<'_> {
             span: start.to(self.prev_span()),
             condition,
             body,
+        })
+    }
+
+    /// `style_prefix <name>`.
+    ///
+    /// A *name*, not a string: Vela names a style the way it names anything else (`style = body`), and
+    /// the migrator's job is to drop Ren'Py's quotes — the same trade every other line here makes.
+    fn parse_style_prefix(&mut self, start: vela_span::Span) -> Option<ScreenLine> {
+        self.bump();
+        let name = self.expect_name("a style prefix").unwrap_or_default();
+        self.end_statement();
+        Some(ScreenLine::StylePrefix {
+            span: start.to(self.prev_span()),
+            name,
         })
     }
 

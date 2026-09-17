@@ -180,6 +180,7 @@ screen wrapper:
 
 screen dialogue(name: str?, line):
     layer ui
+    style_prefix dialogue
     use wrapper:
         box at bottom, stretch_x:
             pad 24
@@ -209,6 +210,26 @@ fn a_state_setting_survives_the_round_trip() {
         .collect();
     assert!(keys.contains(&"color"), "{keys:?}");
     assert!(keys.contains(&"hover_color"), "{keys:?}");
+}
+
+/// `style_prefix` survives as itself rather than as a widget named `""`.
+///
+/// It carries no widget name, so the failure this pins is the fall-through arm: a reader that did not
+/// know the tag would decode it as a node, and every screen it skins would come back unskinned.
+#[test]
+fn a_style_prefix_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let set = ScreenPack::from_bytes(&bytes)
+        .expect("a pack decodes")
+        .into_set();
+
+    let dialogue = set.screen("dialogue").expect("the screen survives");
+    assert!(
+        dialogue.body.iter().any(
+            |line| matches!(line, vela_syntax::ScreenLine::StylePrefix { name, .. } if name == "dialogue")
+        ),
+        "`style_prefix` did not survive"
+    );
 }
 
 /// `use` and `transclude` survive the codec, and land as themselves rather than as widgets.

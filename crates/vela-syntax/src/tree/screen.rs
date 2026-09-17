@@ -32,6 +32,18 @@ pub enum ScreenLine {
         /// The layer's name.
         name: String,
     },
+    /// `style_prefix <name>` — a style every widget in this block falls back to.
+    ///
+    /// Each widget resolves `{name}_{widget}` if such a style is declared (`say_text` for a `text`),
+    /// which is how one line gives a screen's whole contents a skin. A widget that writes its own
+    /// `style = …` keeps it; a block that declares its own prefix overrides the enclosing one; and a
+    /// used screen does not inherit the caller's, because a screen is a function (`§2.1`).
+    StylePrefix {
+        /// The line's span.
+        span: Span,
+        /// The prefix, as written.
+        name: String,
+    },
     /// `if <condition>:` with an indented body.
     If {
         /// The line's span.
