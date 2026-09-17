@@ -243,3 +243,21 @@ fn an_empty_screen_is_static() {
     let body = body_of(&parsed);
     assert!(deps_of(&screens_of(&parsed), body).is_empty());
 }
+
+/// A name read only in an `elif` or an `else` is a dependency like any other.
+///
+/// `SCREENS.md §8.2`: the set decides whether a screen relays out, and a walk that stopped at the
+/// `then` arm would leave the screen showing stale text in the arms beside it — the failure this whole
+/// module exists to make impossible.
+#[test]
+fn a_name_read_only_in_an_elif_is_a_dependency() {
+    let parsed = parse(
+        FileId::from_raw(0),
+        "screen s:\n    if a:\n        text \"A\"\n    elif b:\n        text \"B\"\n    else:\n        text c\n",
+    );
+    let deps = deps_of(&screens_of(&parsed), body_of(&parsed));
+    let read = names(&deps);
+    assert!(deps.contains("a"), "the `if` condition: {read:?}");
+    assert!(deps.contains("b"), "the `elif` condition: {read:?}");
+    assert!(deps.contains("c"), "a read in the `else`: {read:?}");
+}

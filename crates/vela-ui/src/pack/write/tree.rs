@@ -109,11 +109,26 @@ impl Writer {
                 span,
                 condition,
                 body,
+                elifs,
+                else_body,
             } => {
                 self.u8(1);
                 self.span(*span);
                 self.expr(condition);
                 self.lines(body);
+                self.u32(count(elifs.len()));
+                for clause in elifs {
+                    self.span(clause.span);
+                    self.expr(&clause.condition);
+                    self.lines(&clause.body);
+                }
+                match else_body {
+                    Some(body) => {
+                        self.flag(true);
+                        self.lines(body);
+                    }
+                    None => self.flag(false),
+                }
             }
             ScreenLine::Use {
                 span,

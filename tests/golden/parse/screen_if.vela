@@ -1,0 +1,15 @@
+screen if_chain(first, second):
+    if first:
+        text "A"
+    elif second:
+        text "B"
+    else:
+        text "C"
+
+screen nested_arm(flag):
+    box:
+        if flag:
+            text "Shown"
+        elif flag:
+            if flag:
+                text "Nested"

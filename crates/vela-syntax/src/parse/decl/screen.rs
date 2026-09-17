@@ -6,7 +6,7 @@
 
 use crate::lex::token::{Keyword, TokenKind};
 use crate::parse::parser::Parser;
-use crate::tree::{Expr, ScreenArg, ScreenLine, ScreenNode};
+use crate::tree::{Expr, ScreenArg, ScreenElif, ScreenLine, ScreenNode};
 
 impl Parser<'_> {
     /// Parses the indented body of a `screen`.
@@ -67,15 +67,43 @@ impl Parser<'_> {
         self.parse_screen_node(start).map(ScreenLine::Node)
     }
 
-    /// `if <condition>:` and its body.
+    /// `if <condition>:` and its body, then any `elif` arms and an `else`.
+    ///
+    /// The chain is parsed into one line rather than into sibling lines, which is the shape the
+    /// statement form already has (`LANGUAGE.md §3`). `elif` and `else` are reserved words, so this
+    /// loop is the only place a screen body consumes them: written anywhere else they are a name the
+    /// widget vocabulary does not know, which is the honest report for a conditional with no `if`.
     fn parse_screen_if(&mut self, start: vela_span::Span) -> Option<ScreenLine> {
         self.bump();
         let condition = self.parse_expr();
         let body = self.parse_screen_body("`if`");
+
+        let mut elifs = Vec::new();
+        while self.at(TokenKind::Keyword(Keyword::Elif)) {
+            let elif_start = self.span();
+            self.bump();
+            let elif_condition = self.parse_expr();
+            let elif_body = self.parse_screen_body("`elif`");
+            elifs.push(ScreenElif {
+                span: elif_start.to(self.prev_span()),
+                condition: elif_condition,
+                body: elif_body,
+            });
+        }
+
+        let else_body = if self.at(TokenKind::Keyword(Keyword::Else)) {
+            self.bump();
+            Some(self.parse_screen_body("`else`"))
+        } else {
+            None
+        };
+
         Some(ScreenLine::If {
             span: start.to(self.prev_span()),
             condition,
             body,
+            elifs,
+            else_body,
         })
     }
 

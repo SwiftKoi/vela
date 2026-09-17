@@ -106,6 +106,43 @@ screen, it is an unbounded one: drawing it would draw it again.
 > 4 to carry both lines (§13.1), and `crates/vela-ui/tests/compose.rs` pins the diagnostics, the tree
 > a composition draws, and the fold into the caller's dependency set.
 
+### 2.2 Conditionals
+
+A screen draws the first arm whose condition holds, and nothing when none holds and there is no `else`:
+
+```vela
+screen status(ready: bool, waiting: bool):
+    if ready:
+        text "Ready."
+    elif waiting:
+        text "Waiting."
+    else:
+        text "Nothing."
+```
+
+- **The arms are clauses of one line.** `elif` and `else` belong to the `if` they continue, and there is
+  no way to write one without it — the shape the statement form already has (`LANGUAGE.md §3`). A
+  conditional is therefore one node, and choosing an arm is one decision rather than a walk that has to
+  remember what the line before it concluded.
+- **Every arm is checked.** Which arm draws is a runtime question (§8.2), so an unknown widget or a
+  wrong prop in an `elif` is as real as one in the `then`, and an arm nobody has run yet is not an arm
+  nobody wrote.
+- **Every arm's reads are dependencies.** The same reason: a screen whose `elif` reads a field is stale
+  when that field changes, whether or not the `elif` drew last frame.
+- **A `transclude` in any arm places the caller's block** (§2.1), which is what lets a wrapper put
+  content in one of several places.
+
+> **Note.** An arm is only as live as its condition can be. The screen evaluator reads the screen's
+> parameters and a comparison of them — nothing else yet — so a condition over data the runtime has not
+> bound is false, and a chain over one draws its `else`. That is §8's work, and it is stated here so a
+> chain that always takes one arm is a known limit rather than a puzzle.
+
+> **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the screen pack moved to
+> version 7. `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/instantiate.rs` that
+> the first arm to hold is the one drawn, `tests/check.rs` that an arm's mistakes are reported,
+> `tests/compose.rs` that a `transclude` in an `elif` places the block, and `tests/reactivity.rs` that
+> an `elif`'s reads are the screen's.
+
 ## 3. Widget tree
 
 The built-in node set. Each is a registered widget (`CONVENTIONS.md §4.2`), not a hardcoded

@@ -63,11 +63,9 @@ fn build_lines(
             // A `layer` names where the screen draws and a `style_prefix` how its widgets look;
             // neither draws anything itself, and the prefix is read above.
             ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
-            ScreenLine::If {
-                condition, body, ..
-            } => {
-                if eval(condition, args) {
-                    out.extend(build_lines(body, ctx, args, compose, text, font, max_width));
+            ScreenLine::If { .. } => {
+                if let Some(arm) = arm_of(line, args) {
+                    out.extend(build_lines(arm, ctx, args, compose, text, font, max_width));
                 }
             }
             ScreenLine::Use { .. } | ScreenLine::Transclude { .. } => {
@@ -139,17 +137,15 @@ fn apply_line(
 ) {
     match line {
         ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
-        ScreenLine::If {
-            condition, body, ..
-        } => {
-            if eval(condition, args) {
+        ScreenLine::If { .. } => {
+            if let Some(arm) = arm_of(line, args) {
                 // A branch is a block, so a prefix declared inside it scopes to it — `build_lines`
                 // re-reads a block it is handed, and this is the path that does not go through it.
                 let compose = Compose {
-                    prefix: declared_prefix(body).or(compose.prefix),
+                    prefix: declared_prefix(arm).or(compose.prefix),
                     ..compose
                 };
-                for child in body {
+                for child in arm {
                     apply_line(
                         child,
                         parent_widget,
@@ -253,6 +249,33 @@ fn composed(
         }
         _ => None,
     }
+}
+
+/// The arm an `if` draws: the first condition that holds, or the `else` when none does.
+///
+/// `None` for a line that is not an `if`, and for an `if` whose every arm fails. One decision in one
+/// place, because the two paths that build a body — a top-level line and one nested in a widget —
+/// would otherwise each have to get the order and the short circuit right.
+fn arm_of<'a>(line: &'a ScreenLine, args: &Args) -> Option<&'a [ScreenLine]> {
+    let ScreenLine::If {
+        condition,
+        body,
+        elifs,
+        else_body,
+        ..
+    } = line
+    else {
+        return None;
+    };
+    if eval(condition, args) {
+        return Some(body);
+    }
+    for clause in elifs {
+        if eval(&clause.condition, args) {
+            return Some(&clause.body);
+        }
+    }
+    else_body.as_deref()
 }
 
 /// The style prefix a block declares, if it declares one (`SCREENS.md §5.2`).

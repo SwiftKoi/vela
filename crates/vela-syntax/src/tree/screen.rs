@@ -22,6 +22,22 @@
 use crate::tree::Expr;
 use vela_span::Span;
 
+/// One `elif` arm of a screen's [`ScreenLine::If`].
+///
+/// The same shape as the language's `ElifClause` for statements (`LANGUAGE.md §3`,
+/// `if_stmt = "if" expr block { "elif" expr block } [ "else" block ]`) — deliberately, because a
+/// conditional is one idea in Vela and a screen conditional that could not spell `elif` would be a
+/// second, narrower one.
+#[derive(Clone, Debug)]
+pub struct ScreenElif {
+    /// The clause's span, from its `elif` to the end of its body.
+    pub span: Span,
+    /// What this arm tests. Evaluated only when no arm before it held.
+    pub condition: Expr,
+    /// The lines drawn when it holds.
+    pub body: Vec<ScreenLine>,
+}
+
 /// One line of a screen body.
 #[derive(Clone, Debug)]
 pub enum ScreenLine {
@@ -44,14 +60,23 @@ pub enum ScreenLine {
         /// The prefix, as written.
         name: String,
     },
-    /// `if <condition>:` with an indented body.
+    /// `if <condition>:` with an indented body, and the arms that follow it.
+    ///
+    /// The `elif`s and the `else` are *clauses of this line*, not lines beside it, which is the shape
+    /// the statement form already has (`IfStmt`). That is what keeps a conditional one node: the arms
+    /// belong to one another, so a stray `else` cannot exist, and choosing an arm is a single
+    /// decision rather than a walk that has to remember what the previous line concluded.
     If {
-        /// The line's span.
+        /// The line's span, over the whole chain.
         span: Span,
-        /// What is being tested.
+        /// What the `if` tests.
         condition: Expr,
         /// The lines drawn when it holds.
         body: Vec<ScreenLine>,
+        /// The `elif` arms, in order. Each is tested only if everything before it did not hold.
+        elifs: Vec<ScreenElif>,
+        /// The `else` arm, if one was written: the lines drawn when nothing held.
+        else_body: Option<Vec<ScreenLine>>,
     },
     /// `use <screen> [ ( args ) ] [ : block ]` — another screen, included here.
     ///
@@ -80,6 +105,34 @@ pub enum ScreenLine {
     },
     /// A widget, or a prop written on its own line.
     Node(ScreenNode),
+}
+
+impl ScreenLine {
+    /// The arms an `if` line holds, in the order they are written: the `then` body, each `elif`, then
+    /// the `else` if there is one.
+    ///
+    /// Empty for a line that holds no conditional arm. Three kinds of body live on one line, and every
+    /// walk over a screen body has to see all of them — a button in an `elif` is as much a button as
+    /// one in the `then`. A walker that destructured `body` and moved on compiles perfectly and
+    /// silently loses the arms beside it, which no compiler catches, so the question is answered once
+    /// here rather than remembered at each of a dozen sites.
+    #[must_use]
+    pub fn arms(&self) -> Vec<&[ScreenLine]> {
+        let Self::If {
+            body,
+            elifs,
+            else_body,
+            ..
+        } = self
+        else {
+            return Vec::new();
+        };
+        let mut arms: Vec<&[ScreenLine]> = Vec::with_capacity(2 + elifs.len());
+        arms.push(body);
+        arms.extend(elifs.iter().map(|clause| clause.body.as_slice()));
+        arms.extend(else_body.iter().map(Vec::as_slice));
+        arms
+    }
 }
 
 /// One word or value after a name.

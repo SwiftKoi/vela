@@ -233,3 +233,51 @@ fn a_grid_reads_its_column_count() {
         .expect("the screen is declared");
     assert!(matches!(root.children[0].kind, Kind::Grid { columns: 3 }));
 }
+
+/// An `if` draws the first arm that holds, and the `else` when none does.
+///
+/// *First*, not last: a chain where two conditions hold must draw the earlier one, which is what an
+/// `elif` means. The arms are one line, so this is one decision rather than a walk that remembers what
+/// the line before it concluded.
+#[test]
+fn an_if_draws_the_first_arm_that_holds() {
+    let source = "\
+screen s(first: bool, second: bool):
+    if first:
+        text \"one\"
+    elif second:
+        text \"two\"
+    else:
+        text \"three\"
+";
+    let arm = |first: bool, second: bool| -> String {
+        let mut args = Args::new();
+        args.set("first", Value::Bool(first));
+        args.set("second", Value::Bool(second));
+        let root = built_screen(source, "s", &args);
+        match &root.children[0].kind {
+            Kind::Text { text, .. } => text.clone(),
+            other => panic!("expected the chosen arm's text, got {other:?}"),
+        }
+    };
+    assert_eq!(arm(true, true), "one", "the `then` arm wins a tie");
+    assert_eq!(arm(false, true), "two");
+    assert_eq!(arm(false, false), "three", "and `else` is the last resort");
+}
+
+/// An `if` no arm of which holds, and which has no `else`, draws nothing.
+#[test]
+fn an_if_with_no_arm_holding_draws_nothing() {
+    let mut args = Args::new();
+    args.set("flag", Value::Bool(false));
+    let root = built_screen(
+        "screen s(flag: bool):\n    if flag:\n        text \"shown\"\n",
+        "s",
+        &args,
+    );
+    assert!(
+        root.children.is_empty(),
+        "an arm that does not hold drew something: {:?}",
+        root.children
+    );
+}

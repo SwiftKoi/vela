@@ -4,7 +4,9 @@
 //! length comes from [`Reader::count`], which refuses a count larger than the container before
 //! anything is allocated.
 
-use vela_syntax::{Param, ScreenArg, ScreenDecl, ScreenLine, ScreenNode, Setting, StyleDecl, Type};
+use vela_syntax::{
+    Param, ScreenArg, ScreenDecl, ScreenElif, ScreenLine, ScreenNode, Setting, StyleDecl, Type,
+};
 
 use crate::theme::{Fonts, Palette, Rgb};
 
@@ -117,10 +119,25 @@ impl Reader<'_> {
                 let span = self.span();
                 let condition = self.expr();
                 let body = self.lines();
+                let count = self.count();
+                let mut elifs = Vec::with_capacity(count.min(1024));
+                for _ in 0..count {
+                    let span = self.span();
+                    let condition = self.expr();
+                    let body = self.lines();
+                    elifs.push(ScreenElif {
+                        span,
+                        condition,
+                        body,
+                    });
+                }
+                let else_body = self.flag().then(|| self.lines());
                 ScreenLine::If {
                     span,
                     condition,
                     body,
+                    elifs,
+                    else_body,
                 }
             }
             3 => {

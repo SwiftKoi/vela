@@ -294,3 +294,41 @@ fn a_used_screens_reads_become_the_callers() {
         deps.iter().collect::<Vec<_>>()
     );
 }
+
+/// A `transclude` in an `elif` arm places the block.
+///
+/// The sample's `game_menu` writes its `transclude` once per branch of a three-way `if`, so a walk
+/// that only looked at the `then` arm would call every one of those blocks content that goes
+/// nowhere — `W4012` on the one composition the whole file is built from.
+#[test]
+fn a_transclude_in_an_elif_places_the_block() {
+    let source = "\
+screen wrapper(scroll):
+    box:
+        if scroll:
+            transclude
+        elif scroll:
+            transclude
+
+screen page:
+    use wrapper(true):
+        text \"Hello.\"
+";
+    assert_eq!(codes(source), Vec::<String>::new(), "{:?}", codes(source));
+}
+
+/// A `use` inside an `else` is an edge like any other, so a cycle written there is still a cycle.
+///
+/// The graph is built from every arm: which one draws is a runtime question, and `E5011` exists
+/// because drawing the loop would not terminate.
+#[test]
+fn a_use_inside_an_else_is_still_an_edge() {
+    let source = "\
+screen a(flag):
+    if flag:
+        text \"fine\"
+    else:
+        use a(true)
+";
+    assert_eq!(codes(source), vec!["E5011".to_string()]);
+}

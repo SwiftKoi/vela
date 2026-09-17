@@ -81,10 +81,17 @@ fn check_actions(lines: &[ScreenLine], actions: &ActionRegistry, out: &mut Vec<D
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
             ScreenLine::If {
-                condition, body, ..
+                condition, elifs, ..
             } => {
+                // Every condition, and every arm's body: the arms are checked whether or not one
+                // holds, because which one holds is a runtime question.
                 check_action_expr(condition, actions, out);
-                check_actions(body, actions, out);
+                for clause in elifs {
+                    check_action_expr(&clause.condition, actions, out);
+                }
+                for arm in line.arms() {
+                    check_actions(arm, actions, out);
+                }
             }
             ScreenLine::Use { args, body, .. } => {
                 for arg in args {
@@ -234,7 +241,11 @@ fn check_lines(
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { body, .. } => check_lines(body, parent, registry, out),
+            ScreenLine::If { .. } => {
+                for arm in line.arms() {
+                    check_lines(arm, parent, registry, out);
+                }
+            }
             // A `use`'s block is this screen's own code, sitting where the `use` is — so it is
             // checked against the same parent widget, and its own widgets and props are checked
             // like any other line. The used screen's body is checked when *it* is checked.

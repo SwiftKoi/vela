@@ -22,7 +22,7 @@ pub use decl::{
 };
 pub use expr::{BinOp, Expr, StrPart, UnOp};
 pub use program::Program;
-pub use screen::{ScreenArg, ScreenLine, ScreenNode};
+pub use screen::{ScreenArg, ScreenElif, ScreenLine, ScreenNode};
 pub use stmt::{
     AssignOp, AssignStmt, AudioKind, AudioStmt, CallStmt, ElifClause, ExprStmt, ForStmt, IfStmt,
     JumpStmt, MatchArm, MatchStmt, MenuChoice, MenuStmt, Pattern, ReturnStmt, SayStmt, StageKind,

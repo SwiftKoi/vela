@@ -58,7 +58,13 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
                 out.push(name.clone());
                 uses_in(body, out);
             }
-            ScreenLine::If { body, .. } => uses_in(body, out),
+            ScreenLine::If { .. } => {
+                // One arm is drawn at run time and no walk knows which, so every arm's `use` is a
+                // real edge.
+                for arm in line.arms() {
+                    uses_in(arm, out);
+                }
+            }
             ScreenLine::Node(node) => uses_in(&node.children, out),
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
@@ -77,8 +83,10 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
 pub(crate) fn transcludes(lines: &[ScreenLine]) -> bool {
     lines.iter().any(|line| match line {
         ScreenLine::Transclude { .. } => true,
-        ScreenLine::If { body, .. }
-        | ScreenLine::Use { body, .. }
+        // A `transclude` in any arm places the caller's block: which arm draws is a runtime
+        // question, and a block that reaches one of them has somewhere to land.
+        ScreenLine::If { .. } => line.arms().iter().any(|arm| transcludes(arm)),
+        ScreenLine::Use { body, .. }
         | ScreenLine::Node(vela_syntax::ScreenNode { children: body, .. }) => transcludes(body),
         ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => false,
     })
@@ -106,7 +114,11 @@ fn walk_uses(screens: &[&ScreenDecl], lines: &[ScreenLine], out: &mut Vec<Diagno
                 check_use(screens, *span, name, args, body, out);
                 walk_uses(screens, body, out);
             }
-            ScreenLine::If { body, .. } => walk_uses(screens, body, out),
+            ScreenLine::If { .. } => {
+                for arm in line.arms() {
+                    walk_uses(screens, arm, out);
+                }
+            }
             ScreenLine::Node(node) => walk_uses(screens, &node.children, out),
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }

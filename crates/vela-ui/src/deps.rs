@@ -100,10 +100,23 @@ fn collect_lines(
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
             ScreenLine::If {
-                condition, body, ..
+                condition,
+                body,
+                elifs,
+                else_body,
+                ..
             } => {
+                // Every condition and every arm, because which arm holds is a runtime question and a
+                // dependency set that guessed would show stale text forever in the arms it skipped.
                 collect_expr(condition, out);
                 collect_lines(screens, body, out, path);
+                for clause in elifs {
+                    collect_expr(&clause.condition, out);
+                    collect_lines(screens, &clause.body, out, path);
+                }
+                if let Some(else_body) = else_body {
+                    collect_lines(screens, else_body, out, path);
+                }
             }
             ScreenLine::Use {
                 name, args, body, ..

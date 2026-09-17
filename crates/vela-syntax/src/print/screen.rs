@@ -36,10 +36,31 @@ fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
             span,
             condition,
             body: inner,
+            elifs,
+            else_body,
         } => {
             writer.line(&format!("if {}:", expr::text(condition)));
             writer.note(span.start());
             body(writer, inner);
+
+            for clause in elifs {
+                writer.comments_until(clause.span.start());
+                writer.blank_before(clause.span.start());
+                writer.line(&format!("elif {}:", expr::text(&clause.condition)));
+                writer.note(clause.span.start());
+                body(writer, &clause.body);
+            }
+
+            if let Some(else_body) = else_body {
+                // A comment between the last arm and the `else` belongs to the `else`, so it is
+                // written before the keyword rather than after it — the same rule the statement
+                // form's printer follows.
+                if let Some(first) = else_body.first() {
+                    writer.comments_until(start_of(first));
+                }
+                writer.line("else:");
+                body(writer, else_body);
+            }
         }
         ScreenLine::Use {
             span,

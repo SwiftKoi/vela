@@ -145,7 +145,11 @@ fn check_lines(lines: &[ScreenLine], known: &[&str], out: &mut Vec<Diagnostic>) 
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { body, .. } => check_lines(body, known, out),
+            ScreenLine::If { .. } => {
+                for arm in line.arms() {
+                    check_lines(arm, known, out);
+                }
+            }
             // A `use` block is written here, so its styles are this file's — which is the same
             // reason the block is checked as this screen's own code.
             ScreenLine::Use { body, .. } => check_lines(body, known, out),

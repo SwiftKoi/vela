@@ -169,3 +169,17 @@ fn a_conditional_keeps_its_parent_widget() {
     let diagnostics = diagnose("    box:\n        if true:\n            pad 24\n    \n");
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
+
+/// A widget in an `elif` or an `else` is checked like any other.
+///
+/// Which arm draws is a runtime question, and a typo in an arm that has not been run yet is still a
+/// typo — so the arms beside the `then` are walked, not skipped.
+#[test]
+fn a_mistake_in_an_elif_or_else_is_reported() {
+    let diagnostics = diagnose(
+        "    if true:\n        text \"ok\"\n    elif false:\n        txt \"a\"\n    else:\n        colunm\n",
+    );
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5005");
+    assert_eq!(diagnostics[1].0, "E5005");
+}

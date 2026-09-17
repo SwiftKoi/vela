@@ -124,9 +124,14 @@ fn nodes(
             // A `layer` line and a `style_prefix` line place nothing: the first names where the
             // screen draws, the second how its widgets look.
             ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => None,
-            // A conditional contributes its branches' nodes: what a screen reader reads is what
-            // is on screen, and which branch that is is a runtime question.
-            ScreenLine::If { body, .. } => Some(nodes(body, registry, screens, pane, depth, focus)),
+            // A conditional contributes every arm's nodes: what a screen reader reads is what is on
+            // screen, and which arm that is is a runtime question.
+            ScreenLine::If { .. } => Some(
+                line.arms()
+                    .into_iter()
+                    .flat_map(|arm| nodes(arm, registry, screens, pane, depth, focus))
+                    .collect(),
+            ),
             ScreenLine::Use { name, body, .. } => Some(match compose::find(screens, name) {
                 Some(callee) => nodes(
                     &callee.body,
@@ -266,7 +271,11 @@ fn check_lines(lines: &[ScreenLine], registry: &WidgetRegistry, out: &mut Vec<Di
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { body, .. } => check_lines(body, registry, out),
+            ScreenLine::If { .. } => {
+                for arm in line.arms() {
+                    check_lines(arm, registry, out);
+                }
+            }
             // The block is this screen's own code, so a button written in it is checked here. The
             // used screen's body is checked when that screen is checked — per screen, like every
             // other per-file rule.

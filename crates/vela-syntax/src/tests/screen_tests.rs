@@ -256,3 +256,43 @@ fn a_reserved_word_is_a_value_reference() {
             .collect::<Vec<_>>()
     );
 }
+
+/// An `if`'s `elif`s and its `else` are arms of one line, not lines beside it.
+///
+/// The shape is the statement form's (`IfStmt`, `LANGUAGE.md §3`), and it is what keeps a conditional
+/// one node: the arms belong to one another, so a stray `else` is not something the grammar can
+/// produce, and choosing an arm is a single decision rather than a walk that has to remember what the
+/// line before it concluded.
+#[test]
+fn an_if_chain_is_one_line_with_its_arms() {
+    let program = parse_src(
+        "screen s:\n    if a:\n        text \"A\"\n    elif b:\n        text \"B\"\n    elif c:\n        text \"C\"\n    else:\n        pass\n",
+    );
+    assert!(
+        program.diagnostics.is_empty(),
+        "{:?}",
+        program
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
+            .collect::<Vec<_>>()
+    );
+
+    let Some(Item::Screen(screen)) = program.program.items.first() else {
+        panic!("expected a screen");
+    };
+    assert_eq!(screen.body.len(), 1, "the chain is one line, not five");
+
+    let ScreenLine::If {
+        body,
+        elifs,
+        else_body,
+        ..
+    } = &screen.body[0]
+    else {
+        panic!("expected an `if`");
+    };
+    assert_eq!(body.len(), 1, "the `then` arm");
+    assert_eq!(elifs.len(), 2, "two `elif` arms");
+    assert!(else_body.is_some(), "and the `else` is the same line's");
+}

@@ -30,7 +30,10 @@ use crate::theme::{Fonts, Palette};
 /// would read the four sections it knows and never see the table — it does not require the container
 /// to be exhausted — leaving every `font = theme.<token>` falling back to the default font. A wrong
 /// screen, so an old runtime must refuse rather than misread it.
-pub const PACK_VERSION: u16 = 6;
+/// Version 7 adds an `if`'s `elif` arms and its `else` (`SCREENS.md §4`). A version-6 reader would take
+/// the `elif` count for the next line's tag, so a screen with an `elif` would decode as a tree the
+/// author did not write — a wrong screen rather than a refused one.
+pub const PACK_VERSION: u16 = 7;
 
 /// The four bytes every pack starts with.
 ///

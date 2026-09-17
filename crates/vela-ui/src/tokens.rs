@@ -45,7 +45,11 @@ fn check_lines(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) {
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { body, .. } => check_lines(body, out),
+            ScreenLine::If { .. } => {
+                for arm in line.arms() {
+                    check_lines(arm, out);
+                }
+            }
             // Written here, so a literal colour in it is this screen's literal.
             ScreenLine::Use { body, .. } => check_lines(body, out),
             ScreenLine::Node(node) => {

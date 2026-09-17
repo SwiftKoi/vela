@@ -188,6 +188,14 @@ screen dialogue(name: str?, line):
             if name is not none:
                 text name
             text line style = body
+
+screen chooser(which):
+    if which:
+        text \"A\"
+    elif which is not none:
+        text \"B\"
+    else:
+        text \"C\"
 ";
     let parsed = vela_syntax::parse(FileId::from_raw(0), source);
     ScreenPack::compile("main", &parsed.program.items)
@@ -224,6 +232,28 @@ fn a_theme_font_survives_the_round_trip() {
     let bytes = sample().to_bytes();
     let pack = ScreenPack::from_bytes(&bytes).expect("a pack decodes");
     assert_eq!(pack.set.fonts.get("ui"), Some("sans"));
+}
+
+/// An `if`'s `elif` arms and its `else` survive the codec.
+///
+/// They are fields of the `If` tag rather than one tag per arm, so the failure this pins is a reader
+/// that takes the `elif` count for the next line's tag — a screen that decodes as a tree nobody wrote.
+#[test]
+fn an_if_chain_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let set = ScreenPack::from_bytes(&bytes)
+        .expect("a pack decodes")
+        .into_set();
+
+    let chooser = set.screen("chooser").expect("the screen survives");
+    let Some(vela_syntax::ScreenLine::If {
+        elifs, else_body, ..
+    }) = chooser.body.first()
+    else {
+        panic!("expected the chain at the top of the screen");
+    };
+    assert_eq!(elifs.len(), 1, "the `elif` arm did not survive");
+    assert!(else_body.is_some(), "the `else` arm did not survive");
 }
 
 /// `style_prefix` survives as itself rather than as a widget named `""`.
