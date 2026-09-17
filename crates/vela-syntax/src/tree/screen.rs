@@ -133,35 +133,63 @@ pub enum ScreenLine {
         /// Whether it fires again after it elapses.
         repeat: bool,
     },
+    /// `for <name> in <expr>:` — the body once per element (`SCREENS.md §2.4`).
+    ///
+    /// Children from data, and the shape is the statement form's (`ForStmt`). The binding is a
+    /// *scope*: a name it binds is not a read of anything outside the loop, which is what keeps the
+    /// static dependency set (`§8.2`) honest — a loop over a list of options does not depend on
+    /// whatever `option` might otherwise have meant.
+    For {
+        /// The line's span.
+        span: Span,
+        /// The name bound to each element.
+        binding: String,
+        /// What is walked: a list, or a value that is one.
+        iterable: Expr,
+        /// The lines drawn once per element.
+        body: Vec<ScreenLine>,
+    },
     /// A widget, or a prop written on its own line.
     Node(ScreenNode),
 }
 
 impl ScreenLine {
-    /// The arms an `if` line holds, in the order they are written: the `then` body, each `elif`, then
-    /// the `else` if there is one.
+    /// Every body this line holds, in the order it draws them: an `if`'s arms, or a `for`'s iteration.
     ///
-    /// Empty for a line that holds no conditional arm. Three kinds of body live on one line, and every
-    /// walk over a screen body has to see all of them — a button in an `elif` is as much a button as
-    /// one in the `then`. A walker that destructured `body` and moved on compiles perfectly and
-    /// silently loses the arms beside it, which no compiler catches, so the question is answered once
-    /// here rather than remembered at each of a dozen sites.
+    /// Empty for a line that holds no body of its own. A walk over a screen body has to see all of
+    /// them — a button in an `elif`, or inside a loop, is as much a button as one at the top — and a
+    /// walker that destructured one body and moved on compiles perfectly while losing the rest, which
+    /// no compiler catches. So the question is answered once here rather than remembered at each of a
+    /// dozen sites.
+    ///
+    /// A `use` and a widget are deliberately *not* here: both carry something besides a body —
+    /// arguments, props — so a walker that recursed through this would skip its own work on them.
     #[must_use]
-    pub fn arms(&self) -> Vec<&[ScreenLine]> {
-        let Self::If {
-            body,
-            elifs,
-            else_body,
-            ..
-        } = self
-        else {
-            return Vec::new();
-        };
-        let mut arms: Vec<&[ScreenLine]> = Vec::with_capacity(2 + elifs.len());
-        arms.push(body);
-        arms.extend(elifs.iter().map(|clause| clause.body.as_slice()));
-        arms.extend(else_body.iter().map(Vec::as_slice));
-        arms
+    pub fn bodies(&self) -> Vec<&[ScreenLine]> {
+        match self {
+            Self::If {
+                body,
+                elifs,
+                else_body,
+                ..
+            } => {
+                let mut arms: Vec<&[ScreenLine]> = Vec::with_capacity(2 + elifs.len());
+                arms.push(body);
+                arms.extend(elifs.iter().map(|clause| clause.body.as_slice()));
+                arms.extend(else_body.iter().map(Vec::as_slice));
+                arms
+            }
+            // A loop draws its body once per element, so the body is drawn — for as many elements as
+            // there are, which is a runtime question and not one a static walk can answer.
+            Self::For { body, .. } => vec![body],
+            Self::Key { .. }
+            | Self::Timer { .. }
+            | Self::Layer { .. }
+            | Self::StylePrefix { .. }
+            | Self::Transclude { .. }
+            | Self::Node(_)
+            | Self::Use { .. } => Vec::new(),
+        }
     }
 }
 

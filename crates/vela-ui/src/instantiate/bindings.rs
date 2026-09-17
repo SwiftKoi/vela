@@ -78,6 +78,14 @@ fn collect(
                     collect(arm, ctx, args, compose, keys, timers);
                 }
             }
+            // A loop's bindings are live while its body is drawn, once per element — and which
+            // elements those are is the same question the tree asks, through the same function.
+            ScreenLine::For { binding, body, .. } => {
+                for item in super::build::items_of(line, args) {
+                    let scope = args.with(binding, item);
+                    collect(body, ctx, &scope, compose, keys, timers);
+                }
+            }
             ScreenLine::Use {
                 name,
                 args: call,

@@ -198,6 +198,8 @@ screen chooser(which):
         text \"C\"
     key cancel action close_screen()
     timer 1.5 action hide(chooser)
+    for option in options:
+        text option.caption
 ";
     let parsed = vela_syntax::parse(FileId::from_raw(0), source);
     ScreenPack::compile("main", &parsed.program.items)
@@ -284,6 +286,26 @@ fn a_binding_survives_the_round_trip() {
             .any(|line| matches!(line, vela_syntax::ScreenLine::Timer { .. })),
         "the `timer` line did not survive"
     );
+}
+
+/// A `for` survives the codec: the binding, the iterable, and the body under it.
+///
+/// A version-8 reader would read the tag as a widget named `""` and then take the binding for the next
+/// line's tag — which is why the version moved. A loop that came back as something else would make
+/// every screen it draws wrong rather than refused.
+#[test]
+fn a_loop_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let set = ScreenPack::from_bytes(&bytes)
+        .expect("a pack decodes")
+        .into_set();
+
+    let chooser = set.screen("chooser").expect("the screen survives");
+    let Some(vela_syntax::ScreenLine::For { binding, body, .. }) = chooser.body.last() else {
+        panic!("expected the loop at the end of the screen");
+    };
+    assert_eq!(binding, "option");
+    assert_eq!(body.len(), 1, "the loop's body did not survive");
 }
 
 /// `style_prefix` survives as itself rather than as a widget named `""`.

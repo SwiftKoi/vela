@@ -341,3 +341,10 @@ screen a(flag):
 ";
     assert_eq!(codes(source), vec!["E5011".to_string()]);
 }
+
+/// A `use` inside a loop is an edge too: the body is drawn once per element, so the loop is a cycle.
+#[test]
+fn a_use_inside_a_loop_is_still_an_edge() {
+    let source = "screen a(items):\n    for item in items:\n        use a(items)\n";
+    assert_eq!(codes(source), vec!["E5011".to_string()]);
+}

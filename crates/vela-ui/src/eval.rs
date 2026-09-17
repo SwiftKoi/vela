@@ -36,6 +36,17 @@ pub enum Value {
     /// parameter and hand it to a widget. Without that, `confirm(message, yes_action, no_action)`
     /// cannot be written at all: the caller's answer is the content.
     Action(Action),
+    /// A sequence, for a `for` to walk (`SCREENS.md §2.4`).
+    ///
+    /// A list rather than anything cleverer: a screen draws children from data, and the data arrives
+    /// from outside it. Nothing *builds* one in a screen body except a literal, which is what makes a
+    /// loop testable before the systems that feed it exist.
+    List(Vec<Value>),
+    /// A record: named fields, so `option.caption` resolves (`SCREENS.md §2.4`).
+    ///
+    /// Ordered rather than hashed, like everything else that reaches output — two runs of one screen
+    /// must walk the same fields in the same order.
+    Record(Vec<(String, Value)>),
     /// No value.
     None,
 }
@@ -51,6 +62,21 @@ impl Value {
             // An action as text is the call it was written as. Nothing draws one today, but a screen
             // that interpolates an action should say what it is rather than render as blank.
             Self::Action(action) => action.to_string(),
+            // A sequence and a record render as themselves, `[a, b]` and `{caption: "Yes"}`. Nothing
+            // draws one on purpose, and the alternative — blank — is a screen that looks like it
+            // worked. Elements go through this same function, so a nested value cannot print
+            // differently depending on where it sits.
+            Self::List(items) => {
+                let parts: Vec<String> = items.iter().map(Self::as_text).collect();
+                format!("[{}]", parts.join(", "))
+            }
+            Self::Record(fields) => {
+                let parts: Vec<String> = fields
+                    .iter()
+                    .map(|(name, value)| format!("{name}: {}", value.as_text()))
+                    .collect();
+                format!("{{{}}}", parts.join(", "))
+            }
             Self::None => String::new(),
             // Not `{}`: a float's default formatting is locale-adjacent enough that the
             // determinism rules ban it, and a fixed precision is what a screen wants anyway.
@@ -69,7 +95,23 @@ impl Value {
             Self::Num(number) => *number != 0.0,
             // An action is something, so it is true — the same answer every non-`none` value gets.
             Self::Action(_) => true,
+            // Empty is false, which is Python's answer and Ren'Py's: `if items:` is how a screen asks
+            // whether it was handed anything to draw.
+            Self::List(items) => !items.is_empty(),
+            Self::Record(fields) => !fields.is_empty(),
         }
+    }
+
+    /// The fields of a record, if this value is one.
+    #[must_use]
+    pub fn field(&self, name: &str) -> Option<&Value> {
+        let Self::Record(fields) = self else {
+            return None;
+        };
+        fields
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|(_, value)| value)
     }
 }
 
@@ -86,7 +128,7 @@ impl Args {
         Self::default()
     }
 
-    /// Binds a parameter.
+    /// Binds a name, replacing any binding it already has.
     pub fn set(&mut self, name: impl Into<String>, value: Value) {
         self.values.push((name.into(), value));
     }
@@ -98,6 +140,24 @@ impl Args {
             .iter()
             .find(|(key, _)| key == name)
             .map(|(_, value)| value)
+    }
+
+    /// This scope, with `name` bound to `value`.
+    ///
+    /// A clone with one binding replaced, which is what a loop needs: `for option in items` must
+    /// *shadow* an outer `option` rather than be shadowed by it, and the shadow has to end with the
+    /// iteration. [`get`](Self::get) answers with the first binding it finds, so a loop that appended
+    /// would never be the one read.
+    #[must_use]
+    pub fn with(&self, name: &str, value: Value) -> Self {
+        let mut values: Vec<(String, Value)> = self
+            .values
+            .iter()
+            .filter(|(key, _)| key != name)
+            .cloned()
+            .collect();
+        values.push((name.to_string(), value));
+        Self { values }
     }
 }
 
@@ -202,6 +262,9 @@ pub(crate) fn text_of(expr: &Expr, values: &Args) -> String {
         Expr::Int { value, .. } => value.to_string(),
         Expr::Bool { value, .. } => value.to_string(),
         Expr::Name { name, .. } => values.get(name).map(Value::as_text).unwrap_or_default(),
+        // A field reads as the value it names: `text option.caption` is the caption, and
+        // `text d.who` is whoever said it.
+        Expr::Field { .. } => value_of(expr, values).as_text(),
         Expr::None { .. } => String::new(),
         _ => String::new(),
     }
@@ -248,9 +311,10 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
 
 /// The value of an expression. An unbound name is `none`.
 ///
-/// Used for a comparison, and for the arguments of a `use`: what a screen call passes is a value, and
-/// this is the small set of expressions this evaluator can produce one from. Anything else is `none`
-/// rather than a crash — the same answer an unrecognised condition gets, and for the same reason.
+/// Used for a comparison, for the arguments of a `use`, and for what a `for` iterates: what a screen
+/// passes or walks is a value, and this is the small set of expressions this evaluator can produce one
+/// from. Anything else is `none` rather than a crash — the same answer an unrecognised condition gets,
+/// and for the same reason.
 pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
     match expr {
         Expr::Name { name, .. } => values.get(name).cloned().unwrap_or(Value::None),
@@ -262,7 +326,39 @@ pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
         // `quit` and `open_screen`, and a call is how one becomes a value a screen can pass on — as
         // the argument of a `use`, or into a parameter a widget then holds.
         Expr::Call { .. } => action_of(expr).map_or(Value::None, Value::Action),
+        // A list literal, and a record literal. These are how a screen makes its own data: nothing
+        // outside it has to hand one over for `for` to have something to walk, which is what keeps a
+        // loop testable before the systems that feed it exist (`SCREENS.md §2.4`).
+        Expr::List { items, .. } => {
+            Value::List(items.iter().map(|item| value_of(item, values)).collect())
+        }
+        Expr::Map { entries, .. } => Value::Record(
+            entries
+                .iter()
+                .map(|(key, value)| (key_text(key, values), value_of(value, values)))
+                .collect(),
+        ),
+        // A field of a record — `option.caption`, where `option` is whatever the loop bound or the
+        // caller passed. `theme.bg` arrives here too and resolves to `none`, which is right: a theme
+        // token is read by `color_of`, not by this.
+        Expr::Field { base, name, .. } => value_of(base, values)
+            .field(name)
+            .cloned()
+            .unwrap_or(Value::None),
+        Expr::Paren { inner, .. } => value_of(inner, values),
         _ => Value::None,
+    }
+}
+
+/// A record literal's key, as text.
+///
+/// A key is written either as a string or as a bare name (`{ caption: "Yes" }`), and both mean the
+/// same field. Anything else is a key nothing can look up, so it is written as it reads rather than
+/// dropped — a record whose field vanished would be a loop that silently drew one thing fewer.
+fn key_text(key: &Expr, values: &Args) -> String {
+    match key {
+        Expr::Name { name, .. } => name.clone(),
+        other => text_of(other, values),
     }
 }
 

@@ -121,9 +121,8 @@ screen status(ready: bool, waiting: bool):
 ```
 
 - **The arms are clauses of one line.** `elif` and `else` belong to the `if` they continue, and there is
-  no way to write one without it — the shape the statement form already has (`LANGUAGE.md §3`). A
-  conditional is therefore one node, and choosing an arm is one decision rather than a walk that has to
-  remember what the line before it concluded.
+  no way to write one without it — the shape the statement form already has (`LANGUAGE.md §3`). So a
+  conditional is one node, and choosing an arm is one decision rather than a walk that remembers.
 - **Every arm is checked.** Which arm draws is a runtime question (§8.2), so an unknown widget or a
   wrong prop in an `elif` is as real as one in the `then`, and an arm nobody has run yet is not an arm
   nobody wrote.
@@ -134,14 +133,11 @@ screen status(ready: bool, waiting: bool):
 
 > **Note.** An arm is only as live as its condition can be. The screen evaluator reads the screen's
 > parameters and a comparison of them — nothing else yet — so a condition over data the runtime has not
-> bound is false, and a chain over one draws its `else`. That is §8's work, and it is stated here so a
-> chain that always takes one arm is a known limit rather than a puzzle.
+> bound is false, and a chain over one draws its `else`. That is §8's work, stated so a chain that
+> always takes one arm is a known limit rather than a puzzle.
 
-> **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the screen pack moved to
-> version 7. `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/instantiate.rs` that
-> the first arm to hold is the one drawn, `tests/check.rs` that an arm's mistakes are reported,
-> `tests/compose.rs` that a `transclude` in an `elif` places the block, and `tests/reactivity.rs` that
-> an `elif`'s reads are the screen's.
+> **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the pack moved to version 7.
+> Pinned by `crates/vela-syntax/src/tests/screen_tests.rs` and `crates/vela-ui/tests/`.
 
 ### 2.3 Input: `key` and `timer`
 
@@ -151,44 +147,72 @@ A screen answers input by naming what the player *meant*, never which button the
 screen confirm(message, no_action):
     column:
         text message
-        button:
-            text "OK"
-            action close_screen()
     key cancel action no_action
 
 screen notify(message):
     box at top:
         text message
-    timer 3.25 action hide(notify)
+    timer 3.25 repeat action hide(notify)
 ```
 
 - **A `key` binds a semantic action** — one of the host's (§11) — to an action this screen runs while it
   is shown. The name is written as a *name*, not Ren'Py's string (`key "game_menu"`), the same trade
-  `style_prefix` makes (§5.2), and the migrator's job to drop the quotes.
-- **The top screen answers first.** A binding is consulted before the runtime's own handling of that
-  action, which is what makes a modal screen modal: `key cancel action no_action` is how the sample's
-  confirm screen keeps Escape from dismissing it. A screen under another is not asked, exactly as it is
-  not navigable (§10).
-- **A name nothing delivers is `E5014`.** A binding that never fires is a screen whose escape hatch
-  quietly does nothing, and nothing about the screen would look wrong — so the vocabulary is checked,
-  against the set the caller supplies, the same shape the widget and action registries have.
+  `style_prefix` makes (§5.2).
+- **The top screen answers first**, before the runtime's own handling of that action — which is what
+  makes a modal screen modal: `key cancel action no_action` is how the sample's confirm screen keeps
+  Escape from dismissing it. A screen under another is not asked, exactly as it is not navigable (§10).
+- **A name nothing delivers is `E5014`**, against the set the caller supplies. A binding that never
+  fires is an escape hatch that quietly does nothing, and nothing about the screen would look wrong.
 - **`timer <seconds> [repeat] action <call>` declares a deadline.** `repeat` makes it come round again.
-- **A binding is an action, so it resolves like one.** `key cancel action no_action` and
-  `action no_action` mean the same thing, including a parameter the screen was handed — which is how a
-  caller says what a screen's escape hatch does.
-- **A binding is not a placement.** A `key` or a `timer` draws nothing, so it is not part of the widget
-  tree; it is collected beside it and carried on the screen a runtime navigates.
+- **A binding is an action, so it resolves like one**: `key cancel action no_action` means what
+  `action no_action` means, including a parameter the screen was handed. A binding is not a placement,
+  so it is not a widget — it is collected beside the tree and carried on the screen a runtime navigates.
 
 > **Not yet.** A `timer` is *data*, not behaviour: the laid screen carries the deadline and the action
-> (`Laid::timers`) and nothing fires them. §6 runs animation from `World::clock`, and no clock reaches
-> the screen runtime yet, so a deadline measured against wall time would be a frame nobody could replay.
-> Firing a timer is the clock work, and this is the record that a `timer` draws nothing until then.
+> (`Laid::timers`) and nothing fires them. §6 runs animation from `World::clock`, no clock reaches the
+> screen runtime yet, and a deadline measured against wall time would be a frame nobody could replay.
 
-> **Implemented (M12.1).** `key` and `timer` as screen lines; the screen pack moved to version 8.
-> `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/check.rs` that an unknown name
-> is `E5014` and a binding's action is checked like any other, `tests/instantiate.rs` that the bindings
-> a screen declares resolve into the `Laid` it draws, and `crates/vela-cli/src/tests/ui_tests.rs` that
-> the top screen answers its own — and that the vocabulary is the host's, name for name.
+> **Implemented (M12.1).** `key` and `timer` as screen lines; the pack moved to version 8. Pinned by
+> `crates/vela-ui/tests/` and `crates/vela-cli/src/tests/ui_tests.rs` (the top screen answers, and the
+> vocabulary is the host's).
+
+### 2.4 Loops
+
+A screen draws a body once per element of a list:
+
+```vela
+screen choice(prompt, items):
+    column:
+        text prompt
+        for option in items:
+            button:
+                text option.caption
+                action option.action
+```
+
+- **The shape is the statement form's** (`LANGUAGE.md §3`): `for <name> in <expr>:` and a block. One
+  loop in the language rather than two, so an author who knows the story syntax knows this one.
+- **A field of the element resolves.** `option.caption` is that element's field, and `option.action` is
+  an *action* like any other — which is what makes a menu's choices drawable as data.
+- **The binding is a scope.** `for option in items` shadows an outer `option`, and the shadow ends with
+  the loop — which is what keeps the dependency set honest (§8.2): a name the loop bound is not a read
+  of world state. A `use` can pass a list (§7); a value that is not one walks as nothing, so the body
+  draws nothing rather than failing.
+
+> **Not yet.** Nothing *feeds* a screen a list: `Screens::dialogue` binds two strings and the runtime
+> opens every other screen with no arguments, so a migrated `choice(items)` walks an unbound value and
+> draws nothing — the construct is here, the data is not. It arrives with §7's systems (the menu's
+> choices, which `Command::Menu` carries; the dialogue log), owned by M12.2 and M12.3. Until then a
+> literal (`for pair in [{caption: "Yes"}]`) is the one list a screen builds for itself.
+
+> **Implemented (M12.1).** `for` as a screen line; the pack moved to version 9. Pinned by
+> `crates/vela-ui/tests/{instantiate,reactivity}.rs`, `crates/vela-syntax/src/tests/screen_tests.rs`
+> and the pack round trip.
+
+> **Revised (M12.1).** A dotted value at the head of a widget's line is the widget's *content*, not a
+> prop name: `text option.caption` parses as `text line` does, because no prop name contains a dot and
+> the chain settles the ambiguity alone. The parser used to read `option` as a prop name and then have
+> nowhere to put `.caption` — which is what the sample's menu writes.
 
 ## 3. Widget tree
 
@@ -317,26 +341,22 @@ style japanese:
     font = theme.kanji
 ```
 
-- **A font token names a font the engine has**, not an asset path: loading a face is the asset and
-  theme work of item 15, and a name the engine does not carry resolves to nothing.
+- **A font token names a font the engine has**, not an asset path: loading a face is item 15's work, and
+  a name the engine does not carry resolves to nothing.
 - **An unroutable font falls back to the screen's own font**, silently, for the same reason a
-  `style_prefix` that names nothing does (§5.2): a project may write the token before the face
-  behind it is wired up, and a screen that drew no text at all would be the worse answer.
-- **`size` is a style setting, not part of the font token.** Ren'Py's `text_font` names a face;
-  its `text_size` is this section's `size`, already.
+  `style_prefix` that names nothing does (§5.2): a project may write the token before the face behind
+  it is wired up, and a screen that drew no text at all would be the worse answer.
+- **`size` is a style setting, not part of the font token.** Ren'Py's `text_font` names a face; its
+  `text_size` is this section's `size`, already.
 
-> **Revised (M12.1).** The `font` token above was written `font body = @"fonts/inter.ttf" size 22
-> leading 1.4` — a path with a size and a leading. Three things were wrong with that: it does not
-> parse (a setting body is `key = value`, `LANGUAGE.md §7`, and a token carries no trailing words),
-> `leading` has no reader (`vela-text` lays out by size and width), and the path is an *asset*,
-> which is what item 15 loads. The token is a name and the size stays the `size` setting.
+> **Revised (M12.1).** The token above was written `font body = @"fonts/inter.ttf" size 22 leading 1.4`
+> — a path with a size and a leading. Three things were wrong with it: that does not parse (a setting
+> body is `key = value`, `LANGUAGE.md §7`), `leading` has no reader in `vela-text`, and the path is an
+> *asset*, which is what item 15 loads. The token is a name; the size stays the `size` setting.
 
-> **Implemented (M12.1).** A `style` setting `font` — `font = theme.kanji`, a token reference — is
-> read into the node's paint and threaded through measuring and drawing, so one screen can draw two
-> scripts. The token table travels in the screen pack (version 6). `crates/vela-ui/tests/theme.rs`
-> pins the token table, `tests/instantiate.rs` that a style sets a node's font, and `tests/paint.rs`
-> that an unroutable font falls back rather than drawing nothing.
-
+> **Implemented (M12.1).** A `style` setting `font` — `font = theme.kanji` — is read into the node's
+> paint and threaded through measuring and drawing, so one screen can draw two scripts. The token table
+> travels in the screen pack (version 6), and `crates/vela-ui/tests/{theme,styling,paint}.rs` pin it.
 
 ### 5.1 Interaction states
 
@@ -427,11 +447,10 @@ transition dissolve(d = 0.3s):
   here.
 
 > **Not yet.** None of this exists, and the grammar above is the design rather than the surface:
-> `transform` is a declaration with an unparsed body (`LANGUAGE.md §3`), a screen's `at` reads an
-> anchor and nothing else (`§4.2`), and there is no animation clock at all — `World::clock` is read by
-> the `time.now` effect and **nothing advances it**. That last one is why a screen's `timer` is
-> carried and not fired (`§2.3`), and it is stated here because "all animation is driven by
-> `World::clock`" reads as a working mechanism. M13 owns it.
+> `transform` is a declaration with an unparsed body (`LANGUAGE.md §3`), a screen's `at` reads an anchor
+> and nothing else (`§4.2`), and there is no animation clock — `World::clock` is read by the `time.now`
+> effect and **nothing advances it**, which is why a screen's `timer` is carried and not fired (`§2.3`).
+> M13 owns it.
 
 ## 7. Actions
 
@@ -504,6 +523,10 @@ layout over the whole tree every frame.
 Dependency sets are computed **statically** at screen-compile time, so there is no runtime
 dependency-tracking machinery and no way for a binding to silently miss an update.
 
+A name a block *binds* is not a read. A lambda's parameters and a loop's binding (§2.4) are scoped, so
+the set holds what the body reads from *outside* — which is what keeps `for option in items` from making
+the screen depend on any unrelated field called `option`, forever.
+
 ### 8.3 No implicit repaint
 
 A widget repaints when its inputs change or when the animation clock advances it. There is no
@@ -557,6 +580,12 @@ Structural, not a mode (VISION Principle 8).
 - Contrast is linted (§5); missing labels on interactive nodes are `W4010`.
 - Text rendering uses the system's preferred scaling where the host provides it.
 
+> **Note.** A label is derived from the screen's *source*: an explicit `label` prop, or a single `text`
+> child whose content is a literal. A `text` child whose content is a value — `text option.caption`, or
+> the `text line` of every dialogue screen — therefore has no label, and `W4010` says so. That is honest
+> rather than wrong (the tree is built from the declaration), and deriving labels from the *evaluated*
+> tree is what would fix it. Found when a list could finally be walked (§2.4).
+
 ## 11. Input
 
 Input is abstracted to **semantic actions**, not keys. A project defines a binding profile;
@@ -565,16 +594,14 @@ the engine resolves device events to actions (`advance`, `skip`, `rollback`, `me
 action set, so a screen never asks "what key was pressed".
 
 The set is `vela_host::Action` — nine names, `Action::all()` — and it is what a screen's `key` binds
-(§2.3). The checker validates the name against `vela_ui::input::SemanticActions`, which mirrors that
-list because `vela-ui` cannot depend on `vela-host`: a screen checker that pulled a windowing library
-in to validate a name would be the worse trade. `crates/vela-cli/src/tests/ui_tests.rs` asserts the two
-lists agree, so a drift is a failing test rather than a binding the editor accepts and the window cannot
-deliver.
+(§2.3). The checker validates against `vela_ui::input::SemanticActions`, which mirrors that list
+because `vela-ui` cannot depend on `vela-host`: a screen checker that pulled a windowing library in to
+validate a name would be the worse trade. `crates/vela-cli/src/tests/ui_tests.rs` asserts the two lists
+agree, so a drift fails CI rather than binding a name the window cannot deliver.
 
 > **Revised (M12.1).** This paragraph listed `ui_confirm` where the engine spells the action `confirm`.
-> No such action has ever existed: the host's table is the authority for what a window delivers, and the
-> doc now says what it says. Found while writing `E5014`, which is the check that makes the difference
-> between the two visible.
+> No such action has ever existed: the host's table is what a window delivers, and the doc now says what
+> it says. Found while writing `E5014`, which makes the difference between the two visible.
 
 ## 12. Hot reload
 

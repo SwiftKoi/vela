@@ -1,0 +1,24 @@
+screen choice(items):
+    style_prefix choice
+
+    column:
+        for option in items:
+            button:
+                text option.caption
+                action option.action
+
+screen pages(count):
+    column:
+        for page in pages:
+            text page
+
+screen table(rows):
+    grid columns = 2:
+        for row in rows:
+            for cell in row:
+                text cell
+
+screen literals:
+    column:
+        for pair in [{caption: "Yes"}, {caption: "No"}]:
+            text pair.caption

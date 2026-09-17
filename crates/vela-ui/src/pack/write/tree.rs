@@ -105,31 +105,8 @@ impl Writer {
                 self.span(*span);
                 self.string(name);
             }
-            ScreenLine::If {
-                span,
-                condition,
-                body,
-                elifs,
-                else_body,
-            } => {
-                self.u8(1);
-                self.span(*span);
-                self.expr(condition);
-                self.lines(body);
-                self.u32(count(elifs.len()));
-                for clause in elifs {
-                    self.span(clause.span);
-                    self.expr(&clause.condition);
-                    self.lines(&clause.body);
-                }
-                match else_body {
-                    Some(body) => {
-                        self.flag(true);
-                        self.lines(body);
-                    }
-                    None => self.flag(false),
-                }
-            }
+            ScreenLine::If { .. } => self.if_line(line),
+            ScreenLine::For { .. } => self.loop_line(line),
             ScreenLine::Use {
                 span,
                 name,
@@ -154,6 +131,51 @@ impl Writer {
                 self.span(*span);
                 self.string(name);
             }
+            ScreenLine::Key { .. } | ScreenLine::Timer { .. } => self.binding(line),
+            ScreenLine::Node(node) => {
+                self.u8(2);
+                self.node(node);
+            }
+        }
+    }
+
+    /// An `if`, its `elif` arms, and its `else` — one tag, because they are one line.
+    ///
+    /// `if_line` rather than `conditional` because the expression codec already has a `conditional`: one
+    /// `Writer` cannot have two inherent methods of the same name.
+    fn if_line(&mut self, line: &ScreenLine) {
+        let ScreenLine::If {
+            span,
+            condition,
+            body,
+            elifs,
+            else_body,
+        } = line
+        else {
+            return;
+        };
+        self.u8(1);
+        self.span(*span);
+        self.expr(condition);
+        self.lines(body);
+        self.u32(count(elifs.len()));
+        for clause in elifs {
+            self.span(clause.span);
+            self.expr(&clause.condition);
+            self.lines(&clause.body);
+        }
+        match else_body {
+            Some(body) => {
+                self.flag(true);
+                self.lines(body);
+            }
+            None => self.flag(false),
+        }
+    }
+
+    /// The two input lines, which share a shape: a name and an action, and a timer a delay too.
+    fn binding(&mut self, line: &ScreenLine) {
+        match line {
             ScreenLine::Key { span, name, action } => {
                 self.u8(6);
                 self.span(*span);
@@ -172,11 +194,26 @@ impl Writer {
                 self.expr(action);
                 self.flag(*repeat);
             }
-            ScreenLine::Node(node) => {
-                self.u8(2);
-                self.node(node);
-            }
+            _ => {}
         }
+    }
+
+    /// A loop: the name it binds, what it walks, and the body under it.
+    fn loop_line(&mut self, line: &ScreenLine) {
+        let ScreenLine::For {
+            span,
+            binding,
+            iterable,
+            body,
+        } = line
+        else {
+            return;
+        };
+        self.u8(8);
+        self.span(*span);
+        self.string(binding);
+        self.expr(iterable);
+        self.lines(body);
     }
 
     fn node(&mut self, node: &ScreenNode) {

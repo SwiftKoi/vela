@@ -146,8 +146,8 @@ fn collect(lines: &[ScreenLine], prefix: &mut Vec<usize>, out: &mut Tree) {
             // A conditional is not a node: it is a shape the tree takes at run time, so its
             // children are collected where they are rather than under a path nobody sees — every
             // arm's children, since which arm is drawn is a runtime question.
-            for arm in line.arms() {
-                collect(arm, prefix, out);
+            for body in line.bodies() {
+                collect(body, prefix, out);
             }
             continue;
         };

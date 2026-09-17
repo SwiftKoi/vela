@@ -115,31 +115,8 @@ impl Reader<'_> {
                 let name = self.string();
                 ScreenLine::Layer { span, name }
             }
-            1 => {
-                let span = self.span();
-                let condition = self.expr();
-                let body = self.lines();
-                let count = self.count();
-                let mut elifs = Vec::with_capacity(count.min(1024));
-                for _ in 0..count {
-                    let span = self.span();
-                    let condition = self.expr();
-                    let body = self.lines();
-                    elifs.push(ScreenElif {
-                        span,
-                        condition,
-                        body,
-                    });
-                }
-                let else_body = self.flag().then(|| self.lines());
-                ScreenLine::If {
-                    span,
-                    condition,
-                    body,
-                    elifs,
-                    else_body,
-                }
-            }
+            1 => self.if_line(),
+            2 => ScreenLine::Node(self.node()),
             3 => {
                 let span = self.span();
                 let name = self.string();
@@ -162,25 +139,73 @@ impl Reader<'_> {
                 let name = self.string();
                 ScreenLine::StylePrefix { span, name }
             }
-            6 => {
-                let span = self.span();
-                let name = self.string();
-                let action = self.expr();
-                ScreenLine::Key { span, name, action }
-            }
-            7 => {
-                let span = self.span();
-                let seconds = self.expr();
-                let action = self.expr();
-                let repeat = self.flag();
-                ScreenLine::Timer {
-                    span,
-                    seconds,
-                    action,
-                    repeat,
-                }
-            }
+            6 => self.key_line(),
+            7 => self.timer_line(),
+            8 => self.loop_line(),
             _ => ScreenLine::Node(self.node()),
+        }
+    }
+
+    /// An `if`, its `elif` arms, and its `else` — one tag, because they are one line.
+    fn if_line(&mut self) -> ScreenLine {
+        let span = self.span();
+        let condition = self.expr();
+        let body = self.lines();
+        let count = self.count();
+        let mut elifs = Vec::with_capacity(count.min(1024));
+        for _ in 0..count {
+            let span = self.span();
+            let condition = self.expr();
+            let body = self.lines();
+            elifs.push(ScreenElif {
+                span,
+                condition,
+                body,
+            });
+        }
+        let else_body = self.flag().then(|| self.lines());
+        ScreenLine::If {
+            span,
+            condition,
+            body,
+            elifs,
+            else_body,
+        }
+    }
+
+    /// A `key`: the semantic action it names and the action it runs.
+    fn key_line(&mut self) -> ScreenLine {
+        let span = self.span();
+        let name = self.string();
+        let action = self.expr();
+        ScreenLine::Key { span, name, action }
+    }
+
+    /// A `timer`: a delay, an action, and whether it comes round again.
+    fn timer_line(&mut self) -> ScreenLine {
+        let span = self.span();
+        let seconds = self.expr();
+        let action = self.expr();
+        let repeat = self.flag();
+        ScreenLine::Timer {
+            span,
+            seconds,
+            action,
+            repeat,
+        }
+    }
+
+    /// A loop: the name it binds, what it walks, and the body under it.
+    fn loop_line(&mut self) -> ScreenLine {
+        let span = self.span();
+        let binding = self.string();
+        let iterable = self.expr();
+        let body = self.lines();
+        ScreenLine::For {
+            span,
+            binding,
+            iterable,
+            body,
         }
     }
 

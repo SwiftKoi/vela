@@ -32,36 +32,7 @@ fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
     match line {
         ScreenLine::Layer { name, .. } => writer.line(&format!("layer {name}")),
         ScreenLine::StylePrefix { name, .. } => writer.line(&format!("style_prefix {name}")),
-        ScreenLine::If {
-            span,
-            condition,
-            body: inner,
-            elifs,
-            else_body,
-        } => {
-            writer.line(&format!("if {}:", expr::text(condition)));
-            writer.note(span.start());
-            body(writer, inner);
-
-            for clause in elifs {
-                writer.comments_until(clause.span.start());
-                writer.blank_before(clause.span.start());
-                writer.line(&format!("elif {}:", expr::text(&clause.condition)));
-                writer.note(clause.span.start());
-                body(writer, &clause.body);
-            }
-
-            if let Some(else_body) = else_body {
-                // A comment between the last arm and the `else` belongs to the `else`, so it is
-                // written before the keyword rather than after it — the same rule the statement
-                // form's printer follows.
-                if let Some(first) = else_body.first() {
-                    writer.comments_until(start_of(first));
-                }
-                writer.line("else:");
-                body(writer, else_body);
-            }
-        }
+        ScreenLine::If { .. } | ScreenLine::For { .. } => nested(writer, line),
         ScreenLine::Use {
             span,
             name,
@@ -104,6 +75,57 @@ fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
             ));
         }
         ScreenLine::Node(declared) => node(writer, declared),
+    }
+}
+
+/// A line that opens a block: a conditional's arms, or a loop's body.
+///
+/// Apart from the lines that open a block, because they are the only ones that print *more than one*
+/// body — an `if` writes its arms one after another, each at the same indentation.
+fn nested(writer: &mut Writer<'_>, line: &ScreenLine) {
+    match line {
+        // Children from data: the same shape the statement form prints (`LANGUAGE.md §3`).
+        ScreenLine::For {
+            binding,
+            iterable,
+            body: inner,
+            ..
+        } => {
+            writer.line(&format!("for {binding} in {}:", expr::text(iterable)));
+            body(writer, inner);
+        }
+        ScreenLine::If {
+            span,
+            condition,
+            body: inner,
+            elifs,
+            else_body,
+        } => {
+            writer.line(&format!("if {}:", expr::text(condition)));
+            writer.note(span.start());
+            body(writer, inner);
+
+            for clause in elifs {
+                writer.comments_until(clause.span.start());
+                writer.blank_before(clause.span.start());
+                writer.line(&format!("elif {}:", expr::text(&clause.condition)));
+                writer.note(clause.span.start());
+                body(writer, &clause.body);
+            }
+
+            if let Some(else_body) = else_body {
+                // A comment between the last arm and the `else` belongs to the `else`, so it is
+                // written before the keyword rather than after it — the same rule the statement
+                // form's printer follows.
+                if let Some(first) = else_body.first() {
+                    writer.comments_until(start_of(first));
+                }
+                writer.line("else:");
+                body(writer, else_body);
+            }
+        }
+        // Neither: `write` sends only the two above here.
+        _ => {}
     }
 }
 
@@ -155,6 +177,7 @@ fn start_of(line: &ScreenLine) -> u32 {
         ScreenLine::Layer { span, .. }
         | ScreenLine::StylePrefix { span, .. }
         | ScreenLine::If { span, .. }
+        | ScreenLine::For { span, .. }
         | ScreenLine::Use { span, .. }
         | ScreenLine::Key { span, .. }
         | ScreenLine::Timer { span, .. }

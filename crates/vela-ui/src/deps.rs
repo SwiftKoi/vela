@@ -127,6 +127,25 @@ fn collect_lines(
                 collect_expr(seconds, out);
                 collect_expr(action, out);
             }
+            // The iterable is a read; the body is walked in a scope the binding owns, so a name the
+            // loop bound is not a dependency on anything outside it. Without the removal, `for i in
+            // items` would make the screen depend on a field called `i` — a screen that relays out
+            // when an unrelated `i` changes, forever.
+            ScreenLine::For {
+                binding,
+                iterable,
+                body,
+                ..
+            } => {
+                collect_expr(iterable, out);
+                let mut inner = DepSet::new();
+                collect_lines(screens, body, &mut inner, path);
+                for name in inner.names {
+                    if name != *binding {
+                        out.insert(name);
+                    }
+                }
+            }
             ScreenLine::Use {
                 name, args, body, ..
             } => collect_use(screens, name, args, body, out, path),

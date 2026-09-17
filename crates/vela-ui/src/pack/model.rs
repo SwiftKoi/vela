@@ -36,7 +36,10 @@ use crate::theme::{Fonts, Palette};
 /// Version 8 adds the two input lines, `key` and `timer` (`SCREENS.md §2.3`). A version-7 reader would
 /// read either tag as a widget named `""`, which draws nothing — so it must refuse rather than draw a
 /// screen with its bindings quietly missing.
-pub const PACK_VERSION: u16 = 8;
+/// Version 9 adds `for` (`SCREENS.md §2.4`). A version-8 reader would read the tag as a widget named
+/// `""` and then take the binding for the next line's tag, so a screen with a loop would decode as a
+/// tree nobody wrote.
+pub const PACK_VERSION: u16 = 9;
 
 /// The four bytes every pack starts with.
 ///

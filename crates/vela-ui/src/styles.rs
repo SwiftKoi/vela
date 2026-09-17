@@ -147,9 +147,11 @@ fn check_lines(lines: &[ScreenLine], known: &[&str], out: &mut Vec<Diagnostic>) 
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { .. } => {
-                for arm in line.arms() {
-                    check_lines(arm, known, out);
+            // An `if` and a `for` both hold bodies that are drawn, so a style named in either is
+            // checked. Which arm draws, or how many elements there are, is a runtime question.
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
+                for body in line.bodies() {
+                    check_lines(body, known, out);
                 }
             }
             // A `use` block is written here, so its styles are this file's — which is the same

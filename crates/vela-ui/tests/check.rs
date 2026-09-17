@@ -214,3 +214,13 @@ fn a_valid_binding_is_clean() {
         diagnose("    key cancel action close_screen()\n    timer 3.0 action quit()\n");
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }
+
+/// A widget inside a loop is checked like any other: the body is drawn, so a typo in it is a typo.
+#[test]
+fn a_mistake_in_a_loop_is_reported() {
+    let diagnostics = diagnose(
+        "    for option in items:\n        button:\n            text option.caption\n            action clse_screen()\n",
+    );
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5012");
+}

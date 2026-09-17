@@ -13,7 +13,7 @@ use vela_syntax::{ScreenArg, ScreenLine, ScreenNode};
 
 use super::compose::Compose;
 use super::props::{apply_args, apply_bare_prop, apply_style, measure_text};
-use crate::eval::{Args, Ctx, eval, number};
+use crate::eval::{Args, Ctx, Value, eval, number, value_of};
 use crate::props::SizeSpec;
 use crate::tree::{Kind, Node, Size};
 use crate::widgets::{Category, Widget};
@@ -70,6 +70,16 @@ fn build_lines(
             ScreenLine::If { .. } => {
                 if let Some(arm) = arm_of(line, args) {
                     out.extend(build_lines(arm, ctx, args, compose, text, font, max_width));
+                }
+            }
+            // Children from data (`SCREENS.md §2.4`): the body once per element, each element in
+            // scope as the binding. How many there are is whatever the caller handed the screen.
+            ScreenLine::For { binding, body, .. } => {
+                for item in items_of(line, args) {
+                    let scope = args.with(binding, item);
+                    out.extend(build_lines(
+                        body, ctx, &scope, compose, text, font, max_width,
+                    ));
                 }
             }
             ScreenLine::Use { .. } | ScreenLine::Transclude { .. } => {
@@ -167,6 +177,26 @@ fn apply_line(
                 }
             }
         }
+        // Children from data, nested inside a widget: the same loop, and the elements become this
+        // widget's children in order.
+        ScreenLine::For { binding, body, .. } => {
+            for item in items_of(line, args) {
+                let scope = args.with(binding, item);
+                for child in body {
+                    apply_line(
+                        child,
+                        parent_widget,
+                        parent,
+                        ctx,
+                        &scope,
+                        compose,
+                        text,
+                        font,
+                        max_width,
+                    );
+                }
+            }
+        }
         ScreenLine::Use { .. } | ScreenLine::Transclude { .. } => {
             if let Some(nodes) = composed(line, compose, ctx, args, text, font, max_width) {
                 parent.children.extend(nodes);
@@ -255,6 +285,21 @@ fn composed(
             ))
         }
         _ => None,
+    }
+}
+
+/// The elements a `for` line walks: the value of its iterable, when that value is a list.
+///
+/// Empty otherwise, which is what a screen handed nothing draws — and the common case until the
+/// systems that *feed* a screen reach it (`SCREENS.md §2.4`). Nothing reports it: a list arrives from
+/// a caller, and whether one did is a runtime question.
+pub(super) fn items_of(line: &ScreenLine, args: &Args) -> Vec<Value> {
+    let ScreenLine::For { iterable, .. } = line else {
+        return Vec::new();
+    };
+    match value_of(iterable, args) {
+        Value::List(items) => items,
+        _ => Vec::new(),
     }
 }
 

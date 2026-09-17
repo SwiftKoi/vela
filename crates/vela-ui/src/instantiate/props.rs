@@ -13,8 +13,8 @@ use vela_syntax::{Expr, ScreenArg, ScreenNode};
 
 use crate::actions::Action;
 use crate::eval::{
-    Args, Ctx, Value, action_of, anchor_of, anchor_word, color_of, name_of, number, style_paint,
-    text_of,
+    Args, Ctx, Value, anchor_of, anchor_word, color_of, name_of, number, style_paint, text_of,
+    value_of,
 };
 use crate::props::{Anchor, SizeSpec};
 use crate::tree::{Kind, Node, Size, State};
@@ -219,8 +219,8 @@ pub(super) fn apply_style(node: &mut Node, style: &str, ctx: &Ctx) {
 /// (`screen confirm(message, yes_action, no_action)` … `action yes_action`) — and dropping that case
 /// is what made the sample's confirm screen silently unclickable, with no diagnostic to say so.
 fn action_value(value: PropValue<'_>, values: &Args) -> Option<Action> {
-    if let Some(action) = value.expr().and_then(|expr| action_from(expr, values)) {
-        return Some(action);
+    if let Some(expr) = value.expr() {
+        return action_from(expr, values);
     }
     match value.name().and_then(|name| values.get(name)) {
         Some(Value::Action(action)) => Some(action.clone()),
@@ -228,20 +228,18 @@ fn action_value(value: PropValue<'_>, values: &Args) -> Option<Action> {
     }
 }
 
-/// The action an expression denotes: a call written here, or a parameter the screen was given.
+/// The action an expression denotes: a call written here, or a value the screen holds.
 ///
 /// Shared with the `key` and `timer` lines, which bind an action the same way a prop holds one
 /// (`SCREENS.md §2.3`): `key cancel action no_action` means what `action no_action` means, and two
 /// resolvers would be two chances to disagree about it.
+///
+/// One rule rather than a list of shapes, because the shapes keep arriving: a call, a parameter's name,
+/// and — since a screen can walk data (`§2.4`) — a *field*, which is how the sample's menu writes
+/// `textbutton i.caption action i.action`.
 pub(super) fn action_from(expr: &Expr, values: &Args) -> Option<Action> {
-    if let Some(action) = action_of(expr) {
-        return Some(action);
-    }
-    let Expr::Name { name, .. } = expr else {
-        return None;
-    };
-    match values.get(name) {
-        Some(Value::Action(action)) => Some(action.clone()),
+    match value_of(expr, values) {
+        Value::Action(action) => Some(action),
         _ => None,
     }
 }

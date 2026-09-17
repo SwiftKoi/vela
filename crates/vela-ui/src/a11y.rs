@@ -128,12 +128,13 @@ fn nodes(
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. } => None,
-            // A conditional contributes every arm's nodes: what a screen reader reads is what is on
-            // screen, and which arm that is is a runtime question.
-            ScreenLine::If { .. } => Some(
-                line.arms()
+            // A conditional contributes every arm's nodes, and a loop its body's: what a screen reader
+            // reads is what is on screen, and which arm that is, or how many elements there are, is a
+            // runtime question.
+            ScreenLine::If { .. } | ScreenLine::For { .. } => Some(
+                line.bodies()
                     .into_iter()
-                    .flat_map(|arm| nodes(arm, registry, screens, pane, depth, focus))
+                    .flat_map(|body| nodes(body, registry, screens, pane, depth, focus))
                     .collect(),
             ),
             ScreenLine::Use { name, body, .. } => Some(match compose::find(screens, name) {
@@ -277,9 +278,9 @@ fn check_lines(lines: &[ScreenLine], registry: &WidgetRegistry, out: &mut Vec<Di
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { .. } => {
-                for arm in line.arms() {
-                    check_lines(arm, registry, out);
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
+                for body in line.bodies() {
+                    check_lines(body, registry, out);
                 }
             }
             // The block is this screen's own code, so a button written in it is checked here. The

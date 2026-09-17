@@ -58,19 +58,19 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
                 out.push(name.clone());
                 uses_in(body, out);
             }
-            ScreenLine::If { .. } => {
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
                 // One arm is drawn at run time and no walk knows which, so every arm's `use` is a
-                // real edge.
-                for arm in line.arms() {
-                    uses_in(arm, out);
+                // real edge — and a loop's body is drawn once per element, so its `use` is one too.
+                for body in line.bodies() {
+                    uses_in(body, out);
                 }
             }
             ScreenLine::Node(node) => uses_in(&node.children, out),
             // A binding names no screen and holds no block: it is an input answer, not a placement.
-            ScreenLine::Layer { .. }
-            | ScreenLine::StylePrefix { .. }
-            | ScreenLine::Key { .. }
+            ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
+            | ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
         }
     }
@@ -86,9 +86,12 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
 pub(crate) fn transcludes(lines: &[ScreenLine]) -> bool {
     lines.iter().any(|line| match line {
         ScreenLine::Transclude { .. } => true,
-        // A `transclude` in any arm places the caller's block: which arm draws is a runtime
-        // question, and a block that reaches one of them has somewhere to land.
-        ScreenLine::If { .. } => line.arms().iter().any(|arm| transcludes(arm)),
+        // A `transclude` in any arm of an `if`, or inside a loop, places the caller's block: which arm
+        // draws and how many elements there are are runtime questions, and a block that reaches one of
+        // them has somewhere to land.
+        ScreenLine::If { .. } | ScreenLine::For { .. } => {
+            line.bodies().iter().any(|body| transcludes(body))
+        }
         ScreenLine::Use { body, .. }
         | ScreenLine::Node(vela_syntax::ScreenNode { children: body, .. }) => transcludes(body),
         ScreenLine::Layer { .. }
@@ -120,9 +123,9 @@ fn walk_uses(screens: &[&ScreenDecl], lines: &[ScreenLine], out: &mut Vec<Diagno
                 check_use(screens, *span, name, args, body, out);
                 walk_uses(screens, body, out);
             }
-            ScreenLine::If { .. } => {
-                for arm in line.arms() {
-                    walk_uses(screens, arm, out);
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
+                for body in line.bodies() {
+                    walk_uses(screens, body, out);
                 }
             }
             ScreenLine::Node(node) => walk_uses(screens, &node.children, out),

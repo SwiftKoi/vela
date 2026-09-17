@@ -95,9 +95,9 @@ fn check_keys(lines: &[ScreenLine], inputs: &SemanticActions, out: &mut Vec<Diag
                 }
                 out.push(diagnostic);
             }
-            ScreenLine::If { .. } => {
-                for arm in line.arms() {
-                    check_keys(arm, inputs, out);
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
+                for body in line.bodies() {
+                    check_keys(body, inputs, out);
                 }
             }
             // Written here, so a `key` in it is this screen's own binding.
@@ -134,9 +134,15 @@ fn check_actions(lines: &[ScreenLine], actions: &ActionRegistry, out: &mut Vec<D
                 for clause in elifs {
                     check_action_expr(&clause.condition, actions, out);
                 }
-                for arm in line.arms() {
+                for arm in line.bodies() {
                     check_actions(arm, actions, out);
                 }
+            }
+            // A loop's body is drawn, so its actions are checked like any other — and the iterable is
+            // an expression that may hold one.
+            ScreenLine::For { iterable, body, .. } => {
+                check_action_expr(iterable, actions, out);
+                check_actions(body, actions, out);
             }
             // A binding's action is an action like any other, so a misspelled one is the same
             // mistake here as in an `action` prop — and the delay is an expression that may hold
@@ -298,9 +304,9 @@ fn check_lines(
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { .. } => {
-                for arm in line.arms() {
-                    check_lines(arm, parent, registry, out);
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
+                for body in line.bodies() {
+                    check_lines(body, parent, registry, out);
                 }
             }
             // A `use`'s block is this screen's own code, sitting where the `use` is — so it is

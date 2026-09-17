@@ -348,3 +348,72 @@ fn key_and_timer_lines_parse_with_their_actions() {
     assert!(*repeat, "`repeat` was not read");
     assert!(matches!(bound, Expr::Call { .. }), "{bound:?}");
 }
+
+/// A `for` binds a name to each element of a value, and its body is a block like any other.
+///
+/// The shape is the statement form's (`ForStmt`, `LANGUAGE.md §3`) — one loop in the language rather
+/// than two — and the binding is a *scope*, which is what keeps the dependency set honest (`§8.2`).
+#[test]
+fn a_for_line_binds_a_name_to_a_value() {
+    let program =
+        parse_src("screen s(items):\n    for option in items:\n        text option.caption\n");
+    assert!(
+        program.diagnostics.is_empty(),
+        "{:?}",
+        program
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
+            .collect::<Vec<_>>()
+    );
+
+    let Some(Item::Screen(screen)) = program.program.items.first() else {
+        panic!("expected a screen");
+    };
+    let ScreenLine::For {
+        binding,
+        iterable,
+        body,
+        ..
+    } = &screen.body[0]
+    else {
+        panic!("expected a `for` line");
+    };
+    assert_eq!(binding, "option");
+    assert!(
+        matches!(iterable, Expr::Name { name, .. } if name == "items"),
+        "{iterable:?}"
+    );
+    assert_eq!(body.len(), 1, "the body");
+}
+
+/// A dotted value at the head of a widget's line is the widget's *content*, not a prop name.
+///
+/// `text option.caption` is the same shape as `text line` — a name where a value goes. No prop name
+/// contains a dot, so the chain settles it: reading `option` as a prop name leaves `.caption` with
+/// nowhere to go, which is what the sample's menu writes.
+#[test]
+fn a_dotted_value_parses_as_a_value() {
+    let program = parse_src("screen s(options):\n    text options.first\n");
+    assert!(
+        program.diagnostics.is_empty(),
+        "{:?}",
+        program
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
+            .collect::<Vec<_>>()
+    );
+
+    let Some(Item::Screen(screen)) = program.program.items.first() else {
+        panic!("expected a screen");
+    };
+    let ScreenLine::Node(node) = &screen.body[0] else {
+        panic!("expected a widget");
+    };
+    assert!(
+        matches!(&node.args[0], ScreenArg::Value(Expr::Field { name, .. }) if name == "first"),
+        "{:?}",
+        node.args[0]
+    );
+}

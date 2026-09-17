@@ -47,9 +47,11 @@ fn check_lines(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) {
             | ScreenLine::Key { .. }
             | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
-            ScreenLine::If { .. } => {
-                for arm in line.arms() {
-                    check_lines(arm, out);
+            // An `if` and a `for` both hold bodies that are drawn, so a literal colour in either is
+            // this screen's literal.
+            ScreenLine::If { .. } | ScreenLine::For { .. } => {
+                for body in line.bodies() {
+                    check_lines(body, out);
                 }
             }
             // Written here, so a literal colour in it is this screen's literal.
