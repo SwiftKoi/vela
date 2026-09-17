@@ -219,10 +219,28 @@ pub(super) fn apply_style(node: &mut Node, style: &str, ctx: &Ctx) {
 /// (`screen confirm(message, yes_action, no_action)` … `action yes_action`) — and dropping that case
 /// is what made the sample's confirm screen silently unclickable, with no diagnostic to say so.
 fn action_value(value: PropValue<'_>, values: &Args) -> Option<Action> {
-    if let Some(action) = value.expr().and_then(action_of) {
+    if let Some(action) = value.expr().and_then(|expr| action_from(expr, values)) {
         return Some(action);
     }
     match value.name().and_then(|name| values.get(name)) {
+        Some(Value::Action(action)) => Some(action.clone()),
+        _ => None,
+    }
+}
+
+/// The action an expression denotes: a call written here, or a parameter the screen was given.
+///
+/// Shared with the `key` and `timer` lines, which bind an action the same way a prop holds one
+/// (`SCREENS.md §2.3`): `key cancel action no_action` means what `action no_action` means, and two
+/// resolvers would be two chances to disagree about it.
+pub(super) fn action_from(expr: &Expr, values: &Args) -> Option<Action> {
+    if let Some(action) = action_of(expr) {
+        return Some(action);
+    }
+    let Expr::Name { name, .. } = expr else {
+        return None;
+    };
+    match values.get(name) {
         Some(Value::Action(action)) => Some(action.clone()),
         _ => None,
     }

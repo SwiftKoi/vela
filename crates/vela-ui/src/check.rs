@@ -24,6 +24,7 @@ use vela_syntax::{Expr, ScreenArg, ScreenDecl, ScreenLine, ScreenNode};
 
 use crate::actions::ActionRegistry;
 use crate::compose;
+use crate::input::SemanticActions;
 use crate::widgets::{Widget, WidgetRegistry};
 
 /// Builds a diagnostic for a registered code.
@@ -54,6 +55,7 @@ pub fn check_screen(
     registry: &WidgetRegistry,
     screens: &[&ScreenDecl],
     actions: &ActionRegistry,
+    inputs: &SemanticActions,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     // A screen's top level has no parent widget, so a bare prop there has nothing to belong
@@ -65,7 +67,50 @@ pub fn check_screen(
     compose::check_uses(screens, lines, &mut diagnostics);
     // Every call in a body is an action (`SCREENS.md §7`), and the registry is what says so.
     check_actions(lines, actions, &mut diagnostics);
+    // Every `key` names a semantic action (`§11`), and the vocabulary is what says so.
+    check_keys(lines, inputs, &mut diagnostics);
     diagnostics
+}
+
+/// `E5014` — a `key` naming something the host does not deliver.
+///
+/// Checked, because the alternative is a binding that looks live and answers nothing. Input arrives as
+/// a *semantic* action (`SCREENS.md §11`), so a screen that misspells one is a screen no input
+/// reaches — and nothing about the screen would look wrong.
+fn check_keys(lines: &[ScreenLine], inputs: &SemanticActions, out: &mut Vec<Diagnostic>) {
+    for line in lines {
+        match line {
+            ScreenLine::Key { span, name, .. } => {
+                if inputs.contains(name) {
+                    continue;
+                }
+                let mut diagnostic = diag(
+                    "E5014",
+                    format!("no input action called `{name}`"),
+                    *span,
+                    "the host delivers no action by this name",
+                );
+                if let Some(nearest) = inputs.closest(name) {
+                    diagnostic = diagnostic.with_help(format!("did you mean `{nearest}`?"));
+                }
+                out.push(diagnostic);
+            }
+            ScreenLine::If { .. } => {
+                for arm in line.arms() {
+                    check_keys(arm, inputs, out);
+                }
+            }
+            // Written here, so a `key` in it is this screen's own binding.
+            ScreenLine::Use { body, .. } => check_keys(body, inputs, out),
+            ScreenLine::Node(node) => check_keys(&node.children, inputs, out),
+            // The rest hold no binding: a layer, a prefix, a passthrough, and a timer whose name is a
+            // piece of time rather than an action.
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Timer { .. }
+            | ScreenLine::Transclude { .. } => {}
+        }
+    }
 }
 
 /// Checks every action a body calls against the registry.
@@ -92,6 +137,16 @@ fn check_actions(lines: &[ScreenLine], actions: &ActionRegistry, out: &mut Vec<D
                 for arm in line.arms() {
                     check_actions(arm, actions, out);
                 }
+            }
+            // A binding's action is an action like any other, so a misspelled one is the same
+            // mistake here as in an `action` prop — and the delay is an expression that may hold
+            // one too.
+            ScreenLine::Key { action, .. } => check_action_expr(action, actions, out),
+            ScreenLine::Timer {
+                seconds, action, ..
+            } => {
+                check_action_expr(seconds, actions, out);
+                check_action_expr(action, actions, out);
             }
             ScreenLine::Use { args, body, .. } => {
                 for arg in args {
@@ -240,6 +295,8 @@ fn check_lines(
         match line {
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Key { .. }
+            | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { .. } => {
                 for arm in line.arms() {

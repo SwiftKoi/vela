@@ -154,6 +154,24 @@ impl Writer {
                 self.span(*span);
                 self.string(name);
             }
+            ScreenLine::Key { span, name, action } => {
+                self.u8(6);
+                self.span(*span);
+                self.string(name);
+                self.expr(action);
+            }
+            ScreenLine::Timer {
+                span,
+                seconds,
+                action,
+                repeat,
+            } => {
+                self.u8(7);
+                self.span(*span);
+                self.expr(seconds);
+                self.expr(action);
+                self.flag(*repeat);
+            }
             ScreenLine::Node(node) => {
                 self.u8(2);
                 self.node(node);

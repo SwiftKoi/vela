@@ -44,6 +44,8 @@ fn check_lines(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) {
         match line {
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Key { .. }
+            | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
             ScreenLine::If { .. } => {
                 for arm in line.arms() {

@@ -196,6 +196,8 @@ screen chooser(which):
         text \"B\"
     else:
         text \"C\"
+    key cancel action close_screen()
+    timer 1.5 action hide(chooser)
 ";
     let parsed = vela_syntax::parse(FileId::from_raw(0), source);
     ScreenPack::compile("main", &parsed.program.items)
@@ -254,6 +256,34 @@ fn an_if_chain_survives_the_round_trip() {
     };
     assert_eq!(elifs.len(), 1, "the `elif` arm did not survive");
     assert!(else_body.is_some(), "the `else` arm did not survive");
+}
+
+/// The two input lines survive the codec, their action expressions and all.
+///
+/// A version-7 reader would read either tag as a widget named `""`, which draws nothing — which is why
+/// the version moved: a binding that came back as a widget would make every screen it skins wrong
+/// rather than refused.
+#[test]
+fn a_binding_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let set = ScreenPack::from_bytes(&bytes)
+        .expect("a pack decodes")
+        .into_set();
+
+    let chooser = set.screen("chooser").expect("the screen survives");
+    assert!(
+        chooser.body.iter().any(
+            |line| matches!(line, vela_syntax::ScreenLine::Key { name, .. } if name == "cancel")
+        ),
+        "the `key` line did not survive"
+    );
+    assert!(
+        chooser
+            .body
+            .iter()
+            .any(|line| matches!(line, vela_syntax::ScreenLine::Timer { .. })),
+        "the `timer` line did not survive"
+    );
 }
 
 /// `style_prefix` survives as itself rather than as a widget named `""`.

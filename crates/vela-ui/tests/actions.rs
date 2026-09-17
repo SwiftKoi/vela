@@ -12,7 +12,7 @@ use vela_span::FileId;
 use vela_syntax::{Item, ScreenDecl, ScreenLine, parse};
 use vela_ui::actions::ActionDecl;
 use vela_ui::widgets::PropType;
-use vela_ui::{ActionRegistry, WidgetRegistry, check_screen};
+use vela_ui::{ActionRegistry, SemanticActions, WidgetRegistry, check_screen};
 
 /// Every diagnostic a one-screen source produces.
 fn diagnostics(source: &str) -> Vec<Diagnostic> {
@@ -39,7 +39,15 @@ fn diagnostics(source: &str) -> Vec<Diagnostic> {
     let actions = ActionRegistry::builtin();
     screens
         .iter()
-        .flat_map(|screen| check_screen(&screen.body, &registry, &screens, &actions))
+        .flat_map(|screen| {
+            check_screen(
+                &screen.body,
+                &registry,
+                &screens,
+                &actions,
+                &SemanticActions::builtin(),
+            )
+        })
         .collect()
 }
 
@@ -265,6 +273,7 @@ fn an_action_line_parses_and_checks() {
         &WidgetRegistry::builtin(),
         &screens,
         &ActionRegistry::builtin(),
+        &SemanticActions::builtin(),
     );
     assert!(
         diagnostics.is_empty(),

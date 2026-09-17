@@ -14,6 +14,7 @@ use vela_render::DrawList;
 use vela_syntax::{Item, ScreenDecl, StyleDecl};
 use vela_text::TextEngine;
 
+use crate::actions::Action;
 use crate::eval::{Args, Ctx};
 use crate::focus::{self, Hotspot};
 use crate::instantiate;
@@ -33,6 +34,50 @@ pub struct Laid {
     pub frame: Frame,
     /// Action-bearing nodes, in focus order (`focus::hotspots`).
     pub hotspots: Vec<Hotspot>,
+    /// The semantic actions this screen answers while it is shown (`SCREENS.md §2.3`).
+    pub keys: Vec<KeyBinding>,
+    /// The deadlines it declares. Data, because nothing fires them yet — see [`Timer`].
+    pub timers: Vec<Timer>,
+}
+
+impl Laid {
+    /// The action this screen answers `name` with, if it binds it.
+    ///
+    /// The first binding wins, as the first arm of an `if` does: a screen that binds one action twice
+    /// has one answer, and it is the one a reader meets first.
+    #[must_use]
+    pub fn key(&self, name: &str) -> Option<&Action> {
+        self.keys
+            .iter()
+            .find(|binding| binding.name == name)
+            .map(|binding| &binding.action)
+    }
+}
+
+/// A semantic action a screen answers, and what it does about it (`SCREENS.md §2.3`).
+#[derive(Clone, PartialEq, Debug)]
+pub struct KeyBinding {
+    /// The host's semantic action — `cancel`, `menu_up`, … — as the screen wrote it.
+    pub name: String,
+    /// What the screen does when it arrives.
+    pub action: Action,
+}
+
+/// A deadline a screen declares (`SCREENS.md §2.3`).
+///
+/// Both halves are resolved — the delay to seconds, the action to a call — and nothing fires it.
+/// `SCREENS.md §6` runs animation from `World::clock`, no clock reaches the screen runtime, and a
+/// `timer` is therefore a declaration the runtime carries and does not yet act on. Said here, on the
+/// type, rather than only in the docs: a `timer` that quietly never fires is exactly the failure that
+/// looks like the project's mistake.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Timer {
+    /// How long, in seconds.
+    pub seconds: f32,
+    /// What the screen does when it elapses.
+    pub action: Action,
+    /// Whether it fires again.
+    pub repeat: bool,
 }
 
 /// The screens, styles, and theme of one file.
@@ -134,6 +179,25 @@ impl ScreenSet {
             .collect()
     }
 
+    /// Runs a visitor over a screen body with this set's resolution context.
+    ///
+    /// The context borrows this set's styles, palette, fonts, and screens, so it cannot be handed out —
+    /// and it is built twice for one screen (`build` wants a tree, `bindings` wants the inputs), which
+    /// is why it is built here once rather than at each call site.
+    fn with_ctx<R>(&self, visit: impl FnOnce(&Ctx<'_>) -> R) -> R {
+        // Built here rather than stored, because a set that held both the screens and references to
+        // them would be a struct borrowing from itself.
+        let screens: Vec<&ScreenDecl> = self.screens.iter().collect();
+        let ctx = Ctx {
+            registry: &self.registry,
+            palette: &self.palette,
+            fonts: &self.fonts,
+            styles: &self.styles,
+            screens: &screens,
+        };
+        visit(&ctx)
+    }
+
     /// Evaluates a screen to a widget tree, or `None` if it is not declared.
     #[must_use]
     pub fn build(
@@ -145,25 +209,9 @@ impl ScreenSet {
         max_width: f32,
     ) -> Option<Node> {
         let screen = self.screen(name)?;
-        // The file's screens as references, so a `use` in this one can find the screen it names.
-        // Built here rather than stored, because a set that held both the screens and references to
-        // them would be a struct borrowing from itself.
-        let screens: Vec<&ScreenDecl> = self.screens.iter().collect();
-        let ctx = Ctx {
-            registry: &self.registry,
-            palette: &self.palette,
-            fonts: &self.fonts,
-            styles: &self.styles,
-            screens: &screens,
-        };
-        Some(instantiate::build(
-            &screen.body,
-            &ctx,
-            args,
-            text,
-            font,
-            max_width,
-        ))
+        Some(
+            self.with_ctx(|ctx| instantiate::build(&screen.body, ctx, args, text, font, max_width)),
+        )
     }
 
     /// Evaluates and lays out a screen, collecting where it goes and what can be activated.
@@ -181,13 +229,21 @@ impl ScreenSet {
         font: &str,
     ) -> Option<Laid> {
         let (width, height) = (size.0 as f32, size.1 as f32);
-        let node = self.build(name, args, text, font, width)?;
+        let screen = self.screen(name)?;
+        // One context, two questions: the tree, and the input bindings that are not part of it.
+        let (node, keys, timers) = self.with_ctx(|ctx| {
+            let node = instantiate::build(&screen.body, ctx, args, text, font, width);
+            let (keys, timers) = instantiate::bindings(&screen.body, ctx, args);
+            (node, keys, timers)
+        });
         let frame = layout(&node, Constraints::exact(Size::new(width, height)));
         let hotspots = focus::hotspots(&node, &frame);
         Some(Laid {
             node,
             frame,
             hotspots,
+            keys,
+            timers,
         })
     }
 

@@ -61,8 +61,12 @@ fn build_lines(
     for line in lines {
         match line {
             // A `layer` names where the screen draws and a `style_prefix` how its widgets look;
-            // neither draws anything itself, and the prefix is read above.
-            ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
+            // neither draws anything itself, and the prefix is read above. A binding places nothing
+            // either: `instantiate::bindings` is what collects those.
+            ScreenLine::Layer { .. }
+            | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Key { .. }
+            | ScreenLine::Timer { .. } => {}
             ScreenLine::If { .. } => {
                 if let Some(arm) = arm_of(line, args) {
                     out.extend(build_lines(arm, ctx, args, compose, text, font, max_width));
@@ -136,7 +140,10 @@ fn apply_line(
     max_width: f32,
 ) {
     match line {
-        ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => {}
+        ScreenLine::Layer { .. }
+        | ScreenLine::StylePrefix { .. }
+        | ScreenLine::Key { .. }
+        | ScreenLine::Timer { .. } => {}
         ScreenLine::If { .. } => {
             if let Some(arm) = arm_of(line, args) {
                 // A branch is a block, so a prefix declared inside it scopes to it — `build_lines`
@@ -254,9 +261,9 @@ fn composed(
 /// The arm an `if` draws: the first condition that holds, or the `else` when none does.
 ///
 /// `None` for a line that is not an `if`, and for an `if` whose every arm fails. One decision in one
-/// place, because the two paths that build a body — a top-level line and one nested in a widget —
-/// would otherwise each have to get the order and the short circuit right.
-fn arm_of<'a>(line: &'a ScreenLine, args: &Args) -> Option<&'a [ScreenLine]> {
+/// place, because three paths need it — a top-level line, one nested in a widget, and the input
+/// bindings — and each of them would otherwise have to get the order and the short circuit right.
+pub(super) fn arm_of<'a>(line: &'a ScreenLine, args: &Args) -> Option<&'a [ScreenLine]> {
     let ScreenLine::If {
         condition,
         body,

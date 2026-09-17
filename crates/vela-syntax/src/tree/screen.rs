@@ -103,6 +103,36 @@ pub enum ScreenLine {
         /// The line's span.
         span: Span,
     },
+    /// `key <action> action <call>` — a semantic action this screen answers while it is shown.
+    ///
+    /// The name is the *host's* (`SCREENS.md §11`: `advance`, `cancel`, `menu_up`, …), not a device
+    /// key: input is abstracted to what the player meant, so a screen never asks which button was
+    /// pressed and a profile can move the button without touching the screen. The checker holds the
+    /// name to the vocabulary it was given, because a binding that names nothing is a key that does
+    /// nothing and says nothing.
+    Key {
+        /// The line's span.
+        span: Span,
+        /// The semantic action, as written — a name, not Ren'Py's string.
+        name: String,
+        /// What the screen does when it arrives: a call, or a parameter's name.
+        action: Expr,
+    },
+    /// `timer <seconds> action <call> [repeat]` — what the screen does when time passes.
+    ///
+    /// The deadline is data here (`Laid::timers`) rather than a behaviour, because the clock is not
+    /// this layer's: `SCREENS.md §6` drives animation from `World::clock`, and until something
+    /// advances a clock into the screen runtime a timer is a declaration nothing fires yet.
+    Timer {
+        /// The line's span.
+        span: Span,
+        /// How long, in seconds. A value, resolved like any other.
+        seconds: Expr,
+        /// What the screen does when it elapses.
+        action: Expr,
+        /// Whether it fires again after it elapses.
+        repeat: bool,
+    },
     /// A widget, or a prop written on its own line.
     Node(ScreenNode),
 }

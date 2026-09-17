@@ -296,3 +296,55 @@ fn an_if_chain_is_one_line_with_its_arms() {
     assert_eq!(elifs.len(), 2, "two `elif` arms");
     assert!(else_body.is_some(), "and the `else` is the same line's");
 }
+
+/// A `key` binds a semantic action to an action, and a `timer` a delay to one.
+///
+/// Both are *lines* rather than props: they place nothing, so they are not widgets, and the action each
+/// holds parses exactly as an `action` prop's value does (`SCREENS.md §2.3`). The semantic action is a
+/// name rather than Ren'Py's string, the same trade `style_prefix` makes.
+#[test]
+fn key_and_timer_lines_parse_with_their_actions() {
+    let program = parse_src(
+        "screen s:\n    key cancel action close_screen()\n    timer 3.5 repeat action hide(note)\n",
+    );
+    assert!(
+        program.diagnostics.is_empty(),
+        "{:?}",
+        program
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
+            .collect::<Vec<_>>()
+    );
+
+    let Some(Item::Screen(screen)) = program.program.items.first() else {
+        panic!("expected a screen");
+    };
+
+    let ScreenLine::Key {
+        name,
+        action: bound,
+        ..
+    } = &screen.body[0]
+    else {
+        panic!("expected a `key` line");
+    };
+    assert_eq!(name, "cancel");
+    assert!(
+        matches!(bound, Expr::Call { .. }),
+        "`close_screen()` is a call: {bound:?}"
+    );
+
+    let ScreenLine::Timer {
+        seconds,
+        action: bound,
+        repeat,
+        ..
+    } = &screen.body[1]
+    else {
+        panic!("expected a `timer` line");
+    };
+    assert!(matches!(seconds, Expr::Float { .. }), "{seconds:?}");
+    assert!(*repeat, "`repeat` was not read");
+    assert!(matches!(bound, Expr::Call { .. }), "{bound:?}");
+}

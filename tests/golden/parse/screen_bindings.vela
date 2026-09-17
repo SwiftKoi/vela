@@ -1,0 +1,18 @@
+screen pause:
+    key cancel action close_screen()
+    key menu_up action open_screen(credits)
+    timer 3.5 action close_screen()
+    timer 0.1 repeat action close_screen()
+
+screen notify(message):
+    box:
+        text message
+    timer 2.0 action hide(notify)
+
+screen confirm(message, no_action):
+    column:
+        text message
+        button:
+            text "OK"
+            action close_screen()
+    key cancel action no_action

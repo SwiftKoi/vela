@@ -111,6 +111,9 @@ fn screens(parsed: &ParseResult) -> Vec<Diagnostic> {
             &registry,
             &screens,
             &actions,
+            // The engine's own vocabulary. A target with a different input profile is a project
+            // setting the editor does not read yet (`SCREENS.md §11`).
+            &vela_ui::SemanticActions::builtin(),
         ));
         diagnostics.extend(vela_ui::check_screen_styles(&screen.body, &styles));
         diagnostics.extend(vela_ui::a11y::check_labels(&screen.body, &registry));

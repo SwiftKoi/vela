@@ -56,6 +56,14 @@ impl Parser<'_> {
             self.end_statement();
             return Some(ScreenLine::Transclude { span: start });
         }
+        // Contextual too, and for the same reason: `key` and `timer` are ordinary words a widget
+        // could be called, and only a line that starts with one is an input binding.
+        if self.at_keyword_word("key") {
+            return self.parse_screen_key(start);
+        }
+        if self.at_keyword_word("timer") {
+            return self.parse_screen_timer(start);
+        }
         // `pass` is the language's own empty statement, and a screen needs *something* indented
         // to have a body. Read as a widget it would be a line named `pass` and reported as an
         // unknown widget — an error about a screen that is doing exactly the right thing.

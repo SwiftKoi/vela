@@ -162,6 +162,24 @@ impl Reader<'_> {
                 let name = self.string();
                 ScreenLine::StylePrefix { span, name }
             }
+            6 => {
+                let span = self.span();
+                let name = self.string();
+                let action = self.expr();
+                ScreenLine::Key { span, name, action }
+            }
+            7 => {
+                let span = self.span();
+                let seconds = self.expr();
+                let action = self.expr();
+                let repeat = self.flag();
+                ScreenLine::Timer {
+                    span,
+                    seconds,
+                    action,
+                    repeat,
+                }
+            }
             _ => ScreenLine::Node(self.node()),
         }
     }

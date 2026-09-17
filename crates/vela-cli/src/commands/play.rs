@@ -19,6 +19,7 @@ use vela_world::Input;
 
 use crate::command::Error;
 use crate::commands::ui::{Screens, Stack, Watcher};
+use vela_ui::actions::Action as ScreenAction;
 
 /// The bundled default face. See `assets/fonts/README.md`.
 const FACE: &[u8] = include_bytes!("../../../../assets/fonts/LiberationSans-Regular.ttf");
@@ -287,6 +288,15 @@ impl Player {
             return;
         };
         println!("screen activate {action}");
+        self.run(action);
+    }
+
+    /// Runs an action a screen asked for, however it asked.
+    ///
+    /// One place, because a screen asks two ways — the focused control, and a `key` binding — and a
+    /// binding that dispatched through a second copy of this match would be a second place for the two
+    /// to disagree about what `hide` means.
+    fn run(&mut self, action: ScreenAction) {
         match action.name.as_str() {
             "open_screen" => {
                 let Some(name) = action.first() else {
@@ -346,6 +356,14 @@ impl vela_host::App for Player {
     }
 
     fn action(&mut self, action: vela_host::Action, _window: &vela_host::Window) {
+        // A screen may answer this itself, and it answers first: a modal screen that binds `cancel` is
+        // what keeps Escape from dismissing it, which is the whole point of the binding
+        // (`SCREENS.md §2.3`).
+        if let Some(bound) = self.overlays.key_action(action.as_str()).cloned() {
+            println!("screen key {} {bound}", action.as_str());
+            self.run(bound);
+            return;
+        }
         match action {
             vela_host::Action::Cancel => self.toggle_menu(),
             vela_host::Action::MenuUp => self.steer(-1),

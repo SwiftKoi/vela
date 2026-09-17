@@ -99,6 +99,8 @@ fn collect_lines(
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
             | ScreenLine::Transclude { .. } => {}
+            // Every condition and every arm, because which arm holds is a runtime question and a
+            // dependency set that guessed would show stale text forever in the arms it skipped.
             ScreenLine::If {
                 condition,
                 body,
@@ -106,8 +108,6 @@ fn collect_lines(
                 else_body,
                 ..
             } => {
-                // Every condition and every arm, because which arm holds is a runtime question and a
-                // dependency set that guessed would show stale text forever in the arms it skipped.
                 collect_expr(condition, out);
                 collect_lines(screens, body, out, path);
                 for clause in elifs {
@@ -118,53 +118,80 @@ fn collect_lines(
                     collect_lines(screens, else_body, out, path);
                 }
             }
+            // A binding's expressions are reads like any other: the action it names and the delay it
+            // waits are names this screen mentions, so a change to either must stale its frame.
+            ScreenLine::Key { action, .. } => collect_expr(action, out),
+            ScreenLine::Timer {
+                seconds, action, ..
+            } => {
+                collect_expr(seconds, out);
+                collect_expr(action, out);
+            }
             ScreenLine::Use {
                 name, args, body, ..
-            } => {
-                // Only the argument *values* are reads here. A named argument's name is a parameter
-                // of the used screen, not a field this screen mentions — the opposite of a widget's
-                // arg, where a bare name is the content (`text line`).
-                for arg in args {
-                    match arg {
-                        ScreenArg::Value(value) => collect_expr(value, out),
-                        ScreenArg::Named {
-                            value: Some(value), ..
-                        } => collect_expr(value, out),
-                        ScreenArg::Named { value: None, .. } => {}
-                    }
-                }
-                // The block is this screen's own code, wherever the used screen places it.
-                collect_lines(screens, body, out, path);
+            } => collect_use(screens, name, args, body, out, path),
+            ScreenLine::Node(node) => collect_node(screens, node, out, path),
+        }
+    }
+}
 
-                if !path.iter().any(|seen| seen == name)
-                    && let Some(callee) = compose::find(screens, name)
-                {
-                    path.push(name.clone());
-                    collect_lines(screens, &callee.body, out, path);
-                    path.pop();
+/// A `use`: its argument values, its block, and the used screen's own body.
+///
+/// Only the argument *values* are reads. A named argument's name is a parameter of the used screen,
+/// not a field this screen mentions — the opposite of a widget's arg, where a bare name is the content
+/// (`text line`).
+fn collect_use(
+    screens: &[&ScreenDecl],
+    name: &str,
+    args: &[ScreenArg],
+    body: &[ScreenLine],
+    out: &mut DepSet,
+    path: &mut Vec<String>,
+) {
+    for arg in args {
+        match arg {
+            ScreenArg::Value(value) => collect_expr(value, out),
+            ScreenArg::Named {
+                value: Some(value), ..
+            } => collect_expr(value, out),
+            ScreenArg::Named { value: None, .. } => {}
+        }
+    }
+    // The block is this screen's own code, wherever the used screen places it.
+    collect_lines(screens, body, out, path);
+
+    if !path.iter().any(|seen| seen == name)
+        && let Some(callee) = compose::find(screens, name)
+    {
+        path.push(name.to_string());
+        collect_lines(screens, &callee.body, out, path);
+        path.pop();
+    }
+}
+
+/// A widget: its arguments, and its children.
+fn collect_node(
+    screens: &[&ScreenDecl],
+    node: &vela_syntax::ScreenNode,
+    out: &mut DepSet,
+    path: &mut Vec<String>,
+) {
+    for arg in &node.args {
+        match arg {
+            ScreenArg::Value(value) => collect_expr(value, out),
+            // A bare name is collected too, even though most of them are prop names like
+            // `stretch_x` that read nothing. `text line` is the same shape and *is* a read, and the
+            // two cannot be told apart here — so this over-approximates, which is the safe
+            // direction: an extra name costs a relayout, a missing one shows stale text forever.
+            ScreenArg::Named { name, value, .. } => {
+                out.insert(name.clone());
+                if let Some(value) = value {
+                    collect_expr(value, out);
                 }
-            }
-            ScreenLine::Node(node) => {
-                for arg in &node.args {
-                    match arg {
-                        ScreenArg::Value(value) => collect_expr(value, out),
-                        // A bare name is collected too, even though most of them are prop
-                        // names like `stretch_x` that read nothing. `text line` is the same
-                        // shape and *is* a read, and the two cannot be told apart here — so
-                        // this over-approximates, which is the safe direction: an extra name
-                        // costs a relayout, a missing one shows stale text forever.
-                        ScreenArg::Named { name, value, .. } => {
-                            out.insert(name.clone());
-                            if let Some(value) = value {
-                                collect_expr(value, out);
-                            }
-                        }
-                    }
-                }
-                collect_lines(screens, &node.children, out, path);
             }
         }
     }
+    collect_lines(screens, &node.children, out, path);
 }
 
 /// Walks an expression.

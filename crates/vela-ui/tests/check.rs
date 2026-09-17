@@ -6,7 +6,7 @@
 
 use vela_span::FileId;
 use vela_syntax::{Item, ScreenDecl, parse};
-use vela_ui::{ActionRegistry, WidgetRegistry, check_screen};
+use vela_ui::{ActionRegistry, SemanticActions, WidgetRegistry, check_screen};
 
 /// Every `screen` a parsed fixture declares, as the checker wants them.
 fn screens_of(parsed: &vela_syntax::ParseResult) -> Vec<&ScreenDecl> {
@@ -43,6 +43,7 @@ fn diagnose(body: &str) -> Vec<(String, String)> {
         &WidgetRegistry::builtin(),
         &screens,
         &ActionRegistry::builtin(),
+        &SemanticActions::builtin(),
     )
     .into_iter()
     .map(|d| {
@@ -68,6 +69,7 @@ fn a_valid_screen_is_clean() {
         &WidgetRegistry::builtin(),
         &screens,
         &ActionRegistry::builtin(),
+        &SemanticActions::builtin(),
     );
     assert!(
         diagnostics.is_empty(),
@@ -182,4 +184,33 @@ fn a_mistake_in_an_elif_or_else_is_reported() {
     assert_eq!(diagnostics.len(), 2, "{diagnostics:?}");
     assert_eq!(diagnostics[0].0, "E5005");
     assert_eq!(diagnostics[1].0, "E5005");
+}
+
+/// `E5014` — a `key` naming something the host does not deliver, with the name it probably meant.
+///
+/// The binding is what makes a modal screen modal, so a misspelled one is a screen whose escape hatch
+/// answers nothing — and nothing about the screen would look wrong.
+#[test]
+fn an_unknown_semantic_action_is_reported_with_a_suggestion() {
+    let diagnostics = diagnose("    key menue_up action close_screen()\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    let (code, help) = &diagnostics[0];
+    assert_eq!(code, "E5014");
+    assert!(help.contains("menu_up"), "{help}");
+}
+
+/// A `key`'s action is an action like any other: a misspelled one is `E5012`, in a binding as in a prop.
+#[test]
+fn a_key_binding_checks_its_action() {
+    let diagnostics = diagnose("    key cancel action clse_screen()\n");
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].0, "E5012");
+}
+
+/// The bindings the engine delivers are clean, and so is a timer.
+#[test]
+fn a_valid_binding_is_clean() {
+    let diagnostics =
+        diagnose("    key cancel action close_screen()\n    timer 3.0 action quit()\n");
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }

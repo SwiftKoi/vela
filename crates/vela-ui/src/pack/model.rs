@@ -33,7 +33,10 @@ use crate::theme::{Fonts, Palette};
 /// Version 7 adds an `if`'s `elif` arms and its `else` (`SCREENS.md §4`). A version-6 reader would take
 /// the `elif` count for the next line's tag, so a screen with an `elif` would decode as a tree the
 /// author did not write — a wrong screen rather than a refused one.
-pub const PACK_VERSION: u16 = 7;
+/// Version 8 adds the two input lines, `key` and `timer` (`SCREENS.md §2.3`). A version-7 reader would
+/// read either tag as a widget named `""`, which draws nothing — so it must refuse rather than draw a
+/// screen with its bindings quietly missing.
+pub const PACK_VERSION: u16 = 8;
 
 /// The four bytes every pack starts with.
 ///

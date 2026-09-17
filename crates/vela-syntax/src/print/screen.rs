@@ -85,6 +85,24 @@ fn write(writer: &mut Writer<'_>, line: &ScreenLine) {
         }
         // A bare line, like `pass`: nothing follows it, and nothing can.
         ScreenLine::Transclude { .. } => writer.line("transclude"),
+        ScreenLine::Key { name, action, .. } => {
+            writer.line(&format!("key {name} action {}", expr::text(action)));
+        }
+        ScreenLine::Timer {
+            seconds,
+            action,
+            repeat,
+            ..
+        } => {
+            // `repeat` before `action`, which is the canonical order the parser reads — a binding
+            // written the other way round would come back in this one.
+            let again = if *repeat { " repeat" } else { "" };
+            writer.line(&format!(
+                "timer {}{again} action {}",
+                expr::text(seconds),
+                expr::text(action)
+            ));
+        }
         ScreenLine::Node(declared) => node(writer, declared),
     }
 }
@@ -138,6 +156,8 @@ fn start_of(line: &ScreenLine) -> u32 {
         | ScreenLine::StylePrefix { span, .. }
         | ScreenLine::If { span, .. }
         | ScreenLine::Use { span, .. }
+        | ScreenLine::Key { span, .. }
+        | ScreenLine::Timer { span, .. }
         | ScreenLine::Transclude { span } => span.start(),
         ScreenLine::Node(node) => node.span.start(),
     }

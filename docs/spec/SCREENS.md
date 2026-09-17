@@ -143,6 +143,53 @@ screen status(ready: bool, waiting: bool):
 > `tests/compose.rs` that a `transclude` in an `elif` places the block, and `tests/reactivity.rs` that
 > an `elif`'s reads are the screen's.
 
+### 2.3 Input: `key` and `timer`
+
+A screen answers input by naming what the player *meant*, never which button they pressed:
+
+```vela
+screen confirm(message, no_action):
+    column:
+        text message
+        button:
+            text "OK"
+            action close_screen()
+    key cancel action no_action
+
+screen notify(message):
+    box at top:
+        text message
+    timer 3.25 action hide(notify)
+```
+
+- **A `key` binds a semantic action** — one of the host's (§11) — to an action this screen runs while it
+  is shown. The name is written as a *name*, not Ren'Py's string (`key "game_menu"`), the same trade
+  `style_prefix` makes (§5.2), and the migrator's job to drop the quotes.
+- **The top screen answers first.** A binding is consulted before the runtime's own handling of that
+  action, which is what makes a modal screen modal: `key cancel action no_action` is how the sample's
+  confirm screen keeps Escape from dismissing it. A screen under another is not asked, exactly as it is
+  not navigable (§10).
+- **A name nothing delivers is `E5014`.** A binding that never fires is a screen whose escape hatch
+  quietly does nothing, and nothing about the screen would look wrong — so the vocabulary is checked,
+  against the set the caller supplies, the same shape the widget and action registries have.
+- **`timer <seconds> [repeat] action <call>` declares a deadline.** `repeat` makes it come round again.
+- **A binding is an action, so it resolves like one.** `key cancel action no_action` and
+  `action no_action` mean the same thing, including a parameter the screen was handed — which is how a
+  caller says what a screen's escape hatch does.
+- **A binding is not a placement.** A `key` or a `timer` draws nothing, so it is not part of the widget
+  tree; it is collected beside it and carried on the screen a runtime navigates.
+
+> **Not yet.** A `timer` is *data*, not behaviour: the laid screen carries the deadline and the action
+> (`Laid::timers`) and nothing fires them. §6 runs animation from `World::clock`, and no clock reaches
+> the screen runtime yet, so a deadline measured against wall time would be a frame nobody could replay.
+> Firing a timer is the clock work, and this is the record that a `timer` draws nothing until then.
+
+> **Implemented (M12.1).** `key` and `timer` as screen lines; the screen pack moved to version 8.
+> `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/check.rs` that an unknown name
+> is `E5014` and a binding's action is checked like any other, `tests/instantiate.rs` that the bindings
+> a screen declares resolve into the `Laid` it draws, and `crates/vela-cli/src/tests/ui_tests.rs` that
+> the top screen answers its own — and that the vocabulary is the host's, name for name.
+
 ## 3. Widget tree
 
 The built-in node set. Each is a registered widget (`CONVENTIONS.md §4.2`), not a hardcoded
@@ -507,8 +554,20 @@ Structural, not a mode (VISION Principle 8).
 
 Input is abstracted to **semantic actions**, not keys. A project defines a binding profile;
 the engine resolves device events to actions (`advance`, `skip`, `rollback`, `menu_up`,
-`ui_confirm`, `screenshot`, …). Gamepad, keyboard, mouse, and touch are profiles over the same
+`confirm`, `screenshot`, …). Gamepad, keyboard, mouse, and touch are profiles over the same
 action set, so a screen never asks "what key was pressed".
+
+The set is `vela_host::Action` — nine names, `Action::all()` — and it is what a screen's `key` binds
+(§2.3). The checker validates the name against `vela_ui::input::SemanticActions`, which mirrors that
+list because `vela-ui` cannot depend on `vela-host`: a screen checker that pulled a windowing library
+in to validate a name would be the worse trade. `crates/vela-cli/src/tests/ui_tests.rs` asserts the two
+lists agree, so a drift is a failing test rather than a binding the editor accepts and the window cannot
+deliver.
+
+> **Revised (M12.1).** This paragraph listed `ui_confirm` where the engine spells the action `confirm`.
+> No such action has ever existed: the host's table is the authority for what a window delivers, and the
+> doc now says what it says. Found while writing `E5014`, which is the check that makes the difference
+> between the two visible.
 
 ## 12. Hot reload
 

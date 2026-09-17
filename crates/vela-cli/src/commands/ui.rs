@@ -362,6 +362,15 @@ impl Stack {
             .map(|hotspot| &hotspot.action)
     }
 
+    /// The action the top screen answers `name` with, if it binds one.
+    ///
+    /// Only the top screen, for the same reason only the top screen is navigable: a binding under
+    /// another screen is behind it, and input goes to what the player can see (`SCREENS.md §2.3`).
+    #[must_use]
+    pub fn key_action(&self, name: &str) -> Option<&ScreenAction> {
+        self.overlays.last()?.laid.key(name)
+    }
+
     /// Paints every open screen, bottom first, then a highlight over the focused hotspot.
     ///
     /// The highlight is the runtime's, not the screen's: focus has to be *visible* for the

@@ -51,6 +51,7 @@ E5010|error|a screen call's arguments do not match its parameters
 E5011|error|screens use each other in a loop
 E5012|error|no such action
 E5013|error|an action is given the wrong number of arguments
+E5014|error|no such semantic action
 E6001|error|the stack depth differs across paths into a block
 E6002|error|an instruction's operands do not match its declared stack effect
 E6003|error|a jump target is not an instruction boundary

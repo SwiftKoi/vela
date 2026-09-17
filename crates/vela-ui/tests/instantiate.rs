@@ -281,3 +281,88 @@ fn an_if_with_no_arm_holding_draws_nothing() {
         root.children
     );
 }
+
+/// A `key` binding and a `timer` deadline resolve into the laid screen (`SCREENS.md §2.3`).
+///
+/// Neither places a widget, so neither is in the tree — they are collected beside it and carried on the
+/// `Laid` a runtime navigates. An action bound to a *parameter* resolves here the way an `action` prop
+/// does, which is what lets a caller say what a screen's escape hatch does.
+#[test]
+fn bindings_resolve_into_the_laid_screen() {
+    let source = "\
+screen confirm(message, no_action):
+    column:
+        text message
+        key cancel action no_action
+    timer 3.5 repeat action close_screen()
+";
+    let mut args = Args::new();
+    args.set("message", Value::Str("Leave?".to_string()));
+    args.set(
+        "no_action",
+        Value::Action(Action::new("hide", vec!["confirm".to_string()])),
+    );
+
+    let mut text = engine();
+    let laid = set(source)
+        .lay("confirm", &args, (1280, 720), &mut text, "sans")
+        .expect("the screen is declared");
+
+    let bound = laid.key("cancel").expect("`cancel` is bound");
+    assert_eq!(bound.name, "hide", "a binding to a parameter was lost");
+    assert_eq!(bound.first(), Some("confirm"));
+    assert!(laid.key("advance").is_none(), "an unbound action answered");
+
+    assert_eq!(laid.timers.len(), 1, "{:?}", laid.timers);
+    assert!((laid.timers[0].seconds - 3.5).abs() < f32::EPSILON);
+    assert!(laid.timers[0].repeat, "`repeat` was lost");
+    assert_eq!(laid.timers[0].action.name, "close_screen");
+}
+
+/// A binding follows the arm that draws, and a `use`d screen's binding is the caller's.
+///
+/// Composition and conditionals do not hide an input: a wrapper's binding is live wherever the wrapper
+/// is drawn, and an arm nobody took answers nothing — the same rule the widgets in it follow.
+#[test]
+fn bindings_follow_the_drawn_arm_and_composition() {
+    let source = "\
+screen wrapper:
+    box:
+        transclude
+    key cancel action close_screen()
+
+screen page(first: bool):
+    use wrapper:
+        text \"Hi\"
+    if first:
+        key menu_up action quit()
+    else:
+        key menu_down action quit()
+";
+    let mut text = engine();
+    let laid = |first: bool, text: &mut vela_text::TextEngine| {
+        let mut args = Args::new();
+        args.set("first", Value::Bool(first));
+        set(source)
+            .lay("page", &args, (1280, 720), text, "sans")
+            .expect("the screen is declared")
+    };
+
+    let taken = laid(true, &mut text);
+    assert!(
+        taken.key("cancel").is_some(),
+        "the used screen's binding was lost"
+    );
+    assert!(
+        taken.key("menu_up").is_some(),
+        "the drawn arm's binding was lost"
+    );
+    assert!(
+        taken.key("menu_down").is_none(),
+        "an arm nobody took bound something"
+    );
+
+    let other = laid(false, &mut text);
+    assert!(other.key("menu_down").is_some());
+    assert!(other.key("menu_up").is_none());
+}

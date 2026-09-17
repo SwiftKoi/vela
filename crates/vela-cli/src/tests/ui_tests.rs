@@ -238,3 +238,81 @@ fn opening_an_undeclared_screen_does_nothing() {
     assert!(stack.focused().is_none());
     assert!(!stack.move_focus(1));
 }
+
+/// A screen answers its `key` bindings while it is open — and only the top screen is asked.
+///
+/// `SCREENS.md §2.3`: input arrives as a semantic action and a screen may answer one itself, which is
+/// what makes a modal screen modal. A binding under another screen is behind it, like everything else
+/// about that screen — the same rule focus follows.
+#[test]
+fn the_top_screen_answers_its_key_bindings() {
+    let source = "\
+screen confirm(message):
+    column:
+        text message
+        button:
+            text \"OK\"
+            action close_screen()
+    key cancel action close_screen()
+
+screen credits:
+    box:
+        text \"Credits\"
+    key cancel action quit()
+
+label start:
+    \"Hi.\"
+    return
+";
+    let project = temp_project("keys", source);
+    let collected = crate::commands::check::collect(&project).expect("a valid project");
+    let screens = crate::commands::ui::Screens::load(&collected);
+    let mut text = text_engine();
+    let mut stack = crate::commands::ui::Stack::default();
+
+    assert!(stack.key_action("cancel").is_none(), "nothing is open");
+    assert!(stack.open(&screens, "confirm", (1280, 720), &mut text, "sans"));
+    assert_eq!(
+        stack
+            .key_action("cancel")
+            .map(|action| action.name.as_str()),
+        Some("close_screen")
+    );
+    assert!(
+        stack.key_action("advance").is_none(),
+        "an action the screen does not bind was answered"
+    );
+
+    // The screen underneath is not asked: its binding is behind the one on top.
+    assert!(stack.open(&screens, "credits", (1280, 720), &mut text, "sans"));
+    assert_eq!(
+        stack
+            .key_action("cancel")
+            .map(|action| action.name.as_str()),
+        Some("quit")
+    );
+    assert_eq!(stack.close().as_deref(), Some("credits"));
+    assert_eq!(
+        stack
+            .key_action("cancel")
+            .map(|action| action.name.as_str()),
+        Some("close_screen"),
+        "closing the top screen did not uncover the one under it"
+    );
+}
+
+/// The semantic-action vocabulary is the host's, name for name.
+///
+/// `vela-ui` cannot depend on `vela-host` — a screen checker that pulled a windowing library in to
+/// validate a name is the worse trade — so the list exists twice. This is the one crate that can see
+/// both, so the assertion is what keeps them from drifting: a `key` the editor accepts and the window
+/// cannot deliver is a binding that never fires, which is the failure the check exists to prevent.
+#[test]
+fn the_semantic_actions_match_the_hosts() {
+    let ours = vela_ui::SemanticActions::builtin();
+    let host: Vec<&str> = vela_host::Action::all()
+        .iter()
+        .map(|action| action.as_str())
+        .collect();
+    assert_eq!(ours.names(), host);
+}

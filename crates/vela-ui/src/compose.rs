@@ -66,8 +66,11 @@ pub(crate) fn uses_in(lines: &[ScreenLine], out: &mut Vec<String>) {
                 }
             }
             ScreenLine::Node(node) => uses_in(&node.children, out),
+            // A binding names no screen and holds no block: it is an input answer, not a placement.
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Key { .. }
+            | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
         }
     }
@@ -88,7 +91,10 @@ pub(crate) fn transcludes(lines: &[ScreenLine]) -> bool {
         ScreenLine::If { .. } => line.arms().iter().any(|arm| transcludes(arm)),
         ScreenLine::Use { body, .. }
         | ScreenLine::Node(vela_syntax::ScreenNode { children: body, .. }) => transcludes(body),
-        ScreenLine::Layer { .. } | ScreenLine::StylePrefix { .. } => false,
+        ScreenLine::Layer { .. }
+        | ScreenLine::StylePrefix { .. }
+        | ScreenLine::Key { .. }
+        | ScreenLine::Timer { .. } => false,
     })
 }
 
@@ -122,6 +128,8 @@ fn walk_uses(screens: &[&ScreenDecl], lines: &[ScreenLine], out: &mut Vec<Diagno
             ScreenLine::Node(node) => walk_uses(screens, &node.children, out),
             ScreenLine::Layer { .. }
             | ScreenLine::StylePrefix { .. }
+            | ScreenLine::Key { .. }
+            | ScreenLine::Timer { .. }
             | ScreenLine::Transclude { .. } => {}
         }
     }
