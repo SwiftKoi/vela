@@ -121,8 +121,9 @@ screen status(ready: bool, waiting: bool):
 ```
 
 - **The arms are clauses of one line.** `elif` and `else` belong to the `if` they continue, and there is
-  no way to write one without it — the shape the statement form already has (`LANGUAGE.md §3`). So a
-  conditional is one node, and choosing an arm is one decision rather than a walk that remembers.
+  no way to write one without it — the shape the statement form already has (`LANGUAGE.md §3`). A
+  conditional is therefore one node, and choosing an arm is one decision rather than a walk that has to
+  remember what the line before it concluded.
 - **Every arm is checked.** Which arm draws is a runtime question (§8.2), so an unknown widget or a
   wrong prop in an `elif` is as real as one in the `then`, and an arm nobody has run yet is not an arm
   nobody wrote.
@@ -136,8 +137,11 @@ screen status(ready: bool, waiting: bool):
 > bound is false, and a chain over one draws its `else`. That is §8's work, stated so a chain that
 > always takes one arm is a known limit rather than a puzzle.
 
-> **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the pack moved to version 7.
-> Pinned by `crates/vela-syntax/src/tests/screen_tests.rs` and `crates/vela-ui/tests/`.
+> **Implemented (M12.1).** `if`/`elif`/`else` as arms of `ScreenLine::If`; the screen pack moved to
+> version 7. `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/instantiate.rs` that
+> the first arm to hold is the one drawn, `tests/check.rs` that an arm's mistakes are reported,
+> `tests/compose.rs` that a `transclude` in an `elif` places the block, and `tests/reactivity.rs` that
+> an `elif`'s reads are the screen's.
 
 ### 2.3 Input: `key` and `timer`
 
@@ -147,6 +151,9 @@ A screen answers input by naming what the player *meant*, never which button the
 screen confirm(message, no_action):
     column:
         text message
+        button:
+            text "OK"
+            action close_screen()
     key cancel action no_action
 
 screen notify(message):
@@ -172,9 +179,11 @@ screen notify(message):
 > (`Laid::timers`) and nothing fires them. §6 runs animation from `World::clock`, no clock reaches the
 > screen runtime yet, and a deadline measured against wall time would be a frame nobody could replay.
 
-> **Implemented (M12.1).** `key` and `timer` as screen lines; the pack moved to version 8. Pinned by
-> `crates/vela-ui/tests/` and `crates/vela-cli/src/tests/ui_tests.rs` (the top screen answers, and the
-> vocabulary is the host's).
+> **Implemented (M12.1).** `key` and `timer` as screen lines; the screen pack moved to version 8.
+> `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape, `tests/check.rs` that an unknown name
+> is `E5014` and a binding's action is checked like any other, `tests/instantiate.rs` that the bindings
+> a screen declares resolve into the `Laid` it draws, and `crates/vela-cli/src/tests/ui_tests.rs` that
+> the top screen answers its own — and that the vocabulary is the host's, name for name.
 
 ### 2.4 Loops
 
@@ -205,9 +214,11 @@ screen choice(prompt, items):
 > choices, which `Command::Menu` carries; the dialogue log), owned by M12.2 and M12.3. Until then a
 > literal (`for pair in [{caption: "Yes"}]`) is the one list a screen builds for itself.
 
-> **Implemented (M12.1).** `for` as a screen line; the pack moved to version 9. Pinned by
-> `crates/vela-ui/tests/{instantiate,reactivity}.rs`, `crates/vela-syntax/src/tests/screen_tests.rs`
-> and the pack round trip.
+> **Implemented (M12.1).** `for` as a screen line; the screen pack moved to version 9.
+> `crates/vela-syntax/src/tests/screen_tests.rs` pins the shape and the dotted-value rule below,
+> `tests/instantiate.rs` that the body is drawn once per element, that a field resolves, and that the
+> binding shadows, `tests/reactivity.rs` that the binding is not a dependency, and
+> `tests/pack.rs` with `crates/vela-ui/src/pack/tests.rs` that the loop survives the codec.
 
 > **Revised (M12.1).** A dotted value at the head of a widget's line is the widget's *content*, not a
 > prop name: `text option.caption` parses as `text line` does, because no prop name contains a dot and
@@ -354,9 +365,11 @@ style japanese:
 > body is `key = value`, `LANGUAGE.md §7`), `leading` has no reader in `vela-text`, and the path is an
 > *asset*, which is what item 15 loads. The token is a name; the size stays the `size` setting.
 
-> **Implemented (M12.1).** A `style` setting `font` — `font = theme.kanji` — is read into the node's
-> paint and threaded through measuring and drawing, so one screen can draw two scripts. The token table
-> travels in the screen pack (version 6), and `crates/vela-ui/tests/{theme,styling,paint}.rs` pin it.
+> **Implemented (M12.1).** A `style` setting `font` — `font = theme.kanji`, a token reference — is
+> read into the node's paint and threaded through measuring and drawing, so one screen can draw two
+> scripts. The token table travels in the screen pack (version 6). `crates/vela-ui/tests/theme.rs`
+> pins the token table and the screen-pack round trip, `tests/styling.rs` that a style sets a node's
+> font, and `tests/paint.rs` that an unroutable font falls back rather than drawing nothing.
 
 ### 5.1 Interaction states
 
@@ -583,8 +596,10 @@ Structural, not a mode (VISION Principle 8).
 > **Note.** A label is derived from the screen's *source*: an explicit `label` prop, or a single `text`
 > child whose content is a literal. A `text` child whose content is a value — `text option.caption`, or
 > the `text line` of every dialogue screen — therefore has no label, and `W4010` says so. That is honest
-> rather than wrong (the tree is built from the declaration), and deriving labels from the *evaluated*
-> tree is what would fix it. Found when a list could finally be walked (§2.4).
+> rather than wrong: the tree is built from the declaration, so a caption that arrives at run time is a
+> label self-voicing does not have. Deriving labels from the *evaluated* tree is what would fix it, and
+> nothing does — found when a list could finally be walked (§2.4), because a data-driven caption is the
+> first label that is real on screen and absent here.
 
 ## 11. Input
 

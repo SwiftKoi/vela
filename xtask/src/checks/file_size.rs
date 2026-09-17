@@ -2,6 +2,13 @@
 //!
 //! This is the mechanism behind VISION principle 4. It is mechanical on purpose: a rule
 //! that depends on reviewers remembering it is a rule that decays.
+//!
+//! **Code only.** Source files, `lib.rs`/`mod.rs`, `fn` and `impl` bodies, and a crate's
+//! `[dependencies]` are measured, because those budgets stand for something structural: how much of
+//! one file a reader has to hold to change it, and how many things a crate is doing. A document is
+//! not like that. Its length is an editorial judgement — a spec is long because the contract is — and
+//! a line count cannot tell a well-argued 700 from a padded one. So prose is not counted here; the
+//! one-sitting rule still guides a reader, and a reviewer is the one who applies it.
 
 use crate::ctx::Ctx;
 use crate::report::Report;
@@ -28,10 +35,6 @@ const FACADE: Budget = Budget {
     warn: 80,
     hard: 120,
 };
-const MD: Budget = Budget {
-    warn: 500,
-    hard: 700,
-};
 const FN: Budget = Budget { warn: 60, hard: 80 };
 const IMPL: Budget = Budget {
     warn: 200,
@@ -50,37 +53,30 @@ const SPLIT_RECIPE: &str = concat!(
 /// Runs the check.
 pub fn run(ctx: &Ctx) -> Report {
     let rust = scan::walk(&ctx.root, &["rs"]);
-    let docs = scan::walk(&ctx.root, &["md"]);
 
     let mut report = Report::pass(NAME, "");
     let mut warnings = 0usize;
     let mut exempt = 0usize;
 
-    for path in rust.iter().chain(docs.iter()) {
+    for path in &rust {
         let Some(text) = scan::read(path) else {
             continue;
         };
         let rel = ctx.rel(path);
-        let is_rust = rel.ends_with(".rs");
 
         // Scan once: the blanked copy is needed for block measurement, and the
         // comments are needed to find a genuine exemption.
-        let scanned = is_rust.then(|| scan::scan_source(&text));
+        let scanned = scan::scan_source(&text);
         if scanned
-            .as_ref()
-            .is_some_and(|s| s.comments.iter().any(|c| c.body.contains(EXEMPT_MARKER)))
+            .comments
+            .iter()
+            .any(|c| c.body.contains(EXEMPT_MARKER))
         {
             exempt += 1;
             continue;
         }
 
-        let budget = if !is_rust {
-            &MD
-        } else if is_facade(path) {
-            &FACADE
-        } else {
-            &RS
-        };
+        let budget = if is_facade(path) { &FACADE } else { &RS };
         let lines = scan::line_count(&text);
         if lines > budget.hard {
             report.violation(format!(
@@ -91,9 +87,7 @@ pub fn run(ctx: &Ctx) -> Report {
             warnings += 1;
         }
 
-        if let Some(scanned) = &scanned {
-            check_blocks(&rel, &scanned.blanked, &mut report, &mut warnings);
-        }
+        check_blocks(&rel, &scanned.blanked, &mut report, &mut warnings);
     }
 
     if let Ok(workspace) = Workspace::load(&ctx.root) {
@@ -112,9 +106,8 @@ pub fn run(ctx: &Ctx) -> Report {
     }
 
     report.summary = format!(
-        "{} Rust + {} Markdown files, {warnings} over the warn threshold, {exempt} exempt",
-        rust.len(),
-        docs.len()
+        "{} Rust file(s), {warnings} over the warn threshold, {exempt} exempt",
+        rust.len()
     );
     report
 }

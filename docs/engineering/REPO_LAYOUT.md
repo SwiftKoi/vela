@@ -109,13 +109,19 @@ decay silently.
 | `lib.rs` / `mod.rs` | 80 lines | 120 lines |
 | Single `fn` body | 60 lines | 80 lines |
 | Single `impl` block | 200 lines | 300 lines |
-| `.md` doc | 500 lines | 700 lines |
 | `Cargo.toml` `[dependencies]` | 25 entries | 35 entries |
 
 Lines is the coarse metric; the real rule is the one below it.
 
+**Documents are not budgeted.** A code budget stands for something structural — how much of one file a
+reader must hold to change it, and how many things a crate is doing — and a document is not like that:
+a spec is long because the contract is, and no line count can tell a well-argued 700 from a padded one.
+Prose is therefore left to review, where the one-sitting rule below is applied by a reader rather than
+by `xtask`. The rule still guides a *writer*: a section that has stopped fitting one idea wants
+splitting, and that is a judgement about the argument, not about the count.
+
 > **The one-sitting rule.** If you cannot read a file top to bottom and hold it in your head,
-> it is too long — regardless of line count. The numbers above are the enforceable proxy.
+> it is too long — regardless of line count. The numbers above are the enforceable proxy, for code.
 
 ### 3.1 How to split a file that exceeds budget
 
