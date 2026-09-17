@@ -6,7 +6,7 @@
 use vela_span::FileId;
 use vela_syntax::{Item, ThemeDecl, parse};
 use vela_ui::check_contrast;
-use vela_ui::theme::{AA_TEXT, Rgb, palette};
+use vela_ui::theme::{AA_TEXT, Rgb, fonts, palette};
 
 fn theme_of(source: &str) -> ThemeDecl {
     let parsed = parse(FileId::from_raw(0), source);
@@ -186,4 +186,35 @@ fn a_non_colour_value_is_not_a_colour() {
 #[test]
 fn the_threshold_is_stated() {
     assert!((AA_TEXT - 4.5).abs() < f64::EPSILON);
+}
+
+/// A theme reads its `font` tokens, told apart from the other settings by the type word.
+///
+/// `SCREENS.md §5`: `font body` and `space body` are one shape with one kind of value, and only the
+/// word says which is which — the same reason a palette needs the word to read a colour.
+#[test]
+fn a_theme_parses_its_fonts() {
+    let theme = theme_of(
+        "theme dusk:\n    font ui = \"sans\"\n    font kanji = \"SourceHanSans\"\n    space md = 8\n",
+    );
+    let fonts = fonts(&theme);
+    assert_eq!(fonts.get("ui"), Some("sans"));
+    assert_eq!(fonts.get("kanji"), Some("SourceHanSans"));
+    assert_eq!(fonts.get("md"), None, "a `space` token is not a font");
+    assert_eq!(fonts.tokens.len(), 2);
+}
+
+/// A font token that is not a plain string is left out rather than guessed at — the same rule a
+/// colour that is not six hex digits follows.
+#[test]
+fn a_non_string_font_is_not_a_font() {
+    let theme = theme_of("theme odd:\n    font ui = 4\n    font named = \"sans\"\n");
+    assert_eq!(fonts(&theme).tokens.len(), 1);
+}
+
+/// A theme with no fonts is empty rather than surprising, and a colour is not a font.
+#[test]
+fn a_theme_without_fonts_declares_none() {
+    let theme = theme_of("theme bare:\n    color bg = 0x10121a\n");
+    assert!(fonts(&theme).is_empty());
 }

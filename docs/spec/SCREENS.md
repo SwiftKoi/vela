@@ -152,7 +152,7 @@ of coordinate math:
 | `at <transform>` | any | Position/scale/alpha offset |
 | `stretch_x` / `stretch_y` | any | Shorthand for the matching axis |
 | `background <colour>` | any | Fill painted behind the node, as a theme token (`theme.bg`) |
-| `style <name>` | any | A `style` declaration whose `color` (and `size`) this node draws with |
+| `style <name>` | any | A `style` declaration whose `color`, `size`, and `font` this node draws with |
 | `action <call>` | interactive | What activating the node does: `action open_screen(settings)` |
 
 Both `align` and `anchor` compose: a node that names its own `anchor` positions itself in the
@@ -198,7 +198,7 @@ theme dusk:
     color accent    = 0x6ea8fe
     space sm        = 4
     space md        = 8
-    font  body      = @"fonts/inter.ttf" size 22 leading 1.4
+    font  body      = "sans"
 
 style speaker from body:
     color = theme.accent
@@ -221,6 +221,38 @@ Rules:
   quietly omits another file's styles looks like a bug unless the rule is the rule.
 - **Contrast checking**: a foreground/background pair below a WCAG threshold is `W4009`, with
   the computed ratio in the message. Accessibility as a lint, not a manual audit.
+
+A theme's `font` token is a **name**, and a style draws text with it:
+
+```vela
+theme cjk:
+    font ui  = "sans"
+    font kanji = "SourceHanSans"
+
+style japanese:
+    font = theme.kanji
+```
+
+- **A font token names a font the engine has**, not an asset path: loading a face is the asset and
+  theme work of item 15, and a name the engine does not carry resolves to nothing.
+- **An unroutable font falls back to the screen's own font**, silently, for the same reason a
+  `style_prefix` that names nothing does (§5.2): a project may write the token before the face
+  behind it is wired up, and a screen that drew no text at all would be the worse answer.
+- **`size` is a style setting, not part of the font token.** Ren'Py's `text_font` names a face;
+  its `text_size` is this section's `size`, already.
+
+> **Revised (M12.1).** The `font` token above was written `font body = @"fonts/inter.ttf" size 22
+> leading 1.4` — a path with a size and a leading. Three things were wrong with that: it does not
+> parse (a setting body is `key = value`, `LANGUAGE.md §7`, and a token carries no trailing words),
+> `leading` has no reader (`vela-text` lays out by size and width), and the path is an *asset*,
+> which is what item 15 loads. The token is a name and the size stays the `size` setting.
+
+> **Implemented (M12.1).** A `style` setting `font` — `font = theme.kanji`, a token reference — is
+> read into the node's paint and threaded through measuring and drawing, so one screen can draw two
+> scripts. The token table travels in the screen pack (version 6). `crates/vela-ui/tests/theme.rs`
+> pins the token table, `tests/instantiate.rs` that a style sets a node's font, and `tests/paint.rs`
+> that an unroutable font falls back rather than drawing nothing.
+
 
 ### 5.1 Interaction states
 
@@ -496,6 +528,7 @@ sections  each u32 length-prefixed, in fixed order:
             screens   count + ScreenDecl
             styles    count + StyleDecl
             palette   count + (token, r, g, b)
+            fonts     count + (token, name)
 checksum  u64       FNV-1a over every byte before it
 ```
 

@@ -204,6 +204,7 @@ pub(super) fn apply_style(node: &mut Node, style: &str, ctx: &Ctx) {
     node.paint.background = paint.background.or(node.paint.background);
     node.paint.color = paint.color.or(node.paint.color);
     node.paint.size = paint.size.or(node.paint.size);
+    node.paint.font = paint.font.clone().or_else(|| node.paint.font.take());
     for state in [State::Hover, State::Selected, State::Insensitive] {
         if let Some(values) = paint.over(state).cloned() {
             *node.paint.state_mut(state) = values;
@@ -265,6 +266,7 @@ pub(super) fn measure_text(
         return;
     }
     let size_px = node.paint.size.unwrap_or(DEFAULT_SIZE);
+    let font = crate::paint::resolve_font(text, node.paint.font.as_deref(), font);
     if let Some(layout) = text.layout(font, size_px, content, Some(max_width)) {
         *size = Size::new(layout.width, layout.height);
     }

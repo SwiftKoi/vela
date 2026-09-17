@@ -18,7 +18,7 @@
 use vela_diag::{Code, Diagnostic};
 use vela_render::Color;
 use vela_span::Span;
-use vela_syntax::{Expr, ThemeDecl};
+use vela_syntax::{Expr, StrPart, ThemeDecl};
 
 /// The token that names a theme's background.
 ///
@@ -102,6 +102,77 @@ impl Palette {
     pub fn color(&self, token: &str) -> Option<Color> {
         self.get(token).map(Rgb::color)
     }
+}
+
+/// The font names a theme declares.
+///
+/// Separate from [`Palette`] for the reason that type gives for being colours-only: a table that
+/// held both would be a table with two meanings. `SCREENS.md §5` distinguishes the typed tokens
+/// already — `color bg` and `font body` are different declarations that happen to share a body.
+///
+/// A token names a font the *engine* has registered, not a path: loading a face from an asset is
+/// the asset and theme work of item 15, and `SCREENS.md §5` says so where the token is described.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct Fonts {
+    /// The font names, by token, in declaration order.
+    pub tokens: Vec<(String, String)>,
+}
+
+impl Fonts {
+    /// A font by token name.
+    #[must_use]
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.tokens
+            .iter()
+            .find(|(token, _)| token == name)
+            .map(|(_, font)| font.as_str())
+    }
+
+    /// Whether the theme declares no fonts at all.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.tokens.is_empty()
+    }
+}
+
+/// Reads a theme's `font` tokens.
+///
+/// The type word is what makes a setting a font, the same way it makes one a colour: `font body`
+/// and `space body` are one shape with one value kind, and only the word tells them apart.
+#[must_use]
+pub fn fonts(theme: &ThemeDecl) -> Fonts {
+    let mut tokens = Vec::new();
+    for setting in &theme.settings {
+        if setting.ty.as_deref() != Some("font") {
+            continue;
+        }
+        // A token whose value is not a plain string is skipped rather than guessed at, exactly as
+        // a `color` that is not six hex digits is: a wrong font is worse than a missing one.
+        let Some(name) = string_literal(&setting.value) else {
+            continue;
+        };
+        tokens.push((setting.key.clone(), name));
+    }
+    Fonts { tokens }
+}
+
+/// A string literal's text, when it is one with no interpolation.
+///
+/// Shared with the screen evaluator, which resolves a style's `font = "sans"` the same way: one
+/// definition, so a token and a setting cannot disagree about what a string is.
+#[must_use]
+pub(crate) fn string_literal(expr: &Expr) -> Option<String> {
+    let Expr::Str { parts, .. } = expr else {
+        return None;
+    };
+    let mut text = String::new();
+    for part in parts {
+        let StrPart::Literal { text: literal, .. } = part else {
+            return None;
+        };
+        text.push_str(literal);
+    }
+    Some(text)
 }
 
 /// Reads a theme's colour tokens.

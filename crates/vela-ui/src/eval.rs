@@ -14,7 +14,7 @@ use vela_syntax::{BinOp, Expr, ScreenDecl, StrPart, StyleDecl, UnOp};
 
 use crate::actions::Action;
 use crate::props::Anchor;
-use crate::theme::Palette;
+use crate::theme::{Fonts, Palette, string_literal};
 use crate::tree::{Paint, State};
 use crate::widgets::WidgetRegistry;
 
@@ -107,6 +107,8 @@ pub struct Ctx<'a> {
     pub registry: &'a WidgetRegistry,
     /// The active theme's colours.
     pub palette: &'a Palette,
+    /// The active theme's font tokens (`SCREENS.md §5`).
+    pub fonts: &'a Fonts,
     /// The declared styles, for `style = ...`.
     pub styles: &'a [StyleDecl],
     /// The file's screens, so a `use` can find the one it names (`SCREENS.md §2`).
@@ -284,6 +286,28 @@ pub(crate) fn color_of(expr: &Expr, ctx: &Ctx) -> Option<Color> {
     }
 }
 
+/// A font name from a `theme.<token>` reference, or a literal.
+///
+/// Mirrors [`color_of`]: the value a style writes is a token of the active theme, and resolving it
+/// here is what keeps a style independent of which theme is selected (`SCREENS.md §5`).
+pub(crate) fn font_of(expr: &Expr, ctx: &Ctx) -> Option<String> {
+    match expr {
+        Expr::Field { base, name, .. } => {
+            let Expr::Name { name: base, .. } = base.as_ref() else {
+                return None;
+            };
+            if base == "theme" {
+                ctx.fonts.get(name).map(str::to_string)
+            } else {
+                None
+            }
+        }
+        Expr::Str { .. } => string_literal(expr),
+        Expr::Paren { inner, .. } => font_of(inner, ctx),
+        _ => None,
+    }
+}
+
 /// A `0xRRGGBB` integer as a colour.
 fn hex_color(value: i64) -> Option<Color> {
     let value = u32::try_from(value).ok()?;
@@ -313,6 +337,7 @@ pub(crate) fn style_paint(name: &str, ctx: &Ctx) -> Paint {
                 "color" => set_colour(&mut target.color, &setting.value, ctx),
                 "background" => set_colour(&mut target.background, &setting.value, ctx),
                 "size" => set_size(&mut target.size, &setting.value),
+                "font" => set_font(&mut target.font, &setting.value, ctx),
                 _ => {}
             }
         }
@@ -331,6 +356,13 @@ fn set_colour(slot: &mut Option<Color>, expr: &Expr, ctx: &Ctx) {
 fn set_size(slot: &mut Option<f32>, expr: &Expr) {
     if let Some(size) = number(expr) {
         *slot = Some(size);
+    }
+}
+
+/// Resolves a font expression into a slot, leaving it alone when it does not resolve.
+fn set_font(slot: &mut Option<String>, expr: &Expr, ctx: &Ctx) {
+    if let Some(font) = font_of(expr, ctx) {
+        *slot = Some(font);
     }
 }
 

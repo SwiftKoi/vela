@@ -157,6 +157,12 @@ pub struct Paint {
     pub color: Option<Color>,
     /// A text size in pixels, from the node's `style`.
     pub size: Option<f32>,
+    /// The font text is shaped with, from the node's `style` (`SCREENS.md §5`).
+    ///
+    /// A *name*, resolved against the engine's fonts when the text is measured and drawn: a style
+    /// cannot know which faces a build carried, and a screen that named one it did not have falls
+    /// back to the screen's own font rather than drawing nothing.
+    pub font: Option<String>,
     /// What the pointer being over it changes.
     pub hover: Option<Box<Paint>>,
     /// What being the focused control changes.
@@ -180,6 +186,7 @@ impl Paint {
             background: overridden.background.or(self.background),
             color: overridden.color.or(self.color),
             size: overridden.size.or(self.size),
+            font: overridden.font.clone().or_else(|| self.font.clone()),
             hover: None,
             selected: None,
             insensitive: None,

@@ -6,7 +6,7 @@ use vela_syntax::Expr;
 
 use crate::pack::model::{MAGIC, PACK_VERSION, ScreenPack};
 
-/// Encodes a pack: header, four sections, checksum.
+/// Encodes a pack: header, five sections, checksum.
 pub(crate) fn encode(pack: &ScreenPack) -> Vec<u8> {
     let mut writer = Writer::default();
     writer.bytes.extend_from_slice(&MAGIC);
@@ -19,6 +19,7 @@ pub(crate) fn encode(pack: &ScreenPack) -> Vec<u8> {
     writer.section(|section| section.screens(&pack.set.screens));
     writer.section(|section| section.styles(&pack.set.styles));
     writer.section(|section| section.palette(&pack.set.palette));
+    writer.section(|section| section.fonts(&pack.set.fonts));
 
     let checksum = fnv1a(&writer.bytes);
     writer.u64(checksum);

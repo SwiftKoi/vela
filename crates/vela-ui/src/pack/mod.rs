@@ -21,6 +21,7 @@
 //!               screens   count + ScreenDecl
 //!               styles    count + StyleDecl
 //!               palette   count + (token, r, g, b)
+//!               fonts     count + (token, name)
 //!   checksum  u64       FNV-1a over every byte before it
 //! ```
 //!

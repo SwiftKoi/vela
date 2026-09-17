@@ -180,6 +180,68 @@ screen menu:
     );
 }
 
+/// A style's font is the one its text is *measured* with, not merely stored on the node.
+///
+/// The observable is the engine's layout cache, which is keyed by everything that changes the answer —
+/// the font among them. Two identical texts differing only in the font their styles name therefore
+/// take two entries; if the name never reached the engine they would share one.
+#[test]
+fn a_style_font_measures_the_text() {
+    let source = "\
+theme dusk:
+    font ui = \"sans\"
+    font kanji = \"cjk\"
+
+style kanji:
+    font = theme.kanji
+
+screen s:
+    column:
+        text \"x\" style = kanji
+        text \"x\"
+";
+    let mut text = engine();
+    // The one bundled face under a second name: a different cache *key*, the same glyphs, which is
+    // exactly enough to see whether the style's name reached the engine.
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/fonts/LiberationSans-Regular.ttf");
+    let face = Font::from_bytes(std::fs::read(path).expect("read font"), 0).expect("load font");
+    text.add_font("cjk", face);
+
+    set(source)
+        .build("s", &Args::new(), &mut text, "sans", 1280.0)
+        .expect("the screen is declared");
+    assert_eq!(
+        text.cached_layouts(),
+        2,
+        "the two texts shared a layout, so the style's font never reached the engine"
+    );
+}
+
+/// A style naming a face the engine does not carry falls back rather than drawing nothing.
+///
+/// `SCREENS.md §5`: the same silent-fallback rule a `style_prefix` follows, so a project may write the
+/// token before the face behind it is wired up — and a screen whose text vanished would be the worse
+/// answer.
+#[test]
+fn an_unroutable_font_falls_back() {
+    let source = "\
+theme dusk:
+    font kanji = \"SourceHanSans\"
+
+style kanji:
+    font = theme.kanji
+
+screen s:
+    text \"Still here.\" style = kanji
+";
+    let mut text = engine();
+    let mut draw = DrawList::new();
+    let drawn = set(source).draw("s", &Args::new(), (1280, 720), &mut text, "sans", &mut draw);
+    assert!(drawn, "the screen was not found");
+    assert!(draw.glyph_count() > 0, "the text vanished with its font");
+}
+
 /// Building the same screen twice produces the same draw list, byte for byte.
 #[test]
 fn painting_is_deterministic() {

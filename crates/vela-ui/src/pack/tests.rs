@@ -169,6 +169,7 @@ fn sample() -> ScreenPack {
     let source = "\
 theme dusk:
     color bg = 0x10121a
+    font ui = \"sans\"
 
 style body from text:
     color = theme.fg
@@ -210,6 +211,19 @@ fn a_state_setting_survives_the_round_trip() {
         .collect();
     assert!(keys.contains(&"color"), "{keys:?}");
     assert!(keys.contains(&"hover_color"), "{keys:?}");
+}
+
+/// A theme's font tokens survive the codec, so a style's `font = theme.<token>` still resolves from a
+/// bundle.
+///
+/// The pack carries the table because a run from a bundle has no parser to read the theme again: a
+/// token that did not survive would leave every screen that names it falling back to the default font —
+/// a wrong screen rather than a refused one.
+#[test]
+fn a_theme_font_survives_the_round_trip() {
+    let bytes = sample().to_bytes();
+    let pack = ScreenPack::from_bytes(&bytes).expect("a pack decodes");
+    assert_eq!(pack.set.fonts.get("ui"), Some("sans"));
 }
 
 /// `style_prefix` survives as itself rather than as a widget named `""`.

@@ -69,6 +69,15 @@ impl TextEngine {
         self.fonts.get(name).cloned()
     }
 
+    /// Whether a font is registered under this name.
+    ///
+    /// The question a caller with a *provisional* name asks — a style that named a face the build
+    /// may not have carried — without cloning the face to find out.
+    #[must_use]
+    pub fn has_font(&self, name: &str) -> bool {
+        self.fonts.contains_key(name)
+    }
+
     /// The metrics of a registered font at a size.
     #[must_use]
     pub fn metrics(&self, font: &str, size: f32) -> Option<FontMetrics> {

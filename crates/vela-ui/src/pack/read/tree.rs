@@ -1,4 +1,4 @@
-//! Reading the screen tree back: declarations, widgets, and the palette.
+//! Reading the screen tree back: declarations, widgets, the palette, and the fonts.
 //!
 //! One function per declaration and per line kind, so a tag and its fields sit together. Every
 //! length comes from [`Reader::count`], which refuses a count larger than the container before
@@ -6,7 +6,7 @@
 
 use vela_syntax::{Param, ScreenArg, ScreenDecl, ScreenLine, ScreenNode, Setting, StyleDecl, Type};
 
-use crate::theme::{Palette, Rgb};
+use crate::theme::{Fonts, Palette, Rgb};
 
 use super::cursor::Reader;
 
@@ -225,5 +225,16 @@ impl Reader<'_> {
             colors.push((token, Rgb { r, g, b }));
         }
         Palette { colors }
+    }
+
+    pub(super) fn fonts(&mut self) -> Fonts {
+        let count = self.count();
+        let mut tokens = Vec::with_capacity(count.min(1024));
+        for _ in 0..count {
+            let token = self.string();
+            let font = self.string();
+            tokens.push((token, font));
+        }
+        Fonts { tokens }
     }
 }

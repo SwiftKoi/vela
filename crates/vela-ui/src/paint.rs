@@ -14,7 +14,7 @@ use vela_render::{Color, DrawList, GlyphQuad, RectQuad};
 use vela_text::TextEngine;
 
 use crate::layout::Frame;
-use crate::tree::{Kind, Node, State};
+use crate::tree::{Kind, Node, Paint, State};
 
 /// The size text is drawn at when no `style` sets one.
 const DEFAULT_SIZE: f32 = 24.0;
@@ -22,6 +22,27 @@ const DEFAULT_SIZE: f32 = 24.0;
 /// The colour of text with no `style`, matching the presenter's default body colour.
 fn default_text() -> Color {
     Color::rgb(235, 235, 240)
+}
+
+/// The font a node's text is drawn with: what its `style` named, when the engine has it.
+///
+/// A style names a font the engine may not carry — `SCREENS.md §5` — and the honest answer to a
+/// name nothing registered is the screen's own font, not an empty draw list. That is the same
+/// silent-fallback rule a `style_prefix` follows (§5.2), and it is what lets a project write the
+/// token before the face behind it is wired up.
+///
+/// Shared by measuring and drawing, because a node measured in one font and painted in another would
+/// lay out around text it did not draw.
+#[must_use]
+pub(crate) fn resolve_font<'a>(
+    text: &TextEngine,
+    wanted: Option<&'a str>,
+    default: &'a str,
+) -> &'a str {
+    match wanted {
+        Some(name) if text.has_font(name) => name,
+        _ => default,
+    }
 }
 
 /// What a paint carries down the tree.
@@ -118,15 +139,7 @@ fn paint_node(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, painter:
         && !content.is_empty()
         && frame.rect.width > 0.0
     {
-        paint_text(
-            content,
-            paint.color.unwrap_or_else(default_text),
-            paint.size.unwrap_or(DEFAULT_SIZE),
-            left,
-            top,
-            frame.rect.width,
-            painter,
-        );
+        paint_text(content, &paint, left, top, frame.rect.width, painter);
     }
 
     for (child, child_frame) in node.children.iter().zip(&frame.children) {
@@ -139,19 +152,22 @@ fn paint_node(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, painter:
 }
 
 /// Shapes one run of text and emits its glyphs, wrapped to `max_width`.
+///
+/// The node's [`Paint`] arrives whole rather than as three values, because the font, the colour, and
+/// the size are one answer to one question — and because resolving the font needs the engine, which the
+/// painter already carries.
 fn paint_text(
     content: &str,
-    color: Color,
-    size: f32,
+    paint: &Paint,
     left: f32,
     top: f32,
     max_width: f32,
     painter: &mut Painter<'_>,
 ) {
-    let Some(layout) = painter
-        .text
-        .layout(painter.font, size, content, Some(max_width))
-    else {
+    let font = resolve_font(painter.text, paint.font.as_deref(), painter.font);
+    let size = paint.size.unwrap_or(DEFAULT_SIZE);
+    let color = paint.color.unwrap_or_else(default_text);
+    let Some(layout) = painter.text.layout(font, size, content, Some(max_width)) else {
         return;
     };
     let (atlas_width, atlas_height) = painter.text.atlas().size();
@@ -159,7 +175,7 @@ fn paint_text(
     for line in &layout.lines {
         let baseline = top + line.baseline;
         for glyph in &line.glyphs {
-            let Some(rect) = painter.text.glyph(painter.font, size, glyph.id) else {
+            let Some(rect) = painter.text.glyph(font, size, glyph.id) else {
                 continue;
             };
             painter.draw.push_glyph(GlyphQuad {

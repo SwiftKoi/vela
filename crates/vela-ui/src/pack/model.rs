@@ -8,7 +8,7 @@ use vela_syntax::{Item, ScreenDecl, StyleDecl};
 use crate::error::PackError;
 use crate::pack::{read, write};
 use crate::screens::ScreenSet;
-use crate::theme::Palette;
+use crate::theme::{Fonts, Palette};
 
 /// The pack format this build writes and the oldest it reads.
 ///
@@ -26,7 +26,11 @@ use crate::theme::Palette;
 /// Version 5 adds `style_prefix` (`SCREENS.md §5.2`). A version-4 reader would read it as a widget
 /// named `""`, which draws nothing and would leave the screens it skins unskinned — a wrong screen
 /// rather than a refused one.
-pub const PACK_VERSION: u16 = 5;
+/// Version 6 adds the theme's `font` tokens (`SCREENS.md §5`) as a fifth section. A version-5 reader
+/// would read the four sections it knows and never see the table — it does not require the container
+/// to be exhausted — leaving every `font = theme.<token>` falling back to the default font. A wrong
+/// screen, so an old runtime must refuse rather than misread it.
+pub const PACK_VERSION: u16 = 6;
 
 /// The four bytes every pack starts with.
 ///
@@ -43,6 +47,8 @@ pub struct PackedSet {
     pub styles: Vec<StyleDecl>,
     /// The active theme's colours.
     pub palette: Palette,
+    /// The active theme's font tokens, which a style's `font` names (`SCREENS.md §5`).
+    pub fonts: Fonts,
 }
 
 /// One module's screens, versioned and named.
@@ -74,7 +80,10 @@ impl ScreenPack {
     /// Whether this module declared nothing at all for the interface.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.set.screens.is_empty() && self.set.styles.is_empty() && self.set.palette.is_empty()
+        self.set.screens.is_empty()
+            && self.set.styles.is_empty()
+            && self.set.palette.is_empty()
+            && self.set.fonts.is_empty()
     }
 
     /// The screens, ready to lay out.

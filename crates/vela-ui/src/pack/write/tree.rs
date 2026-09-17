@@ -1,11 +1,11 @@
-//! Writing the screen tree: declarations, widgets, and the palette.
+//! Writing the screen tree: declarations, widgets, the palette, and the fonts.
 //!
 //! One function per declaration and per line kind, so a tag and the fields that follow it sit
 //! together. The tags are the reader's, in `read/tree.rs`.
 
 use vela_syntax::{Param, ScreenArg, ScreenDecl, ScreenLine, ScreenNode, Setting, StyleDecl, Type};
 
-use crate::theme::Palette;
+use crate::theme::{Fonts, Palette};
 
 use super::codec::{Writer, count};
 
@@ -212,6 +212,14 @@ impl Writer {
             self.u8(colour.r);
             self.u8(colour.g);
             self.u8(colour.b);
+        }
+    }
+
+    pub(super) fn fonts(&mut self, fonts: &Fonts) {
+        self.u32(count(fonts.tokens.len()));
+        for (token, font) in &fonts.tokens {
+            self.string(token);
+            self.string(font);
         }
     }
 }

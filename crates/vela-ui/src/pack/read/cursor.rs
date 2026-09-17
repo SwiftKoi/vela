@@ -43,6 +43,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<ScreenPack, PackError> {
     let screens = reader.section(Reader::screens)?;
     let styles = reader.section(Reader::styles)?;
     let palette = reader.section(Reader::palette)?;
+    let fonts = reader.section(Reader::fonts)?;
     if reader.failed() {
         return Err(reader.refusal());
     }
@@ -54,6 +55,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<ScreenPack, PackError> {
             screens,
             styles,
             palette,
+            fonts,
         },
     })
 }

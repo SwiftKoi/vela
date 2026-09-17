@@ -20,7 +20,7 @@ use crate::instantiate;
 use crate::layout::{Constraints, Frame, layout};
 use crate::pack::PackedSet;
 use crate::paint;
-use crate::theme::{self, Palette};
+use crate::theme::{self, Fonts, Palette};
 use crate::tree::{Node, Size};
 use crate::widgets::WidgetRegistry;
 
@@ -40,6 +40,7 @@ pub struct ScreenSet {
     screens: Vec<ScreenDecl>,
     styles: Vec<StyleDecl>,
     palette: Palette,
+    fonts: Fonts,
     registry: WidgetRegistry,
 }
 
@@ -50,6 +51,7 @@ impl ScreenSet {
         let mut screens = Vec::new();
         let mut styles = Vec::new();
         let mut palette = Palette::default();
+        let mut fonts = Fonts::default();
         let mut theme_taken = false;
 
         for item in items {
@@ -61,6 +63,7 @@ impl ScreenSet {
                 // with one theme — every project today — does not notice the choice.
                 Item::Theme(theme) if !theme_taken => {
                     palette = theme::palette(theme);
+                    fonts = theme::fonts(theme);
                     theme_taken = true;
                 }
                 _ => {}
@@ -71,6 +74,7 @@ impl ScreenSet {
             screens,
             styles,
             palette,
+            fonts,
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -93,6 +97,7 @@ impl ScreenSet {
             screens: self.screens.clone(),
             styles: self.styles.clone(),
             palette: self.palette.clone(),
+            fonts: self.fonts.clone(),
         }
     }
 
@@ -103,6 +108,7 @@ impl ScreenSet {
             screens: packed.screens,
             styles: packed.styles,
             palette: packed.palette,
+            fonts: packed.fonts,
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -146,6 +152,7 @@ impl ScreenSet {
         let ctx = Ctx {
             registry: &self.registry,
             palette: &self.palette,
+            fonts: &self.fonts,
             styles: &self.styles,
             screens: &screens,
         };

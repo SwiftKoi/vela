@@ -16,6 +16,7 @@ fn pack(source: &str) -> ScreenPack {
 const SCREENS: &str = "\
 theme dusk:
     color bg = 0x10121a
+    font ui = \"sans\"
 
 style body:
     color = theme.fg
@@ -37,6 +38,15 @@ fn a_pack_round_trips_into_the_same_screens() {
     assert!(set.has("dialogue"), "the dialogue screen did not survive");
     assert!(set.has("pause"), "the pause screen did not survive");
     assert!(!set.has("settings"), "a screen was invented");
+}
+
+/// The theme's font tokens travel with the screens, because a bundle has no parser to read the theme
+/// again and a style's `font` names one of them.
+#[test]
+fn a_pack_carries_the_themes_fonts() {
+    let bytes = pack(SCREENS).to_bytes();
+    let read = ScreenPack::from_bytes(&bytes).expect("a pack reads");
+    assert_eq!(read.set.fonts.get("ui"), Some("sans"));
 }
 
 /// The container is a binary one: it starts with a magic number and is not source text.
