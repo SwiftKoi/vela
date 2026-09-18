@@ -33,4 +33,8 @@ mod report;
 mod theme;
 mod values;
 
-pub use pass::skin;
+pub use pass::{Names, skin};
+
+// The rules a second pass shares: it honours the same paint-versus-place boundary, and it reads
+// the theme's tokens (`screens.rs`).
+pub(crate) use names::{PAINTED, strip_state};

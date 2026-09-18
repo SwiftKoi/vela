@@ -88,6 +88,7 @@ Adds:
 | `pad` | a number |  | Space inside the container's edges. |
 | `align` | an anchor |  | Where children sit in the space they are given. |
 | `columns` | a number | * | How many columns before wrapping to the next row. |
+| `gap` | a number |  | Space between children. |
 
 ### `absolute`
 

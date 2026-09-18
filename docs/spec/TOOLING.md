@@ -315,8 +315,9 @@ rest precisely.
 
 **Supported in the first pass (M12):** `label`, `jump`, `call`, `return`, say statements,
 `menu`, `if/elif/else`, `define`/`default`, `character`, `image`, `show`/`hide`/`scene`/`with`,
-basic `screen` blocks, `style`, transitions, and simple Python expressions that map to Vela
-expressions (`$` statement blocks → best-effort function extraction, flagged).
+transitions, and simple Python expressions that map to Vela expressions (`$` statement blocks →
+best-effort function extraction, flagged). **M12.1 added the other two halves of a project**: `gui.rpy`
+becomes a theme, and `screens.rpy` becomes the screens and styles that draw with it.
 
 **Reported, not guessed:** anything outside that set produces a report entry with
 `file:line`, the original text, and the reason. The rule is simple:
@@ -352,10 +353,42 @@ non-zero exit, so a team can track migration progress as a number that goes to z
 > the wrong place. `gui.init(width, height)` becomes `vela.toml`'s `[project] size`, which is what
 > `variant("small")` measures against (`SCREENS.md §2.6`).
 >
-> **`screens.rpy` is still reported, and that is the piece left.** The screen language is *Vela's*
-> now — conditions, loops, `key`/`timer`, state, variants all landed in M12.1 — but the migrator does
-> not translate a Ren'Py `screen` block into it yet, so the look a migrated project gets is a theme
-> (`src/gui.vela`) that nothing draws with until the screens come across.
+> **`screens.rpy` is translated too, since M12.1's item 17** (`crates/vela-migrate/src/screens/`).
+> Which `.rpy` file becomes what is now a table rather than a rule of thumb:
+>
+> | File | Disposition |
+> | --- | --- |
+> | a file that declares a `label` | **Translated** as a story module (`src/<name>.vela`). |
+> | `gui.rpy` | **Translated** into the theme and its styles, one module with the screens (see above). |
+> | `screens.rpy` | **Translated** into `screen` and `style` declarations, in the same module as the theme. |
+> | everything else | **Reported**, once by file: engine configuration, `testcases.rpy` (a `test` decl lands with M12.1's item 18), `tl/**`. |
+>
+> The widget tree comes across — `hbox`/`vbox`/`add`/`null`/`fixed`/`frame`/`window`/`label`/
+> `textbutton`/`vpgrid` all lower mechanically — as do the conditions, the loops, the `use`
+> composition, the `default` variables and the actions Vela has a name for (17 of the sample's 20;
+> `ShowMenu`/`Return` are `open_screen`/`close_screen`, and `Start`, `MainMenu` and `InvertedSelected`
+> are reported). A style's *paint* is carried and its *placement* is not: `xpos 240` is a skin's
+> business (`SCREENS.md §4.2`), while a matched `xalign`/`yalign` pair — written on a widget's line or
+> as two lines under it — is one of Vela's nine anchors.
+>
+> Three things are worth knowing before reading a migrated screen:
+>
+> - **A style Vela cannot express is not declared, and a widget that named it is reported.** Ren'Py's
+>   styles are mostly a `properties gui.button_properties("button")` splat and placement, neither of
+>   which a Vela style carries, so they arrive empty and are dropped — which is why a `style "namebox"`
+>   prop is reported rather than becoming a reference to a style nothing declares (`E5007`).
+> - **A style and a screen cannot share a name** (`E2003`): the screen keeps it and the style is
+>   renamed `…_style`, with an entry, because a `use` and an `open_screen` are what refer to a screen.
+> - **A named action argument is dropped with an entry.** Vela's actions take positional arguments
+>   only (`E5013` counts them), so `Quit(confirm=False)` becomes `quit()` and the word is reported; an
+>   argument that reads `config.`/`renpy.`/`persistent.` takes the whole action with it, because an
+>   action that plays an asset nobody named is not an action.
+>
+> What a migrated screen still cannot do is a *list*: `for i in range(6)` is written and walks
+> nothing, because nothing in a Vela screen produces a sequence yet (`SCREENS.md §2.4`'s **Not yet.**),
+> and the report says so. A data-driven caption (`text i.caption`) is drawn but carries `W4010` — the
+> a11y tree is built from the screen's source, which is `SCREENS.md §10`'s own limitation and not a
+> migration defect.
 >
 > **Assets are inventoried, not copied.** An asset in Vela is only meaningful once something
 > declares it (`image bg.room = @"art/room.png"`), and Ren'Py declares its images *automatically*

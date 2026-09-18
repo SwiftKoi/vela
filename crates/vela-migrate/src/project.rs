@@ -22,7 +22,7 @@ use crate::assets::{Asset, Image, declarations, partition, report_inventory};
 use crate::error::MigrateError;
 use crate::report::Report;
 use crate::rpy::Kind;
-use crate::scripts::{Story, collect, read_scripts};
+use crate::scripts::{Story, collect, files, read_scripts};
 
 /// One file the migration will write.
 #[derive(Clone, Debug)]
@@ -75,10 +75,12 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
     let (images, inventory) = partition(assets, &game);
     report_inventory(&inventory, &mut report);
 
-    let read = read_scripts(&game, &scripts, &mut report)?;
-    // The theme first, so a reader of the report sees the look before the story that uses it.
-    let mut files = read.sources;
-    files.extend(translate(&read.stories, &images, &mut report));
+    let mut read = read_scripts(&game, &scripts, &mut report)?;
+    let design = read.design;
+    // The theme and the screens first, so a reader of the report sees the look before the story
+    // that uses it.
+    let mut written = files(&mut read);
+    written.extend(translate(&read.stories, &images, &mut report));
 
     let name = name_of(&game).unwrap_or_else(|| {
         root.file_name().map_or_else(
@@ -86,13 +88,13 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
             |name| name.to_string_lossy().to_string(),
         )
     });
-    let entry = entry_of(&files).unwrap_or_else(|| "main.start".to_string());
+    let entry = entry_of(&written).unwrap_or_else(|| "main.start".to_string());
 
     Ok(Project {
         name,
         entry,
-        design: read.design,
-        files,
+        design,
+        files: written,
         images,
         assets: inventory,
         report,

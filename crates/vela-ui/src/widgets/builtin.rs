@@ -78,7 +78,10 @@ pub const ALL: &[Widget] = &[
         category: Category::Container,
         single_child: false,
         common: COMMON,
-        own: &[CONTAINER, GRID],
+        // `LINEAR` because the solver reads a grid's `gap` (`layout/containers.rs`'s `grid_tracks`)
+        // and `SCREENS.md §4.2` lists `grid` among the containers that take one. The registry was the
+        // one of the three that disagreed, which a migration's `grid ... spacing 10` is what found.
+        own: &[CONTAINER, GRID, LINEAR],
     },
     Widget {
         name: "absolute",

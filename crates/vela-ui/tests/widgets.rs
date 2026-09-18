@@ -49,6 +49,10 @@ fn props_are_answered_by_the_widget_that_declares_them() {
     assert!(registry.get("grid").unwrap().accepts("columns"));
     assert!(!registry.get("text").unwrap().accepts("gap"));
     assert!(!registry.get("box").unwrap().accepts("columns"));
+    // A grid takes a `gap`, because the solver reads one (`layout/containers.rs`'s `grid_tracks`)
+    // and `SCREENS.md §4.2` lists `grid` among the containers that take one. The registry was the
+    // one of the three that disagreed, which `vela migrate`'s `grid ... spacing 10` is what found.
+    assert!(registry.get("grid").unwrap().accepts("gap"));
     // Shared props are accepted everywhere.
     for name in registry.names() {
         assert!(registry.get(name).unwrap().accepts("grow"), "{name}");

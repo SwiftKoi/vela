@@ -356,3 +356,22 @@ screen menu:
 ";
     assert_eq!(codes(source), vec!["E5012"]);
 }
+
+/// A loop's iterable is a *value*, not an action position.
+///
+/// `for i in range(6)` produces the sequence the body walks, so reading that call as an action
+/// reported a producer as a misspelled one — `E5012: no action called `range`` — which is the same
+/// misreading the condition walk had (`SCREENS.md §2.4`). An action written *inside* the iterable is
+/// still checked, because a list's element may be one.
+#[test]
+fn a_loops_iterable_is_a_value_rather_than_an_action() {
+    assert!(
+        codes("screen s():\n    for i in range(6):\n        text \"x\"\n").is_empty(),
+        "a producer is not an action"
+    );
+    assert_eq!(
+        codes("screen s():\n    for a in [quitt()]:\n        text \"x\"\n"),
+        vec!["E5012"],
+        "an action written inside the iterable is still an action"
+    );
+}

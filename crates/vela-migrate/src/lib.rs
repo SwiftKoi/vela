@@ -30,6 +30,7 @@ mod gui;
 mod project;
 mod report;
 mod rpy;
+mod screens;
 mod scripts;
 mod transpile;
 

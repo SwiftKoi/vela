@@ -5,14 +5,16 @@
 //! `.rpy` file can hold story, configuration, the GUI's variables, or the screen language, and
 //! which of those has a Vela counterpart.
 
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 use crate::Source;
 use crate::assets::{Asset, media};
 use crate::error::MigrateError;
-use crate::gui;
+use crate::gui::{self, Names};
 use crate::report::Report;
 use crate::rpy::{self, Kind};
+use crate::screens;
 
 /// Directories whose contents are never migrated.
 ///
@@ -27,6 +29,17 @@ enum Outcome {
     /// A file that becomes a Vela source of its own: the GUI's theme and styles (`gui.rs`), with
     /// the design frame it declared.
     Theme(Source, Option<(u32, u32)>),
+    /// A file of screens and styles (`screens.rs`): the module it belongs in, its text, and the styles
+    /// a screen took the name of — which the merge has to apply to the theme as well, since the two end
+    /// up in one file.
+    Screens {
+        /// The module the file becomes.
+        module: String,
+        /// The screens and styles, as Vela.
+        text: String,
+        /// `style X` → the name it kept.
+        renames: BTreeMap<String, String>,
+    },
     /// A file that is not translated, with its report entry already written.
     Nothing,
 }
@@ -36,8 +49,10 @@ enum Outcome {
 pub(crate) struct Scripts {
     /// The files with story in them.
     pub(crate) stories: Vec<Story>,
-    /// The sources a file becomes on its own: the GUI's theme and styles.
-    pub(crate) sources: Vec<Source>,
+    /// The GUI's theme, from `gui.rpy` (`gui.rs`), and the names it declares.
+    theme: Option<(String, Names)>,
+    /// The screens and their styles, from `screens.rpy` (`screens.rs`).
+    screens: Option<(String, String, BTreeMap<String, String>)>,
     /// The design frame, from `gui.init(width, height)` (`SCREENS.md §2.6`).
     pub(crate) design: Option<(u32, u32)>,
 }
@@ -49,11 +64,21 @@ pub(crate) fn read_scripts(
     report: &mut Report,
 ) -> Result<Scripts, MigrateError> {
     let mut read = Scripts::default();
+    // `gui.rpy` is read before `screens.rpy`, which is the order the paths sort in and the order the
+    // passes need: a screen refers to the theme's styles and tokens by the names the theme chose.
+    let mut names = Names::default();
     for path in scripts {
-        match script_file(game, path, report)? {
+        match script_file(game, path, &mut names, report)? {
             Outcome::Story(story) => read.stories.push(story),
+            Outcome::Screens {
+                module,
+                text,
+                renames,
+            } => {
+                read.screens = Some((module, text, renames));
+            }
             Outcome::Theme(source, size) => {
-                read.sources.push(source);
+                read.theme = Some((source.text, names.clone()));
                 // `gui.init(1280, 720)` is where a Ren'Py project declares the frame its screens
                 // were laid out against, and `vela.toml` is where Vela keeps it (`SCREENS.md §2.6`).
                 read.design = read.design.or(size);
@@ -133,7 +158,12 @@ pub(crate) struct Story {
 }
 
 /// One `.rpy` file, as a story, as a source of its own, or as nothing with a report entry.
-fn script_file(game: &Path, path: &Path, report: &mut Report) -> Result<Outcome, MigrateError> {
+fn script_file(
+    game: &Path,
+    path: &Path,
+    names: &mut Names,
+    report: &mut Report,
+) -> Result<Outcome, MigrateError> {
     let text = std::fs::read_to_string(path).map_err(|source| MigrateError::Io {
         path: path.to_path_buf(),
         source,
@@ -159,6 +189,7 @@ fn script_file(game: &Path, path: &Path, report: &mut Report) -> Result<Outcome,
         .then(|| gui::skin(&relative, &nodes, &screens, report))
         .flatten();
     if let Some(skin) = skin {
+        *names = skin.names;
         let source = Source {
             path: format!("src/{module}.vela"),
             text: skin.source,
@@ -167,6 +198,25 @@ fn script_file(game: &Path, path: &Path, report: &mut Report) -> Result<Outcome,
             formatted(source, &relative, report),
             skin.design,
         ));
+    }
+
+    // A file of screens becomes a Vela screen module (`screens.rs`). Checked before the
+    // engine-configuration test below, because a screen file declares no label and would otherwise
+    // be reported whole.
+    if let Some(lowered) = screens::lower(&relative, &nodes, names, report) {
+        let source = formatted(
+            Source {
+                path: String::new(),
+                text: lowered.text,
+            },
+            &relative,
+            report,
+        );
+        return Ok(Outcome::Screens {
+            module,
+            text: source.text,
+            renames: lowered.renames,
+        });
     }
 
     if is_engine_configuration(&nodes) {
@@ -213,5 +263,68 @@ fn formatted(source: Source, relative: &str, report: &mut Report) -> Source {
 /// project is `options`/`gui`/`screens` — the engine's configuration, which has no Vela
 /// counterpart to translate into.
 fn is_engine_configuration(nodes: &[rpy::Node]) -> bool {
-    !nodes.iter().any(|node| matches!(node.kind, Kind::Label(_)))
+    let mut queue: VecDeque<&rpy::Node> = nodes.iter().collect();
+    while let Some(node) = queue.pop_front() {
+        if matches!(node.kind, Kind::Label(_)) {
+            return false;
+        }
+        queue.extend(node.children.iter());
+    }
+    true
+}
+
+/// The files a project's reading produced, in the order they are written.
+pub(crate) fn files(read: &mut Scripts) -> Vec<Source> {
+    let theme = read.theme.take();
+    let screens = read.screens.take();
+    let mut files = Vec::new();
+    match (theme, screens) {
+        // One module for both, the theme first: a style resolves within the file that declares it,
+        // so a screen that reads `theme.accent` has to be in the file that holds it.
+        (Some((theme, _names)), Some((module, screens, renames))) => {
+            let theme = unshadow(theme, &renames);
+            files.push(Source {
+                path: format!("src/{module}.vela"),
+                text: format!("{theme}\n{screens}"),
+            });
+        }
+        (Some((theme, _)), None) => files.push(Source {
+            path: "src/gui.vela".to_string(),
+            text: theme,
+        }),
+        (None, Some((module, screens, _))) => files.push(Source {
+            path: format!("src/{module}.vela"),
+            text: screens,
+        }),
+        (None, None) => {}
+    }
+    files
+}
+
+/// The theme's text, with the styles a screen took the name of renamed to match.
+///
+/// The rename itself is the screens pass's decision — it is the pass that knows both names (see
+/// `screens::collisions`) — and this is where the *other* half of it lands: Vela keeps screens and
+/// styles in one namespace, so the theme's `style main_menu` has to become `style main_menu_style`
+/// the moment a screen called `main_menu` exists beside it. Renaming by line and not by substring,
+/// because `style main_menu_frame:` contains `style main_menu` and is a different style.
+fn unshadow(theme: String, renames: &BTreeMap<String, String>) -> String {
+    if renames.is_empty() {
+        return theme;
+    }
+    let mut out = String::new();
+    for line in theme.lines() {
+        let header = line.strip_suffix(':').map(str::trim_end);
+        match header.and_then(|header| header.strip_prefix("style ")) {
+            Some(name) if renames.contains_key(name) => {
+                let renamed = &renames[name];
+                out.push_str(
+                    &line.replace(&format!("style {name}:"), &format!("style {renamed}:")),
+                );
+            }
+            _ => out.push_str(line),
+        }
+        out.push('\n');
+    }
+    out
 }

@@ -14,7 +14,7 @@ use super::values::{Value, Variable, is_picture};
 /// Measured, not assumed: `crates/vela-ui/src/paint.rs` resolves exactly these when it applies a
 /// style, and a probe through `vela run --capture` confirms that `size = 40` in a style draws
 /// bigger text while `xpos = 400` and `xalign = 1.0` are accepted and ignored.
-const PAINTED: &[&str] = &["color", "background", "size", "font"];
+pub(crate) const PAINTED: &[&str] = &["color", "background", "size", "font"];
 
 /// The interaction states a key may be prefixed with (`SCREENS.md §5.1`).
 const STATES: &[&str] = &["idle", "hover", "selected", "insensitive"];
@@ -147,7 +147,7 @@ fn strip_text_prefix(key: String) -> String {
 }
 
 /// The key without its state prefix, which is the property Vela resolves.
-fn strip_state(key: &str) -> &str {
+pub(crate) fn strip_state(key: &str) -> &str {
     match key.split_once('_') {
         Some((state, prop)) if STATES.contains(&state) => prop,
         _ => key,
@@ -218,6 +218,31 @@ fn reads(screens: &str) -> BTreeSet<String> {
         index = end.max(index + 1);
     }
     found
+}
+
+/// What a reference to each variable becomes in Vela, by the name a screen writes.
+///
+/// `screens.rpy` reads the GUI's variables directly in places a style cannot reach — `size =
+/// gui.title_text_size` is a *number*, not a token — so a second pass has to resolve them, and it has
+/// to resolve them the way the theme named them or the migrated screens would reference tokens that
+/// do not exist. Both answers come from here: a colour is the token `theme::build` emitted for it, a
+/// font likewise, and a number is the number, because a length is not a thing a theme holds
+/// (`SCREENS.md §4.2` — a style paints, and a token that only ever expands to `50` is not a token).
+pub(super) fn references(
+    variables: &[Variable],
+    groups: &BTreeSet<String>,
+) -> BTreeMap<String, String> {
+    let mut values = BTreeMap::new();
+    for variable in variables {
+        let value = match variable.value {
+            Value::Colour { .. } => format!("theme.{}", token(&variable.name, "_color")),
+            Value::Face(_) => format!("theme.{}", font_token(&variable.name, groups)),
+            Value::Number(ref number) => number.clone(),
+            _ => continue,
+        };
+        values.insert(format!("gui.{}", variable.name), value);
+    }
+    values
 }
 
 /// The groups `gui.<x>_properties("group")` names.

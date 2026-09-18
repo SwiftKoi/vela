@@ -34,10 +34,14 @@ pub(super) fn check_actions(
                     check_actions(arm, actions, declared, out);
                 }
             }
-            // A loop's body is drawn, so its actions are checked like any other — and the iterable is
-            // an expression that may hold one.
+            // A loop's body is drawn, so its actions are checked like any other. Its *iterable* is a
+            // value rather than an action position: `for i in range(6)` produces a sequence, and the
+            // element of a list may still be an action (`for a in [quit()]`), which is what
+            // `sequence` looks inside for. Reading the iterable as an action position reported a
+            // producer as a misspelled action — `E5012: no action called `range`` — which is the same
+            // misreading the condition walk had, one line further down (`SCREENS.md §2.4`).
             ScreenLine::For { iterable, body, .. } => {
-                check_action_expr(iterable, actions, declared, out);
+                sequence(iterable, actions, declared, out);
                 check_actions(body, actions, declared, out);
             }
             // A binding's action is an action like any other, so a misspelled one is the same
@@ -83,6 +87,31 @@ fn arg_value(arg: &ScreenArg) -> Option<&Expr> {
         // A bare name is a flag (`stretch_x`) or a leaf's content (`text line`) — not a value, and
         // so not an action.
         ScreenArg::Named { value: None, .. } => None,
+    }
+}
+
+/// The actions an iterable holds: the ones written *inside* it, not the call that produces it.
+///
+/// The head of an iterable is a producer — a name, a call, a literal — and a call there is a value
+/// the screen draws from rather than an action it performs. What its *elements* are is a different
+/// question, and a list literal is the one shape where an element can be an action.
+fn sequence(expr: &Expr, actions: &ActionRegistry, declared: &[&str], out: &mut Vec<Diagnostic>) {
+    match expr {
+        Expr::List { items, .. } => {
+            for item in items {
+                check_action_expr(item, actions, declared, out);
+            }
+        }
+        Expr::Paren { inner, .. } => sequence(inner, actions, declared, out),
+        Expr::Binary { lhs, rhs, .. } => {
+            sequence(lhs, actions, declared, out);
+            sequence(rhs, actions, declared, out);
+        }
+        Expr::If { then_, else_, .. } => {
+            sequence(then_, actions, declared, out);
+            sequence(else_, actions, declared, out);
+        }
+        _ => {}
     }
 }
 
