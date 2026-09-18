@@ -315,3 +315,65 @@ test \"after it is over\":
 
     assert!(report.is_ok(), "{:?}", report.outcomes[0].failures);
 }
+
+/// `advance until shown` waits for the picture, and containment is how it reads it.
+///
+/// The rule is Ren'Py's (`testfocus.find_focus`: a pattern *in* the text, both casefolded), and it is
+/// what makes a test writable at all: the option is spelled `Ask her right away.` on screen and the
+/// test that waits for it says `"ask her right away"`.
+#[test]
+fn a_wait_reads_what_is_on_screen_case_insensitively() {
+    assert!(
+        failures("    run from menued\n    advance until shown \"which way\"\n    choose \"Left\"\n    expect trust == 1\n")
+            .is_empty(),
+        "a menu's prompt is on screen while the menu is"
+    );
+    // The *wait* is satisfied by the option that is offered, which is why a wait may precede a
+    // `choose` without counting the lines in between.
+    assert!(
+        failures("    run from menued\n    advance until shown \"right\"\n    choose \"Right\"\n    expect trust == 0\n")
+            .is_empty()
+    );
+}
+
+/// A wait that never sees what it waits for fails with what the story *did* show.
+#[test]
+fn a_wait_that_never_arrives_says_what_it_saw() {
+    // The story runs out while the test is still waiting: the wait is what has something to report,
+    // and "what it wanted" with "what was on screen when it stopped" is that report.
+    let ran_out = failures("    run from ending\n    advance until shown \"no such line\"\n");
+    assert_eq!(ran_out.len(), 1, "{ran_out:?}");
+    let Failure::NotShown { wanted, shown, .. } = &ran_out[0] else {
+        panic!("expected a wait failure, got {:?}", ran_out[0]);
+    };
+    assert_eq!(wanted, "no such line");
+    assert!(
+        shown.contains("Done."),
+        "it says where the story stopped: {shown}"
+    );
+
+    // A menu in the way is a different mistake — the script never said what to pick — and saying so
+    // beats a wait that reports the wrong thing for the right reason.
+    let stuck = failures("    run from start\n    advance until shown \"no such line\"\n");
+    assert!(
+        matches!(stuck[0], Failure::UnscriptedChoice { .. }),
+        "{stuck:?}"
+    );
+}
+
+/// `expect shown` asserts about the screen, and `expect not shown` about its absence.
+#[test]
+fn an_assertion_about_the_screen_reads_the_command_on_it() {
+    // The story stops *waiting* on what a player would be looking at: one line in, that is the menu
+    // the story walked into, not the line before it.
+    assert!(
+        failures("    run from start\n    advance 1\n    expect shown \"Which way?\"\n").is_empty(),
+        "a menu's prompt is on screen while the menu is"
+    );
+    assert!(
+        failures("    run from start\n    advance 1\n    expect not shown \"Done.\"\n").is_empty()
+    );
+    let wrong = failures("    run from start\n    advance 1\n    expect shown \"Done.\"\n");
+    assert_eq!(wrong.len(), 1, "{wrong:?}");
+    assert!(matches!(wrong[0], Failure::Shown { negated: false, .. }));
+}

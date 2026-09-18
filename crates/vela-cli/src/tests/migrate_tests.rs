@@ -149,6 +149,54 @@ fn renpys_built_in_black_becomes_a_solid() {
     let _ = std::fs::remove_dir_all(&out_dir);
 }
 
+/// A testcase migrates when every step of it is about the story, and is reported when it is not.
+///
+/// A test is a *sequence*: `advance until …` then `expect …` asserts what the wait left behind, so a
+/// testcase with a step missing is a different test rather than a smaller one — it would run to a
+/// different conclusion and pass for reasons that have nothing to do with the story. The rule is all
+/// of it or none of it, and the entry says which step stopped it.
+#[test]
+fn a_testcase_migrates_whole_or_is_reported() {
+    let base = std::env::temp_dir().join(format!("vela-migrate-tests-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("game")).expect("create project");
+    std::fs::write(
+        base.join("game").join("script.rpy"),
+        "label start:\n    menu:\n        \"Take the left.\":\n            \"Left it is.\"\n        \"Take the right.\":\n            \"Right it is.\"\n    return\n",
+    )
+    .expect("write the story");
+    // `click "take the left"` names a menu option — the option is spelled with a capital and a full
+    // stop, which is Ren'Py's own containment rule and the reason this is a rule rather than a guess.
+    std::fs::write(
+        base.join("game").join("testcases.rpy"),
+        "testcase the left way:\n    click \"take the left\"\n    assert \"Left it is.\"\n\ntestcase by the menu:\n    click \"Start\"\n",
+    )
+    .expect("write the testcases");
+
+    let (code, out) = cli(&["migrate", &base.to_string_lossy()]);
+    assert_eq!(code, 0, "the migration failed:\n{out}");
+
+    let out_dir = migrated(&base);
+    let tests = std::fs::read_to_string(out_dir.join("src/testcases.vela")).expect("test items");
+    assert!(tests.contains("test \"the left way\":"), "{tests}");
+    assert!(tests.contains("    choose \"Take the left.\"\n"), "{tests}");
+    assert!(
+        tests.contains("    expect shown \"Left it is.\"\n"),
+        "{tests}"
+    );
+    // The one that clicks a screen control is not written at all, and says so.
+    assert!(!tests.contains("by the menu"), "{tests}");
+    let report = std::fs::read_to_string(out_dir.join("MIGRATION.md")).expect("the report");
+    assert!(report.contains("click \"Start\""), "{report}");
+
+    // And the translated test runs, which is the only claim worth making about it.
+    let (code, tested) = cli(&["test", &out_dir.to_string_lossy()]);
+    assert_eq!(code, 0, "the migrated test does not pass:\n{tested}");
+
+    let _ = std::fs::remove_dir_all(&base);
+    let _ = std::fs::remove_dir_all(&out_dir);
+}
+
 /// A project that is not Ren'Py is a usage error, not a crash and not a silent empty migration.
 #[test]
 fn a_directory_that_is_not_a_renpy_project_is_refused() {

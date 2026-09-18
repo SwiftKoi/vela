@@ -59,7 +59,10 @@ impl Plan {
     pub fn qualify(&mut self, module: &str) {
         for step in &mut self.steps {
             let function = match &mut step.kind {
-                StepKind::Choose { function, .. } | StepKind::Expect { function, .. } => function,
+                StepKind::Choose { function, .. }
+                | StepKind::Expect { function, .. }
+                | StepKind::AdvanceUntil { function, .. }
+                | StepKind::ExpectShown { function, .. } => function,
                 StepKind::Advance(_) | StepKind::Cover(_) => continue,
             };
             *function = format!("{module}.{function}");
@@ -87,6 +90,22 @@ pub enum StepKind {
         function: String,
         /// The expression as the author wrote it, for a failure message.
         source: String,
+    },
+    /// Advance until the text this function produces is on screen.
+    AdvanceUntil {
+        /// The synthesized function that produces the text.
+        function: String,
+        /// The expression as the author wrote it, for a failure message.
+        source: String,
+    },
+    /// Assert that this function's text is on screen — or is not, when negated.
+    ExpectShown {
+        /// The synthesized function that produces the text.
+        function: String,
+        /// The expression as the author wrote it, for a failure message.
+        source: String,
+        /// Whether the assertion is that it is *not* there.
+        negated: bool,
     },
     /// Assert that this function produces `true`.
     Expect {
@@ -158,14 +177,9 @@ fn step(
     let span = directive.span;
 
     let kind = match &directive.kind {
-        // `run` alone starts where the game does, which the runner knows from the project.
         DirectiveKind::Run { target, .. } if target.is_empty() => return,
-        DirectiveKind::Run {
-            target,
-            target_span,
-        } => {
-            plan.start = Some(target.clone());
-            plan.start_span = *target_span;
+        DirectiveKind::Run { .. } => {
+            start_of(&directive.kind, plan);
             return;
         }
         DirectiveKind::Advance { count } => {
@@ -178,6 +192,29 @@ fn step(
             }
             StepKind::Advance(*count)
         }
+        // The two `shown` directives are one question asked twice — *is this on screen now*, and
+        // *run on until it is* — so they are read once, in `shown`.
+        DirectiveKind::AdvanceUntil { text: expr } => {
+            match shown(expr, text, appended, counter, None) {
+                Some(step) => step,
+                None => {
+                    plan.notes
+                        .push("this `advance until` could not be read".to_string());
+                    return;
+                }
+            }
+        }
+        DirectiveKind::ExpectShown {
+            text: expr,
+            negated,
+        } => match shown(expr, text, appended, counter, Some(*negated)) {
+            Some(step) => step,
+            None => {
+                plan.notes
+                    .push("this `expect shown` could not be read".to_string());
+                return;
+            }
+        },
         DirectiveKind::Choose { text: expr } => {
             let Some(source) = source_of(text, expr.span()) else {
                 plan.notes
@@ -200,20 +237,67 @@ fn step(
                 source: one_line(source),
             }
         }
-        DirectiveKind::Cover { mode } => {
-            if *mode == CoverMode::Variants {
-                plan.notes.push(
-                    "`cover variants` is not implemented: nothing records which enum variants a run \
-                     matched"
-                        .to_string(),
-                );
-                return;
-            }
-            StepKind::Cover(*mode)
-        }
+        DirectiveKind::Cover { mode } => match cover_mode(*mode, plan) {
+            Some(step) => step,
+            None => return,
+        },
     };
 
     plan.steps.push(Step { span, kind });
+}
+
+/// A `cover` step, or a note saying why there is none.
+///
+/// `cover variants` is named and unimplemented: nothing records which enum variants a run matched, and
+/// a test that silently checked nothing would be worse than one that says it cannot.
+fn cover_mode(mode: CoverMode, plan: &mut Plan) -> Option<StepKind> {
+    if mode == CoverMode::Variants {
+        plan.notes.push(
+            "`cover variants` is not implemented: nothing records which enum variants a run \
+             matched"
+                .to_string(),
+        );
+        return None;
+    }
+    Some(StepKind::Cover(mode))
+}
+
+/// Records where a `run from` starts, which is the one directive that is not a step.
+fn start_of(kind: &vela_syntax::DirectiveKind, plan: &mut Plan) {
+    let vela_syntax::DirectiveKind::Run {
+        target,
+        target_span,
+    } = kind
+    else {
+        return;
+    };
+    plan.start = Some(target.clone());
+    plan.start_span = *target_span;
+}
+
+/// A step whose subject is what is *on screen*, or `None` when the expression could not be read.
+///
+/// `negated` is `None` for a wait and `Some(false)`/`Some(true)` for an assertion, which is the only
+/// difference between the two directives: one runs the story on until the subject holds, the other
+/// asks whether it does.
+fn shown(
+    expr: &vela_syntax::Expr,
+    text: &str,
+    appended: &mut String,
+    counter: &mut u32,
+    negated: Option<bool>,
+) -> Option<StepKind> {
+    let source = source_of(text, expr.span())?;
+    let function = function(appended, counter, "shown", "str", source);
+    let source = one_line(source);
+    match negated {
+        Some(negated) => Some(StepKind::ExpectShown {
+            function,
+            source,
+            negated,
+        }),
+        None => Some(StepKind::AdvanceUntil { function, source }),
+    }
 }
 
 /// The source text of a span inside the file it came from.

@@ -32,6 +32,7 @@ mod report;
 mod rpy;
 mod screens;
 mod scripts;
+mod testcases;
 mod transpile;
 
 #[cfg(test)]

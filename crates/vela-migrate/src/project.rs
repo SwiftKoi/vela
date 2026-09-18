@@ -79,7 +79,7 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
     let design = read.design;
     // The theme and the screens first, so a reader of the report sees the look before the story
     // that uses it.
-    let mut written = files(&mut read);
+    let mut written = files(&mut read, &mut report);
     written.extend(translate(&read.stories, &images, &mut report));
 
     let name = name_of(&game).unwrap_or_else(|| {

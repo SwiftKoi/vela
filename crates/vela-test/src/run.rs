@@ -60,7 +60,35 @@ fn one(module: &Module, entry: &str, plan: &Plan) -> Outcome {
             StepKind::Expect { function, source } => {
                 assert(&mut session, function, source, next.span, &mut outcome);
             }
+            StepKind::ExpectShown {
+                function,
+                source,
+                negated,
+            } => {
+                shown_assert(
+                    &mut session,
+                    function,
+                    source,
+                    *negated,
+                    next.span,
+                    &mut outcome,
+                );
+            }
             StepKind::Cover(_) => cover(&session, module, next.span, &mut outcome),
+            // A wait the story never satisfied is why the run stopped, and saying *what it wanted*
+            // is more use than "the story ended": the wait is the step that has something to report.
+            StepKind::AdvanceUntil { function, source } => {
+                if let Some(wanted) = text(&mut session, function, source, next.span, &mut outcome)
+                {
+                    outcome.failures.push(Failure::NotShown {
+                        span: next.span,
+                        wanted,
+                        shown: shown_text(&session),
+                    });
+                }
+            }
+            // A directive the story never reached is a script that wanted a screen that is not there:
+            // the story ended first, and that is the report.
             StepKind::Advance(_) | StepKind::Choose { .. } => {
                 // Only a story that is over owes an explanation; a script that stopped driving leaves
                 // the story running, which is what a test of the first four lines does on purpose.
@@ -115,14 +143,8 @@ fn answer(
     // Assertions that sit before the answer to this command run here, because the world they are about
     // is the world as it is *at* this command — and they do not consume it, so the answer below is still
     // the answer to the command on screen.
-    while let Some(next) = plan.steps.get(script.index) {
-        match &next.kind {
-            StepKind::Expect { function, source } => {
-                assert(session, function, source, next.span, outcome);
-                script.index += 1;
-            }
-            _ => break,
-        }
+    if !assertions(session, plan, script, outcome) {
+        return None;
     }
 
     // A `cover` is a claim about *every* label, so it is a claim about the whole run: the presence of
@@ -169,9 +191,57 @@ fn answer(
             }
             Some(session.answer(Input::Ack))
         }
+        // A wait whose condition does not hold yet: answer, and look again at the next command.
+        StepKind::AdvanceUntil { .. } => {
+            if !answer_plain(session, script, Some(next.span), outcome) {
+                return None;
+            }
+            Some(session.answer(Input::Ack))
+        }
         // Consumed by the loop above, which stops at the first step that is not one.
-        StepKind::Expect { .. } => None,
+        StepKind::Expect { .. } | StepKind::ExpectShown { .. } => None,
     }
+}
+
+/// Consumes every assertion that applies *now*, and says whether the run may go on.
+///
+/// The assertions about the current state are all of them that fit: an `expect`, a `expect shown` and
+/// a `advance until shown` whose subject already holds are claims about the command the story is
+/// waiting on, and consuming them is what lets `advance until "x"` be followed by `choose "x"` as one
+/// instruction rather than two.
+fn assertions(
+    session: &mut Session,
+    plan: &Plan,
+    script: &mut Script,
+    outcome: &mut Outcome,
+) -> bool {
+    while let Some(next) = plan.steps.get(script.index) {
+        match &next.kind {
+            StepKind::Expect { function, source } => {
+                assert(session, function, source, next.span, outcome);
+                script.index += 1;
+            }
+            StepKind::ExpectShown {
+                function,
+                source,
+                negated,
+            } => {
+                shown_assert(session, function, source, *negated, next.span, outcome);
+                script.index += 1;
+            }
+            StepKind::AdvanceUntil { function, source } => {
+                let Some(wanted) = text(session, function, source, next.span, outcome) else {
+                    return false;
+                };
+                if !shows(session, &wanted) {
+                    break;
+                }
+                script.index += 1;
+            }
+            _ => break,
+        }
+    }
+    true
 }
 
 /// Where the script is.
@@ -284,6 +354,71 @@ fn assert(
             span,
             message: fault.to_string(),
         }),
+    }
+}
+
+/// Asserts what is on screen, and says what is there when it is not what was asked for.
+fn shown_assert(
+    session: &mut Session,
+    name: &str,
+    source: &str,
+    negated: bool,
+    span: vela_span::Span,
+    outcome: &mut Outcome,
+) {
+    let Some(wanted) = text(session, name, source, span, outcome) else {
+        return;
+    };
+    if shows(session, &wanted) == negated {
+        outcome.failures.push(Failure::Shown {
+            span,
+            wanted,
+            negated,
+            shown: shown_text(session),
+        });
+    }
+}
+
+/// Whether what is on screen contains this text.
+///
+/// Containment, case-insensitively — which is Ren'Py's rule, read out of `testfocus.find_focus` (`a
+/// pattern in text`, both folded), and the reason a test may write `advance until "ask her right away"`
+/// for the option a screen spells `Ask her right away.`. A test that had to reproduce the punctuation
+/// of what it waits for would be a test about spelling.
+fn shows(session: &Session, wanted: &str) -> bool {
+    let wanted = wanted.to_lowercase();
+    screen_text(session)
+        .iter()
+        .any(|text| text.to_lowercase().contains(&wanted))
+}
+
+/// What is on screen, as one line a failure can print: `"We get married shortly after that."`.
+fn shown_text(session: &Session) -> String {
+    let lines = screen_text(session);
+    match lines.is_empty() {
+        true => "nothing".to_string(),
+        false => lines
+            .iter()
+            .map(|line| format!("`{line}`"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    }
+}
+
+/// Everything the command on screen puts in front of a player.
+///
+/// The command the story is *waiting on*, which is what a player is looking at: a line's text, and a
+/// menu's prompt and options. A screen drawn over it is not here — nothing in a headless run opens
+/// one (`SCREENS.md §2.3`), so a claim about a screen is a claim this runner cannot check yet.
+fn screen_text(session: &Session) -> Vec<String> {
+    match session.current() {
+        Some(Command::Say { text, .. }) => vec![text.clone()],
+        Some(Command::Menu { prompt, choices }) => prompt
+            .iter()
+            .cloned()
+            .chain(choices.iter().map(|choice| choice.text.clone()))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

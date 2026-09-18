@@ -79,14 +79,32 @@ impl Parser<'_> {
                     target_span,
                 }
             }
+            // `advance 4` counts commands; `advance until shown "..."` waits for the picture to say
+            // something. One verb because both are "run on" — the argument says how far.
+            "advance" if self.at_name("until") => {
+                self.bump();
+                self.expect_name("`shown`").filter(|word| word == "shown");
+                DirectiveKind::AdvanceUntil {
+                    text: self.parse_expr(),
+                }
+            }
             "advance" => DirectiveKind::Advance {
                 count: self.parse_count(),
             },
             "choose" => DirectiveKind::Choose {
                 text: self.parse_expr(),
             },
-            "expect" => DirectiveKind::Expect {
-                expr: self.parse_expr(),
+            // `expect shown "x"` is about the screen and `expect x == 1` is about the world: the
+            // word `shown` is what tells them apart, and it is looked for rather than reserved so a
+            // story may still call a variable `shown`.
+            "expect" => match self.at_shown() {
+                Some(negated) => DirectiveKind::ExpectShown {
+                    text: self.parse_expr(),
+                    negated,
+                },
+                None => DirectiveKind::Expect {
+                    expr: self.parse_expr(),
+                },
             },
             "cover" => DirectiveKind::Cover {
                 mode: self.parse_cover_mode(),
@@ -113,6 +131,29 @@ impl Parser<'_> {
             span: start.to(self.prev_span()),
             kind,
         })
+    }
+
+    /// Whether the line reads `shown` or `not shown` here, stepping over it when it does.
+    ///
+    /// `Some(negated)` for the two spellings, `None` when this is an ordinary expression — in which
+    /// case the cursor is left exactly where it was, so `expect shown` and `expect shown_count == 3`
+    /// are told apart by what *follows* the word rather than by the word alone.
+    fn at_shown(&mut self) -> Option<bool> {
+        let saved = self.pos;
+        let negated = self.eat_keyword(Keyword::Not);
+        let shown = self
+            .expect_name("`shown`")
+            .is_some_and(|word| word == "shown");
+        if shown {
+            return Some(negated);
+        }
+        self.pos = saved;
+        None
+    }
+
+    /// Whether the cursor is on a word, which is how the contextual directives' arguments are read.
+    fn at_name(&self, word: &str) -> bool {
+        self.at(TokenKind::Ident) && self.text(self.tokens[self.pos]) == word
     }
 
     /// The count an `advance` carries.

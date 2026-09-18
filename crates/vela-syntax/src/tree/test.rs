@@ -57,6 +57,22 @@ pub enum DirectiveKind {
         /// How many.
         count: u32,
     },
+    /// `advance until shown <expr>`: consume commands until this text is on screen.
+    ///
+    /// The subject is `shown` rather than a bare expression because what a *screen* shows is not what
+    /// the `World` holds: `expect trust == 1` is about the story, and this is about the picture. Two
+    /// subjects, two words, so a failing test says which of the two it was about.
+    AdvanceUntil {
+        /// The text to wait for, as an expression.
+        text: Expr,
+    },
+    /// `expect shown <expr>` / `expect not shown <expr>`: assert what is on screen.
+    ExpectShown {
+        /// The text to look for, as an expression.
+        text: Expr,
+        /// Whether the assertion is that it is *not* there.
+        negated: bool,
+    },
     /// `choose <text>`: pick the menu option whose text is this.
     Choose {
         /// The option's text. An expression rather than a string literal, so a test can name the text

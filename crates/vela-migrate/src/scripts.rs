@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 
+use crate::Node;
 use crate::Source;
 use crate::assets::{Asset, media};
 use crate::error::MigrateError;
@@ -40,6 +41,17 @@ enum Outcome {
         /// `style X` → the name it kept.
         renames: BTreeMap<String, String>,
     },
+    /// A file of `testsuite`/`testcase` blocks (`testcases.rs`): the module it becomes, and the
+    /// nodes. The *translation* needs every story's menu options — a `click` is a `choose` only when
+    /// the text names an option — so it happens after the whole project has been read.
+    Tests {
+        /// The module the file becomes.
+        module: String,
+        /// The file as it was read.
+        nodes: Vec<Node>,
+        /// The path as the report names it.
+        relative: String,
+    },
     /// A file that is not translated, with its report entry already written.
     Nothing,
 }
@@ -53,6 +65,8 @@ pub(crate) struct Scripts {
     theme: Option<(String, Names)>,
     /// The screens and their styles, from `screens.rpy` (`screens.rs`).
     screens: Option<(String, String, BTreeMap<String, String>)>,
+    /// The tests, from `testcases.rpy` (`testcases.rs`).
+    tests: Option<(String, Vec<Node>, String)>,
     /// The design frame, from `gui.init(width, height)` (`SCREENS.md §2.6`).
     pub(crate) design: Option<(u32, u32)>,
 }
@@ -77,6 +91,13 @@ pub(crate) fn read_scripts(
             } => {
                 read.screens = Some((module, text, renames));
             }
+            Outcome::Tests {
+                module,
+                nodes,
+                relative,
+            } => {
+                read.tests = Some((module, nodes, relative));
+            }
             Outcome::Theme(source, size) => {
                 read.theme = Some((source.text, names.clone()));
                 // `gui.init(1280, 720)` is where a Ren'Py project declares the frame its screens
@@ -87,6 +108,56 @@ pub(crate) fn read_scripts(
         }
     }
     Ok(read)
+}
+
+/// A file's bytes, or the error the caller reports.
+fn read(path: &Path) -> Result<String, MigrateError> {
+    std::fs::read_to_string(path).map_err(|source| MigrateError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+/// A file's path as the report names it, and the module it becomes.
+///
+/// The module is the path without its extension, which is how a project's directory layout becomes its
+/// namespace: `chapters/forest.rpy` is `chapters/forest` (`LANGUAGE.md §6.1`).
+fn naming(game: &Path, path: &Path) -> (String, String) {
+    let relative = path
+        .strip_prefix(game)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default();
+    let module = relative.trim_end_matches(".rpy").to_string();
+    (relative, module)
+}
+
+/// The entry a file of engine configuration gets, once, rather than per line.
+///
+/// A file that declares no label is `options.rpy`, `testcases.rpy` (before item 18 read it) or one of
+/// the other files a project configures the engine in, and Vela expresses each of them differently.
+/// One entry for the file is what keeps the report readable: a 220-line `options.rpy` reported line by
+/// line is a report nobody reads.
+fn report_engine_configuration(relative: &str, text: &str, report: &mut Report) {
+    report.push(
+        relative,
+        1,
+        &format!("{relative} ({} lines)", text.lines().count()),
+        "engine configuration, the GUI's variables, or the screen language: Vela expresses these \
+         differently, so this file is not translated — port what it configures by hand, or leave it \
+         out and use Vela's own screens",
+    );
+}
+
+/// Whether a file is Ren'Py's testcases rather than a story.
+fn is_testcases(nodes: &[Node]) -> bool {
+    nodes
+        .iter()
+        .any(|node| matches!(head(&node.text), "testsuite" | "testcase"))
+}
+
+/// The first word of a line.
+fn head(text: &str) -> &str {
+    text.split_whitespace().next().unwrap_or("")
 }
 
 /// Everything under `dir`, split into scripts and media.
@@ -164,17 +235,8 @@ fn script_file(
     names: &mut Names,
     report: &mut Report,
 ) -> Result<Outcome, MigrateError> {
-    let text = std::fs::read_to_string(path).map_err(|source| MigrateError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-
-    let relative = path
-        .strip_prefix(game)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .unwrap_or_default();
-    let module = relative.trim_end_matches(".rpy").to_string();
-
+    let text = read(path)?;
+    let (relative, module) = naming(game, path);
     let nodes = rpy::read(&text);
 
     // The GUI's variables become the project's theme (`SCREENS.md §5`, `§2.6`). What a screen says
@@ -219,15 +281,18 @@ fn script_file(
         });
     }
 
+    // A file of testcases becomes `test` items (`testcases.rs`), for the same reason the screens do:
+    // a testcase declares no label either, so the story test below would report the whole file.
+    if is_testcases(&nodes) {
+        return Ok(Outcome::Tests {
+            module,
+            nodes,
+            relative,
+        });
+    }
+
     if is_engine_configuration(&nodes) {
-        report.push(
-            &relative,
-            1,
-            &format!("{relative} ({} lines)", text.lines().count()),
-            "engine configuration, the GUI's variables, or the screen language: Vela expresses \
-             these differently, so this file is not translated — port what it configures by hand, \
-             or leave it out and use Vela's own screens",
-        );
+        report_engine_configuration(&relative, &text, report);
         return Ok(Outcome::Nothing);
     }
 
@@ -274,10 +339,31 @@ fn is_engine_configuration(nodes: &[rpy::Node]) -> bool {
 }
 
 /// The files a project's reading produced, in the order they are written.
-pub(crate) fn files(read: &mut Scripts) -> Vec<Source> {
+pub(crate) fn files(read: &mut Scripts, report: &mut Report) -> Vec<Source> {
     let theme = read.theme.take();
     let screens = read.screens.take();
     let mut files = Vec::new();
+
+    if let Some((module, nodes, relative)) = read.tests.take() {
+        // The options come from the stories, which are read by now: a `click` is a `choose` when the
+        // text names a menu option, and only the stories can say which texts those are.
+        let menus: std::collections::BTreeSet<String> = read
+            .stories
+            .iter()
+            .flat_map(|story| crate::testcases::menu_options(&story.nodes))
+            .collect();
+        if let Some(translated) = crate::testcases::lower(&relative, &nodes, &menus, report) {
+            let source = formatted(
+                Source {
+                    path: format!("src/{module}.vela"),
+                    text: translated.text,
+                },
+                &relative,
+                report,
+            );
+            files.push(source);
+        }
+    }
     match (theme, screens) {
         // One module for both, the theme first: a style resolves within the file that declares it,
         // so a screen that reads `theme.accent` has to be in the file that holds it.

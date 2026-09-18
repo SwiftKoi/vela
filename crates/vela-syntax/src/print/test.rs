@@ -29,8 +29,15 @@ fn text(directive: &Directive) -> String {
         DirectiveKind::Run { target, .. } if target.is_empty() => "run".to_string(),
         DirectiveKind::Run { target, .. } => format!("run from {}", target.join(".")),
         DirectiveKind::Advance { count } => format!("advance {count}"),
+        DirectiveKind::AdvanceUntil { text } => {
+            format!("advance until shown {}", expr::text(text))
+        }
         DirectiveKind::Choose { text } => format!("choose {}", expr::text(text)),
         DirectiveKind::Expect { expr } => format!("expect {}", expr::text(expr)),
+        DirectiveKind::ExpectShown { text, negated } => {
+            let not = if *negated { "not " } else { "" };
+            format!("expect {not}shown {}", expr::text(text))
+        }
         DirectiveKind::Cover { mode } => format!("cover {}", mode.as_str()),
     }
 }

@@ -94,6 +94,26 @@ pub enum Failure {
         /// What was on offer.
         offered: Vec<String>,
     },
+    /// What a test waited for never appeared on screen.
+    NotShown {
+        /// The directive's span.
+        span: Span,
+        /// What it waited for.
+        wanted: String,
+        /// What it shows, as it was answered.
+        shown: String,
+    },
+    /// An assertion about the screen was wrong.
+    Shown {
+        /// The directive's span.
+        span: Span,
+        /// What it looked for.
+        wanted: String,
+        /// Whether it looked for its absence.
+        negated: bool,
+        /// What is on screen.
+        shown: String,
+    },
     /// An assertion was false.
     Assertion {
         /// The directive's span.
@@ -141,6 +161,8 @@ impl Failure {
             | Self::NoLabel { span, .. }
             | Self::UnscriptedChoice { span, .. }
             | Self::NoSuchChoice { span, .. }
+            | Self::NotShown { span, .. }
+            | Self::Shown { span, .. }
             | Self::Assertion { span, .. }
             | Self::Unreadable { span, .. }
             | Self::Uncovered { span, .. }
@@ -167,6 +189,18 @@ impl Failure {
                 "no option reads `{wanted}`; the story offers {}",
                 quoted(offered)
             ),
+            Self::NotShown { wanted, shown, .. } => {
+                format!("`{wanted}` never appeared on screen; the story ended showing {shown}")
+            }
+            Self::Shown {
+                wanted,
+                negated,
+                shown,
+                ..
+            } => match negated {
+                true => format!("`{wanted}` is on screen, and the test says it is not: {shown}"),
+                false => format!("`{wanted}` is not on screen, which shows {shown}"),
+            },
             Self::Assertion { source, .. } => format!("`{source}` is not true"),
             Self::Unreadable { message, .. } => {
                 format!("the assertion could not be read: {message}")

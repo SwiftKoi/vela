@@ -224,7 +224,24 @@ test "picking the forest sets trust":
 test "every route reaches an ending":
     cover labels             # asserts every label is executed
     cover variants           # asserts every enum variant is matched
+
+test "the left way is the good one":
+    run from start
+    advance until shown "take the left"   # waits for what is *on screen*
+    choose "Take the left."               # the next menu option whose text has this
+    expect shown "Left it is."
+    expect not shown "Right it is."
+    expect trust == 1                     # and the world, where the story put it
 ```
+
+**Two subjects, and the words say which one a step is about.** `expect <expr>` is a claim about the
+`World` — `trust == 1` — and `expect shown <text>` is a claim about the *picture*: the line the story
+is waiting on, or a menu's prompt and options. `shown` matches by **containment, case-insensitively**,
+which is Ren'Py's own rule for a text selector (`renpy/test/testfocus.py`: *a pattern in the text*, both
+casefolded) — and the reason a test may write `"take the left"` for an option a screen spells
+`Take the left.` A test that had to reproduce the punctuation of what it waits for would be a test
+about spelling. `advance until shown <text>` is the same subject as a step: run the story on until it
+is true, and fail with what *was* on screen when the story ends first.
 
 Capabilities:
 
@@ -256,6 +273,14 @@ is always reviewed.
 > that *were* offered. **`cover labels` drives the run to its end**, because "every label" is a claim
 > about a whole playthrough; the labels are recorded by the machine (`Vm::entered_labels`), which is
 > observational state and deliberately not part of a save.
+>
+> **Not yet.** A step that names the *interface* — `click "<control>"`, `assert screen "<name>"`, a
+> keypress — has no directive, because the runner drives the VM and holds no screens: it is a step loop
+> over `Session`, and `session.current()` is the closest thing it has to what a player is looking at.
+> The presentation a click needs (the control's label, its action, the stack it sits in) lives in
+> `vela-ui`, and the runner reaches it only once that runtime is somewhere both callers can use —
+> which is what the screen steps wait on, and what `vela migrate` reports per step
+> (`docs/roadmap/M12.1-screen-language.md`, item 18).
 >
 > **Not yet.** Golden frames (`--update`, `--seed`) and the locale sweep are named and unimplemented:
 > rendering at a scripted point and comparing to a stored image is `vela-render`'s to produce, and a
