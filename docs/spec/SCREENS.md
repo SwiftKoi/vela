@@ -330,11 +330,13 @@ screen main_menu:
 - **Two sources, one set.** `pc`, `web` and `mobile` come from the bundle's descriptor
   (`target.json`'s `variants`, written per target by `commands/target.rs`; a *source* run declares `pc`,
   because the platform the process is on is the answer). `small` comes from the **frame** the screen is
-  laid out in: below three quarters of the reference frame on either side (960×540 against 1280×720).
-  Ren'Py decides `small` from the *physical diagonal* of the device; Vela's is the room the frame has,
-  because that is the question the sample's own use is asking — "there's no room" for the side image —
-  and because a desktop build has no diagonal to measure. Vela owns that number and says so here rather
-  than deriving it from something unmeasurable.
+  laid out in: below three quarters of the frame the *project* declares — `vela.toml`'s
+  `[project] size`, which is Vela's own 1280×720 when a project declares none. Ren'Py decides `small`
+  from the *physical diagonal* of the device; Vela's is the room the frame has, because that is the
+  question the sample's own use is asking — "there's no room" for the side image — and because a
+  desktop build has no diagonal to measure. Vela owns that fraction and says so here rather than
+  deriving it from something unmeasurable; the *frame* is the project's, because a game designed at
+  1920×1080 is not `small` at 1500×900.
 - **The size class is per layout, not per run.** It is added where the frame is known
   (`ScreenSet::lay`), so a window that is resized asks again with the new answer; the platform half
   travels with the screen set, beside its pictures and fonts.
@@ -342,9 +344,12 @@ screen main_menu:
   something nothing can answer (`§2.2`); a variant is a call that can be.
 
 > **Implemented (M12.1).** `Variant`/`Variants` in `crates/vela-ui/src/variants.rs`; the descriptor's
-> `variants` field, which existed and was empty since M9, now carries a target's platform names.
-> `tests/variants.rs` pins both sources and the sample's merged condition, `tests/check.rs` that a
-> question is clean, an unknown name is `E5018` and `W4013` still fires beside one.
+> `variants` field, which existed and was empty since M9, now carries a target's platform names, and
+> `vela.toml`'s `[project] size` carries the frame `gui.init(width, height)` declared — Ren'Py's own
+> `gui.init`, which the migration lands there (`TOOLING.md §8`).
+> `tests/variants.rs` pins both sources, the sample's merged condition, and that the threshold follows
+> the *declared* frame rather than a constant; `tests/check.rs` that a question is clean, an unknown
+> name is `E5018` and `W4013` still fires beside one.
 
 ## 3. Widget tree
 
@@ -512,9 +517,13 @@ style speaker from body:
     color = theme.accent
     weight = bold
 
-style body from:
+style body:
     color = theme.fg
 ```
+
+> **Revised (M12.1).** The derived style above is written `style speaker from body:`, and the base is
+> `style body:` — a `from` takes a *name*, so `style body from:` with nothing after it is `E1004`
+> rather than a style with no base. The example said otherwise until it was run.
 
 Rules:
 - A style may inherit via `from`; inheritance is checked (a style cannot inherit from itself,

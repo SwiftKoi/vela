@@ -340,6 +340,22 @@ jump forest.clearing
 failures of a long-running project: every story added to it is a chance of a collision. Names are
 qualified, and the LSP can rename across modules safely.
 
+A project is a directory with a `vela.toml` and its sources under `src/`:
+
+```toml
+schema = 1
+
+[project]
+name = "the_question"    # the window title, and what a bundle is called
+entry = "main.start"     # where the story starts, written `module.label`
+size = "1280x720"        # the frame the screens were laid out against (`SCREENS.md §2.6`)
+```
+
+`name` and `size` are optional; `entry` is not, because without a starting point there is no such
+thing as an unreachable label. `size` is what `variant("small")` measures against — a frame has to
+shrink below three quarters of it — and a project that declares none is designed at Vela's own
+1280×720. Ren'Py calls it `gui.init(width, height)`, and the migration is where it comes from.
+
 Visibility: everything is private to its module unless marked `pub` on the declaration.
 Unused `use` is `W1002`.
 

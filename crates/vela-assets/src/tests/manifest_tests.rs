@@ -71,7 +71,7 @@ fn the_bundle_descriptor_round_trips_and_is_omitted_when_unset() {
         );
     }
 
-    described.set_project(Some("forest".to_string()), "main.start");
+    described.set_project(Some("forest".to_string()), "main.start", None);
     described
         .images
         .insert("bg.forest".to_string(), "art/forest.json".to_string());

@@ -29,6 +29,7 @@ use crate::commands::run::{play, saves_dir, wants_a_window};
 use crate::commands::target;
 use crate::commands::ui::Screens;
 use crate::commands::{frame, run};
+use crate::manifest::Frame;
 use vela_ui::Variants;
 
 /// Whether a path is a built bundle rather than a project.
@@ -67,7 +68,7 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
     if !wants_a_window(args) {
         let commands = drive(session)?;
         if let Some(path) = run::flag_value(args, "--capture") {
-            let mut screens = screens(dir)?;
+            let mut screens = screens(dir, &manifest)?;
             return frame::capture(&commands, path, args, out, &mut screens, images);
         }
         for command in &commands {
@@ -90,7 +91,7 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
         &title,
         args,
         out,
-        screens(dir)?,
+        screens(dir, &manifest)?,
         saves_dir(dir),
         schema,
         images,
@@ -98,11 +99,11 @@ pub(crate) fn run(dir: &Path, args: &[String], out: &mut dyn Write) -> Result<()
     )
 }
 
-/// A bundle's compiled screens, told what its descriptor says about where it runs.
+/// A bundle's compiled screens, told what its descriptor and its manifest say about it.
 ///
 /// A pack this build cannot read is fatal rather than skipped: a screen that quietly fails to
 /// load is a dialogue box with no text, which is worse than not starting.
-fn screens(dir: &Path) -> Result<Screens, Error> {
+fn screens(dir: &Path, manifest: &vela_assets::Manifest) -> Result<Screens, Error> {
     let mut screens =
         Screens::load_bundle(dir).map_err(|error| Error::diagnostics(error.to_string()))?;
     if let Some(installed) = target::read(dir) {
@@ -115,6 +116,19 @@ fn screens(dir: &Path) -> Result<Screens, Error> {
             );
         }
         screens.set_variants(variants);
+    }
+    if let Some(size) = &manifest.size {
+        // The frame the game was designed for, which is what `variant("small")` measures against
+        // (`SCREENS.md §2.6`). A bundle the build wrote always parses; one that does not is said
+        // out loud rather than defaulted, because the difference is a screen drawing the wrong shape.
+        match Frame::try_from(size.clone()) {
+            Ok(frame) => screens.set_design((frame.width as f32, frame.height as f32)),
+            Err(message) => eprintln!(
+                "vela run: this bundle records a design size it cannot be read as ({message}); \
+                 using {}",
+                Frame::DEFAULT
+            ),
+        }
     }
     Ok(screens)
 }

@@ -26,9 +26,11 @@
 mod assets;
 mod error;
 mod expr;
+mod gui;
 mod project;
 mod report;
 mod rpy;
+mod scripts;
 mod transpile;
 
 #[cfg(test)]

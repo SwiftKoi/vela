@@ -67,14 +67,25 @@ impl Variant {
     }
 }
 
-/// The width a frame has to fall under to be `small`, with its height, against the reference below.
+/// The frame Vela's own styles, layout tests and `--capture` default are written against.
 ///
-/// Three quarters of the reference frame, because the question is "has this been shrunk" rather than
-/// "is this a phone": a window at 1152×648 is a laptop, and one at 640×360 is a phone held sideways,
-/// and the side image the sample guards does not fit in the second. Vela owns this number the way it
-/// owns its other thresholds, and says so here rather than deriving it from something that cannot be
-/// measured.
-const SMALL_FRAME: (f32, f32) = (960.0, 540.0);
+/// A project declares its own (`vela.toml`'s `[project] size`, which is where Ren'Py's
+/// `gui.init(1280, 720)` migrates to); this is what a project that declares none is designed for,
+/// and therefore also what "three quarters" below is three quarters *of* by default.
+pub const REFERENCE_FRAME: (f32, f32) = (1280.0, 720.0);
+
+/// How much of the design frame a frame has to fall below to be `small`.
+///
+/// # How the size class is decided
+///
+/// A frame is `small` when either side is below three quarters of the frame the game was
+/// *designed* for — 960×540 against Vela's default 1280×720. The question is "has this been
+/// shrunk below what the screens were laid out for" rather than "is this a phone", because that is
+/// the question a screen is actually asking: the sample guards its side image with
+/// `not renpy.variant("small")` and says why — "there's no room". Ren'Py decides it from the
+/// device's *physical diagonal*, which a desktop build cannot measure; Vela owns this rule and
+/// states it here rather than deriving it from something unmeasurable.
+const SMALL_FRACTION: f32 = 0.75;
 
 /// A set of variants.
 ///
@@ -133,15 +144,16 @@ impl Variants {
         self.set & (1 << variant as u8) != 0
     }
 
-    /// This set, plus the size class the frame has (`SCREENS.md §2.6`).
+    /// This set, plus the size class a frame has (`SCREENS.md §2.6`).
     ///
-    /// The frame is the only source of `small`, and it is added here rather than by the caller because
-    /// the caller that has a frame is the one laying the screen out: a runner that had to remember to
-    /// classify its own frame could forget, and a screen that asked would silently draw the desktop
-    /// shape on a phone.
+    /// `design` is the frame the game was built for — `vela.toml`'s `[project] size`, which a runner
+    /// passes in beside this set — and the frame is the only source of `small`. It is added here
+    /// rather than by the caller because the caller that has a frame is the one laying the screen
+    /// out: a runner that had to remember to classify its own frame could forget, and a screen that
+    /// asked would silently draw the desktop shape on a phone.
     #[must_use]
-    pub fn for_frame(self, width: f32, height: f32) -> Self {
-        if width < SMALL_FRAME.0 || height < SMALL_FRAME.1 {
+    pub fn for_frame(self, width: f32, height: f32, design: (f32, f32)) -> Self {
+        if width < design.0 * SMALL_FRACTION || height < design.1 * SMALL_FRACTION {
             self.with(Variant::Small)
         } else {
             self

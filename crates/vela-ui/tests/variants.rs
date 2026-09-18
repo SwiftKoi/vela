@@ -9,7 +9,9 @@
 use vela_span::FileId;
 use vela_syntax::parse;
 use vela_text::{Font, TextEngine};
-use vela_ui::{Args, Kind, Node, ScreenSet, ScreenState, Value, Variant, Variants};
+use vela_ui::{
+    Args, Kind, Node, REFERENCE_FRAME, ScreenSet, ScreenState, Value, Variant, Variants,
+};
 
 /// The bundled face, so text measures to something real.
 fn engine() -> TextEngine {
@@ -23,6 +25,11 @@ fn engine() -> TextEngine {
 
 /// A screen taking no arguments, whose arm is the assertion.
 fn drawn(condition: &str, variants: Variants, size: (u32, u32)) -> String {
+    drawn_for(condition, variants, size, REFERENCE_FRAME)
+}
+
+/// The same, with the frame the game was *designed* for spelled out (`SCREENS.md §2.6`).
+fn drawn_for(condition: &str, variants: Variants, size: (u32, u32), design: (f32, f32)) -> String {
     let source = format!(
         "screen s:\n    column:\n        if {condition}:\n            text \"yes\"\n        else:\n            text \"no\"\n"
     );
@@ -37,8 +44,9 @@ fn drawn(condition: &str, variants: Variants, size: (u32, u32)) -> String {
             .collect::<Vec<_>>()
     );
     let mut text = engine();
-    let laid = ScreenSet::from_items(&parsed.program.items)
-        .with_variants(variants)
+    let mut set = ScreenSet::from_items(&parsed.program.items).with_variants(variants);
+    set.set_design(design);
+    let laid = set
         .lay(
             "s",
             &Args::new(),
@@ -158,6 +166,31 @@ fn the_vocabulary_is_closed() {
     let set = Variants::new().with(Variant::Web).with(Variant::Small);
     assert_eq!(set.names(), vec!["web", "small"]);
     assert!(set.has(Variant::Web) && set.has(Variant::Small) && !set.has(Variant::Pc));
+}
+
+/// `small` is measured against the frame the game was *designed* for, not against a constant.
+///
+/// This is what `vela.toml`'s `[project] size` buys: a game designed at 1920×1080 is not `small` at
+/// 1500×900, while a game designed at Vela's default 1280×720 is — and 1500×900 is above three
+/// quarters of 1280×720 but below three quarters of 1920×1080.
+#[test]
+fn the_design_frame_decides_the_threshold() {
+    let none = Variants::new();
+    let big = (1920.0, 1080.0);
+    // Three quarters of the default 1280×720 is 960×540.
+    assert_eq!(drawn("variant(\"small\")", none, (1000, 600)), "no");
+    assert_eq!(drawn("variant(\"small\")", none, (900, 600)), "yes");
+    // Three quarters of 1920×1080 is 1440×810, and the same frame is on the other side of it.
+    assert_eq!(
+        drawn_for("variant(\"small\")", none, (1500, 900), big),
+        "no"
+    );
+    assert_eq!(
+        drawn_for("variant(\"small\")", none, (1400, 900), big),
+        "yes"
+    );
+    // A design frame narrower than it is tall is measured on both sides, not just the width.
+    assert_eq!(drawn("variant(\"small\")", none, (1280, 500)), "yes");
 }
 
 /// A variant is a value as well as a condition, so a screen can draw or pass what it learned.

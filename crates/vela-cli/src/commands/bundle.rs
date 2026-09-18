@@ -102,9 +102,17 @@ pub fn write(
 
     let entry = Some(entry);
     if let Some(entry) = &entry {
+        // The design frame rides along with the project's name and entry point, because a bundle
+        // ships no `vela.toml` and a screen asking `variant("small")` has nothing else to measure
+        // against (`SCREENS.md §2.6`). A single-file build has no manifest and therefore no size,
+        // which the runtime reads as Vela's own reference — the same answer the source run gives.
+        let size = project
+            .manifest
+            .as_ref()
+            .map(|manifest| manifest.project.size.to_string());
         built
             .manifest
-            .set_project(Some(name.clone()), entry.clone());
+            .set_project(Some(name.clone()), entry.clone(), size);
     }
     built.manifest.images = image_map(project, &built.manifest);
     write_tree(destination, &built)?;

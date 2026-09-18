@@ -337,9 +337,25 @@ non-zero exit, so a team can track migration progress as a number that goes to z
 >
 > **A story file is one that declares a label.** That is the whole test, and it is the right one:
 > Ren'Py's story files are exactly the files with labels in them, and every other `.rpy` —
-> `options`, `gui`, `screens`, `testcases` — is engine configuration or the screen language, which
-> Vela expresses differently. Those are reported once, by file, rather than per line: a 1,500-line
+> `options`, `screens`, `testcases` — is engine configuration or the screen language, which Vela
+> expresses differently. Those are reported once, by file, rather than per line: a 1,500-line
 > `screens.rpy` reported as 596 entries is a report nobody reads.
+>
+> **`gui.rpy` is translated, since M12.1** (`crates/vela-migrate/src/gui/`), and it is the one place
+> where a file's meaning depends on another file's text: `properties gui.text_properties("name")` in
+> `screens.rpy` is what says `gui.name_xpos` belongs to the `name` style. So a colour becomes a theme
+> token, a font a font token, and a live `<group>_<state>_<prop>` a `style` line — but only when
+> `<prop>` is one Vela **paints** (`color`, `background`, `size`, `font`). The GUI's *placement*
+> variables (`xpos`, `ypos`, `xalign`, `spacing`, `borders`) are accepted and ignored by a Vela
+> style, so they
+> are reported, grouped by style, rather than written into a file that would look migrated and draw in
+> the wrong place. `gui.init(width, height)` becomes `vela.toml`'s `[project] size`, which is what
+> `variant("small")` measures against (`SCREENS.md §2.6`).
+>
+> **`screens.rpy` is still reported, and that is the piece left.** The screen language is *Vela's*
+> now — conditions, loops, `key`/`timer`, state, variants all landed in M12.1 — but the migrator does
+> not translate a Ren'Py `screen` block into it yet, so the look a migrated project gets is a theme
+> (`src/gui.vela`) that nothing draws with until the screens come across.
 >
 > **Assets are inventoried, not copied.** An asset in Vela is only meaningful once something
 > declares it (`image bg.room = @"art/room.png"`), and Ren'Py declares its images *automatically*

@@ -16,12 +16,13 @@
 //! produces.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::assets::{Asset, Image, declarations, media, partition, report_inventory};
+use crate::assets::{Asset, Image, declarations, partition, report_inventory};
 use crate::error::MigrateError;
 use crate::report::Report;
-use crate::rpy::{self, Kind};
+use crate::rpy::Kind;
+use crate::scripts::{Story, collect, read_scripts};
 
 /// One file the migration will write.
 #[derive(Clone, Debug)]
@@ -39,6 +40,10 @@ pub struct Project {
     pub name: String,
     /// The entry point, as `module.label`.
     pub entry: String,
+    /// The frame the game was designed for, from `gui.init(width, height)` (`SCREENS.md §2.6`).
+    ///
+    /// `None` when the project never says, which the engine reads as its own reference frame.
+    pub design: Option<(u32, u32)>,
     /// The files to write.
     pub files: Vec<Source>,
     /// The images to copy, in sorted order.
@@ -48,12 +53,6 @@ pub struct Project {
     /// Everything that was not translated.
     pub report: Report,
 }
-
-/// Directories whose contents are never migrated.
-///
-/// `cache/` and `saves/` are Ren'Py's own artifacts; `tl/` is a translation tree, and Vela has no
-/// catalogue to put it in yet.
-const SKIPPED: &[&str] = &["cache", "saves", "tl"];
 
 /// Migrates the Ren'Py project at `root`.
 ///
@@ -76,8 +75,10 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
     let (images, inventory) = partition(assets, &game);
     report_inventory(&inventory, &mut report);
 
-    let stories = read_stories(&game, &scripts, &mut report)?;
-    let files = translate(&stories, &images, &mut report);
+    let read = read_scripts(&game, &scripts, &mut report)?;
+    // The theme first, so a reader of the report sees the look before the story that uses it.
+    let mut files = read.sources;
+    files.extend(translate(&read.stories, &images, &mut report));
 
     let name = name_of(&game).unwrap_or_else(|| {
         root.file_name().map_or_else(
@@ -90,26 +91,12 @@ pub fn project(root: &Path) -> Result<Project, MigrateError> {
     Ok(Project {
         name,
         entry,
+        design: read.design,
         files,
         images,
         assets: inventory,
         report,
     })
-}
-
-/// Reads every script, keeping the ones that hold story.
-fn read_stories(
-    game: &Path,
-    scripts: &[PathBuf],
-    report: &mut Report,
-) -> Result<Vec<Story>, MigrateError> {
-    let mut stories = Vec::new();
-    for path in scripts {
-        if let Some(story) = story_file(game, path, report)? {
-            stories.push(story);
-        }
-    }
-    Ok(stories)
 }
 
 /// Turns every story into a Vela file, and adds the images' declarations.
@@ -160,111 +147,6 @@ fn translate(stories: &[Story], images: &[Image], report: &mut Report) -> Vec<So
     files
 }
 
-/// Everything under `dir`, split into scripts and media.
-fn collect(
-    base: &Path,
-    dir: &Path,
-    scripts: &mut Vec<PathBuf>,
-    assets: &mut Vec<Asset>,
-) -> Result<(), MigrateError> {
-    let entries = std::fs::read_dir(dir).map_err(|source| MigrateError::Io {
-        path: dir.to_path_buf(),
-        source,
-    })?;
-
-    for entry in entries {
-        let entry = entry.map_err(|source| MigrateError::Io {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
-
-        if path.is_dir() {
-            if SKIPPED.contains(&name.as_str()) {
-                continue;
-            }
-            collect(base, &path, scripts, assets)?;
-            continue;
-        }
-
-        let extension = path
-            .extension()
-            .map(|extension| extension.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-
-        let relative = path
-            .strip_prefix(base)
-            .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-            .unwrap_or(name);
-
-        match extension.as_str() {
-            "rpy" => scripts.push(path),
-            "rpyc" | "rpyb" | "txt" => {}
-            other => {
-                if let Some(kind) = media(other) {
-                    assets.push(Asset {
-                        path: relative,
-                        kind,
-                    });
-                    continue;
-                }
-                // A file nothing recognises is not reported: it is not the migration's business,
-                // and `vela check` is what decides whether the *result* can use it.
-                let _ = other;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// One story file, read and parsed.
-struct Story {
-    /// The path as the report names it.
-    relative: String,
-    /// The module name the file becomes.
-    module: String,
-    /// The tree.
-    nodes: Vec<rpy::Node>,
-}
-
-/// One `.rpy` file, as a story — or as nothing, with a report entry saying why.
-fn story_file(
-    game: &Path,
-    path: &Path,
-    report: &mut Report,
-) -> Result<Option<Story>, MigrateError> {
-    let text = std::fs::read_to_string(path).map_err(|source| MigrateError::Io {
-        path: path.to_path_buf(),
-        source,
-    })?;
-
-    let relative = path
-        .strip_prefix(game)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .unwrap_or_default();
-    let module = relative.trim_end_matches(".rpy").to_string();
-
-    let nodes = rpy::read(&text);
-    if is_engine_configuration(&nodes) {
-        report.push(
-            &relative,
-            1,
-            &format!("{relative} ({} lines)", text.lines().count()),
-            "engine configuration, the GUI's variables, or the screen language: Vela expresses \
-             these differently, so this file is not translated — port what it configures by hand, \
-             or leave it out and use Vela's own screens",
-        );
-        return Ok(None);
-    }
-
-    Ok(Some(Story {
-        relative,
-        module,
-        nodes,
-    }))
-}
-
 /// The module-level value names a label must not collide with.
 fn value_names(stories: &[Story]) -> BTreeSet<String> {
     let mut names = BTreeSet::new();
@@ -309,16 +191,6 @@ fn collisions(stories: &[Story], report: &mut Report) -> BTreeMap<String, String
         }
     }
     renames
-}
-
-/// Whether a file is configuration rather than story.
-///
-/// A *story* file is one that declares a label. That is the whole test, and it is the right one:
-/// Ren'Py's story files are exactly the files with labels in them, and every other `.rpy` in a
-/// project is `options`/`gui`/`screens` — the engine's configuration, which has no Vela
-/// counterpart to translate into.
-fn is_engine_configuration(nodes: &[rpy::Node]) -> bool {
-    !nodes.iter().any(|node| matches!(node.kind, Kind::Label(_)))
 }
 
 /// The project's name, from `options.rpy`'s `define config.name`.
@@ -402,8 +274,12 @@ impl Project {
 
     /// The `vela.toml` for the migrated project.
     fn manifest(&self) -> String {
+        let size = match self.design {
+            Some((width, height)) => format!("size = \"{width}x{height}\"\n"),
+            None => String::new(),
+        };
         format!(
-            "schema = 1\n\n[project]\nname = {:?}\nentry = {:?}\n",
+            "schema = 1\n\n[project]\nname = {:?}\nentry = {:?}\n{size}",
             self.name, self.entry
         )
     }

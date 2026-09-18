@@ -37,6 +37,13 @@ pub struct Manifest {
     /// Where the story starts, written `module.label`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry: Option<String>,
+    /// The frame the game was designed for, written `1280x720` (`SCREENS.md §2.6`).
+    ///
+    /// A bundle ships no source and no `vela.toml`, so this is the only way one can tell a screen
+    /// what `variant("small")` measures against — and a bundle that recorded nothing would draw
+    /// every frame as `small`, which is the wrong shape rather than a missing one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<String>,
     /// Every `image` declaration, by name, mapped to the artifact that holds its picture.
     ///
     /// The runtime cannot resolve `scene bg.room` to `art/room.png` on its own: that mapping is
@@ -98,6 +105,7 @@ impl Manifest {
             manifest_version: MANIFEST_VERSION,
             name: None,
             entry: None,
+            size: None,
             images: BTreeMap::new(),
             assets: Vec::new(),
         }
@@ -106,11 +114,17 @@ impl Manifest {
     /// Records the project facts a built bundle carries about itself.
     ///
     /// Kept out of [`crate::import_tree`] on purpose: an import is a pure function of an assets
-    /// directory, and a project's name and entry point come from `vela.toml`, which the importer
-    /// never sees.
-    pub fn set_project(&mut self, name: Option<String>, entry: impl Into<String>) {
+    /// directory, and a project's name, entry point and design size come from `vela.toml`, which
+    /// the importer never sees.
+    pub fn set_project(
+        &mut self,
+        name: Option<String>,
+        entry: impl Into<String>,
+        size: Option<String>,
+    ) {
         self.name = name;
         self.entry = Some(entry.into());
+        self.size = size;
     }
 
     /// The artifact holding an image, by the name a `scene` or `show` uses.

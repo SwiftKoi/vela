@@ -68,5 +68,5 @@ pub use styles::{check_inheritance, check_screen_styles, resolve};
 pub use theme::{Fonts, Palette, Rgb, check_contrast, fonts, palette};
 pub use tokens::check_magic_colours;
 pub use tree::{Kind, Node, Paint, Size, State};
-pub use variants::{Variant, Variants};
+pub use variants::{REFERENCE_FRAME, Variant, Variants};
 pub use widgets::{Category, Widget, WidgetRegistry};

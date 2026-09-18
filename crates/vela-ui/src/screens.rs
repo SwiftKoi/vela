@@ -97,6 +97,7 @@ pub struct ScreenSet {
     fonts: Fonts,
     images: ImageTable,
     variants: Variants,
+    design: (f32, f32),
     registry: WidgetRegistry,
 }
 
@@ -135,6 +136,7 @@ impl ScreenSet {
             // No bundle has said where this runs, and no frame has been laid out yet (`§2.6`): a
             // `variant(...)` question is false until a runner that knows the answer supplies one.
             variants: Variants::new(),
+            design: crate::REFERENCE_FRAME,
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -189,6 +191,21 @@ impl ScreenSet {
         self.variants
     }
 
+    /// Sets the frame this project is *designed* for (`SCREENS.md §2.6`).
+    ///
+    /// What `variant("small")` is measured against: a screen is small when the frame it is drawn in
+    /// has shrunk below this one. `vela.toml`'s `[project] size` is where it comes from, and
+    /// [`REFERENCE_FRAME`](crate::REFERENCE_FRAME) is what a project that declares none gets.
+    pub fn set_design(&mut self, design: (f32, f32)) {
+        self.design = design;
+    }
+
+    /// The frame this project is designed for.
+    #[must_use]
+    pub fn design(&self) -> (f32, f32) {
+        self.design
+    }
+
     /// Replaces the widget vocabulary, which a plugin extends.
     #[must_use]
     pub fn with_registry(mut self, registry: WidgetRegistry) -> Self {
@@ -225,6 +242,7 @@ impl ScreenSet {
             // Likewise the variants: the descriptor carries them (`§2.6`), and the runner that read the
             // bundle is what knows them.
             variants: Variants::new(),
+            design: crate::REFERENCE_FRAME,
             registry: WidgetRegistry::builtin(),
         }
     }
@@ -304,11 +322,12 @@ impl ScreenSet {
     ) -> Option<Laid> {
         let (width, height) = (size.0 as f32, size.1 as f32);
         let screen = self.screen(name)?;
-        // The variants this frame adds to what the bundle declared (`§2.6`): a screen laid out in a frame
-        // with no room is `small`, and the frame is the only thing that knows.
+        // The variants this frame adds to what the bundle declared (`§2.6`): a screen laid out in a
+        // frame with less room than the game was designed for is `small`, and the frame is the only
+        // thing that knows.
         let args = args
             .clone()
-            .with_variants(self.variants.for_frame(width, height));
+            .with_variants(self.variants.for_frame(width, height, self.design));
         // The screen's variables start from what the caller kept: a write survives a layout, and a
         // screen that has never been laid out initializes them from its own `default`s.
         let mut state = state.clone();

@@ -75,6 +75,13 @@ impl Command for Run {
         // from `target.json` instead (`commands/target.rs`), which is what makes `--target web`
         // reach a condition.
         screens.set_variants(Variants::new().with(Variant::Pc));
+        // And the frame this game is designed for, which is what `variant("small")` measures against
+        // (`SCREENS.md §2.6`). A project that does not declare one is drawn against Vela's own
+        // reference, which is the same answer `Frame::DEFAULT` gives.
+        if let Some(manifest) = &project.manifest {
+            let size = manifest.project.size;
+            screens.set_design((size.width as f32, size.height as f32));
+        }
         let images = stage_images(&project, out);
 
         if wants_a_window(args) {

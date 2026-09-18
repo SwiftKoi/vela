@@ -279,13 +279,14 @@ fn run_refuses_a_project_with_errors() {
 #[test]
 fn a_window_is_titled_by_the_project_not_by_its_entry_point() {
     use crate::commands::run::title_of;
-    use crate::manifest::{Manifest, Project};
+    use crate::manifest::{Frame, Manifest, Project};
 
     let named = Manifest {
         schema: 1,
         project: Project {
             name: Some("standard".to_string()),
             entry: "main.start".to_string(),
+            size: Frame::DEFAULT,
         },
     };
     assert_eq!(
@@ -300,8 +301,53 @@ fn a_window_is_titled_by_the_project_not_by_its_entry_point() {
         project: Project {
             name: None,
             entry: "main.start".to_string(),
+            size: Frame::DEFAULT,
         },
     };
     assert_eq!(title_of(Some(&unnamed), "main.start"), "main.start");
     assert_eq!(title_of(None, "main.start"), "main.start");
+}
+
+/// A design size is read, defaulted when absent, and refused when it cannot be read.
+///
+/// `SCREENS.md §2.6`: this is what `variant("small")` measures against, so a size that is silently
+/// defaulted draws a screen at the wrong shape — which is why a typo is an error here and not a
+/// fallback. The two are indistinguishable once a frame has been laid out.
+#[test]
+fn a_design_size_is_read_defaulted_and_refused() {
+    use crate::manifest::Frame;
+
+    let dir = std::env::temp_dir().join(format!("vela-cli-size-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create dir");
+    let path = dir.join("vela.toml");
+
+    let write = |size: &str| {
+        std::fs::write(
+            &path,
+            format!("schema = 1\n\n[project]\nname = \"forest\"\nentry = \"main.start\"\n{size}"),
+        )
+        .expect("write vela.toml");
+        crate::manifest::Manifest::read(&path)
+    };
+
+    let declared = write("size = \"1920x1080\"\n").expect("a declared size reads");
+    assert_eq!(declared.project.size.width, 1920);
+    assert_eq!(declared.project.size.height, 1080);
+    assert_eq!(declared.project.size.to_string(), "1920x1080");
+
+    let absent = write("").expect("a project that declares no size is a project");
+    assert_eq!(absent.project.size, Frame::DEFAULT);
+    assert_eq!(Frame::DEFAULT.to_string(), "1280x720");
+
+    // Every shape of "not a size", because each one is a different typo.
+    for bad in [
+        "size = \"1280,720\"\n",
+        "size = \"1280\"\n",
+        "size = \"x720\"\n",
+    ] {
+        let error = write(bad).expect_err("a size that is not one is refused");
+        assert!(error.contains("design size"), "{bad}: {error}");
+        assert!(error.contains("1280x720"), "{bad}: {error}");
+    }
 }

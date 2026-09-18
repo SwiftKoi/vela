@@ -103,6 +103,17 @@ impl Screens {
         }
     }
 
+    /// Tells every set which frame the game was designed for (`SCREENS.md §2.6`).
+    ///
+    /// From `vela.toml`'s `[project] size` in a project, and from a bundle's manifest in a built
+    /// one. What `variant("small")` measures against: a frame is small once it has shrunk below
+    /// three quarters of this, so a project designed at 1920×1080 is not `small` at 1500×900.
+    pub fn set_design(&mut self, design: (f32, f32)) {
+        for set in &mut self.sets {
+            set.set_design(design);
+        }
+    }
+
     /// How many screens are compiled.
     #[must_use]
     pub fn count(&self) -> usize {
