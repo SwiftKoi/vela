@@ -24,6 +24,7 @@
 //! ```
 
 mod assets;
+mod config;
 mod error;
 mod expr;
 mod gui;

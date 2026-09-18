@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use crate::Node;
 use crate::Source;
 use crate::assets::{Asset, media};
+use crate::config;
 use crate::error::MigrateError;
 use crate::gui::{self, Names};
 use crate::report::Report;
@@ -289,6 +290,12 @@ fn script_file(
             nodes,
             relative,
         });
+    }
+
+    // The engine's configuration, dispositioned one declaration at a time (`config.rs`): the names
+    // that map are read, and the ones that do not are reported by kind rather than by file.
+    if config::report(&relative, &nodes, report) {
+        return Ok(Outcome::Nothing);
     }
 
     if is_engine_configuration(&nodes) {

@@ -65,7 +65,7 @@ fn renpy_project(name: &str) -> PathBuf {
     .expect("write the story");
     std::fs::write(
         base.join("game").join("options.rpy"),
-        "define config.name = _(\"The Question\")\n",
+        "define config.name = _(\"The Question\")\ndefine config.version = \"7.0\"\n",
     )
     .expect("write the configuration");
 
@@ -87,11 +87,15 @@ fn a_renpy_project_migrates_into_one_that_checks() {
     let (code, out) = cli(&["migrate", &source.to_string_lossy(), "--report"]);
     assert_eq!(code, 0, "the migration failed:\n{out}");
 
-    // One story file translated, and the engine configuration reported rather than guessed at.
+    // One story file translated, and the engine configuration dispositioned declaration by
+    // declaration: the name becomes `vela.toml`'s, and a knob with no counterpart is reported.
     assert!(out.contains("migrated 1 source file(s)"), "{out}");
-    assert!(out.contains("options.rpy"), "{out}");
 
     let out_dir = migrated(&source);
+    let manifest = std::fs::read_to_string(out_dir.join("vela.toml")).expect("the manifest");
+    assert!(manifest.contains("name = \"The Question\""), "{manifest}");
+    let report = std::fs::read_to_string(out_dir.join("MIGRATION.md")).expect("the report");
+    assert!(report.contains("config.version"), "{report}");
     assert!(out_dir.join("vela.toml").exists(), "{out}");
     assert!(out_dir.join("src/script.vela").exists(), "{out}");
     assert!(out_dir.join("MIGRATION.md").exists(), "{out}");

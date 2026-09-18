@@ -386,11 +386,12 @@ non-zero exit, so a team can track migration progress as a number that goes to z
 > `crates/vela-cli/src/tests/migrate_tests.rs` migrates a project and then **checks** it, because
 > "the output compiles" is not a claim a migrator can make about itself.
 >
-> **A story file is one that declares a label.** That is the whole test, and it is the right one:
-> Ren'Py's story files are exactly the files with labels in them, and every other `.rpy` —
-> `options`, `screens`, `testcases` — is engine configuration or the screen language, which Vela
-> expresses differently. Those are reported once, by file, rather than per line: a 1,500-line
-> `screens.rpy` reported as 596 entries is a report nobody reads.
+> **A story file is one that declares a label**, and the four files that are not are dispositioned by
+> what they declare: `gui.rpy` is a theme, `screens.rpy` is screens and styles, `testcases.rpy` is
+> test steps, and `options.rpy` is one entry per *kind* of knob. The rule underneath all four is the
+> same one: an entry has to name something a person can act on, and "this file, 1,500 lines" names
+> nothing — which is why the counts went up when the entries got better (66 → 257 across the sample,
+> and 190 of those are `screens.rpy`'s styles).
 >
 > **`gui.rpy` is translated, since M12.1** (`crates/vela-migrate/src/gui/`), and it is the one place
 > where a file's meaning depends on another file's text: `properties gui.text_properties("name")` in
@@ -411,7 +412,9 @@ non-zero exit, so a team can track migration progress as a number that goes to z
 > | a file that declares a `label` | **Translated** as a story module (`src/<name>.vela`). |
 > | `gui.rpy` | **Translated** into the theme and its styles, one module with the screens (see above). |
 > | `screens.rpy` | **Translated** into `screen` and `style` declarations, in the same module as the theme. |
-> | everything else | **Reported**, once by file: engine configuration, `testcases.rpy` (a `test` decl lands with M12.1's item 18), `tl/**`. |
+> | `options.rpy` | **Reported, declaration by declaration** — one entry per kind of knob, naming all of them. `config.name` is translated (`vela.toml`'s `[project] name`); the transitions, the audio flags, the window knobs, the version, the save path, the build rules and the `preferences.*` defaults have no counterpart, and each entry says which work owns it. |
+> | `testcases.rpy` | **Reported, step by step**: a testcase migrates whole or not at all, and a step about the *screen* is what stops it (`docs/roadmap/M12.1-screen-language.md`, item 18). |
+> | everything else | **Reported**, once by file: what is neither a story nor one of the four above, and `tl/**`. |
 >
 > The widget tree comes across — `hbox`/`vbox`/`add`/`null`/`fixed`/`frame`/`window`/`label`/
 > `textbutton`/`vpgrid` all lower mechanically — as do the conditions, the loops, the `use`
