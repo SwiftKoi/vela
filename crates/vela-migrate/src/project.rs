@@ -112,7 +112,15 @@ fn translate(stories: &[Story], images: &[Image], report: &mut Report) -> Vec<So
     // with a value is renamed, deterministically and with a report entry, rather than left to
     // fail the check on the other side.
     let renames = collisions(stories, report);
-    let known: BTreeSet<String> = images.iter().map(|image| image.name.clone()).collect();
+    // Ren'Py's own built-in images are *images* like any other, and a story that stages one has a
+    // name Vela cannot resolve — so the migration writes the declaration rather than reporting the
+    // line. See [`BUILT_IN`] for why there is exactly one.
+    let built_in = built_in(stories);
+    let known: BTreeSet<String> = images
+        .iter()
+        .map(|image| image.name.clone())
+        .chain(built_in.iter().map(|(name, _)| (*name).to_string()))
+        .collect();
     let names = crate::transpile::Names {
         renames: &renames,
         images: &known,
@@ -140,13 +148,52 @@ fn translate(stories: &[Story], images: &[Image], report: &mut Report) -> Vec<So
         });
     }
 
-    if !images.is_empty() {
+    if !images.is_empty() || !built_in.is_empty() {
+        let text = declarations(images, &built_in);
+        // Canonical like everything else this pass writes: the formatter is what decides that a
+        // colour literal is `0x0` rather than `0x000000`, and a migration that emitted its own idea
+        // of the spelling would be a file `vela fmt --check` disagrees with.
+        let text = vela_syntax::format(vela_span::FileId::from_raw(0), &text).unwrap_or(text);
         files.push(Source {
             path: "src/images.vela".to_string(),
-            text: declarations(images),
+            text,
         });
     }
     files
+}
+
+/// Ren'Py's built-in images, and the colour each one is — a solid, not a file.
+///
+/// Ren'Py's own `00definitions.rpy` defines exactly one: `image black = Solid("#000")`. It is the
+/// screen a story fades to, and a migration that dropped it left the ending on a placeholder box
+/// labelled `black`. A Vela `image` may name a colour (`LANGUAGE.md §3`), so the translation is a
+/// declaration rather than a report entry — and it is *this* list rather than "any name with no
+/// file", because a name with no file is a typo and reporting it is the job.
+const BUILT_IN: &[(&str, &str)] = &[("black", "0x000000")]; // canonical form: `0x0`
+
+/// The built-in images a story stages, in the order they were met.
+fn built_in(stories: &[Story]) -> Vec<(&'static str, &'static str)> {
+    let mut used: Vec<(&'static str, &'static str)> = Vec::new();
+    for story in stories {
+        // A queue rather than a loop over the top level: a `scene` is inside a label, and a label
+        // inside a label is ordinary Ren'Py.
+        let mut queue: std::collections::VecDeque<&crate::rpy::Node> = story.nodes.iter().collect();
+        while let Some(node) = queue.pop_front() {
+            queue.extend(node.children.iter());
+            let rest = match &node.kind {
+                Kind::Scene(rest) | Kind::Show(rest) | Kind::Hide(rest) => rest,
+                _ => continue,
+            };
+            let staged = rest.split_whitespace().next().unwrap_or_default();
+            let Some(entry) = BUILT_IN.iter().find(|(name, _)| *name == staged) else {
+                continue;
+            };
+            if !used.iter().any(|(name, _)| *name == entry.0) {
+                used.push(*entry);
+            }
+        }
+    }
+    used
 }
 
 /// The module-level value names a label must not collide with.

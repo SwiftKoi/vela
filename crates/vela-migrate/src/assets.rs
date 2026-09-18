@@ -123,7 +123,7 @@ pub(crate) fn report_inventory(inventory: &[Asset], report: &mut Report) {
 ///
 /// A module rather than the story file: these are not story, and a project with three modules'
 /// worth of pictures would bury the dialogue.
-pub(crate) fn declarations(images: &[Image]) -> String {
+pub(crate) fn declarations(images: &[Image], built_in: &[(&str, &str)]) -> String {
     let mut out = String::from(
         "# Image declarations, derived from the images' own file names. Ren'Py defines an image\n\
          # automatically from the file name and Vela does not, so the migration writes them out;\n\
@@ -132,6 +132,11 @@ pub(crate) fn declarations(images: &[Image]) -> String {
     for image in images {
         let path = image.to.trim_start_matches("assets/");
         out.push_str(&format!("image {} = @\"{path}\"\n", image.name));
+    }
+    for (name, colour) in built_in {
+        // Ren'Py's own built-in image, which is a colour rather than a file: the ending of a story
+        // that fades to black is the one place a project meets it.
+        out.push_str(&format!("image {name} = {colour}\n"));
     }
     out
 }

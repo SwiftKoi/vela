@@ -13,7 +13,7 @@
 use std::io::Write;
 
 use crate::command::Error;
-use crate::commands::run::{flag_value, parse_size};
+use crate::commands::run::{Picture, flag_value, parse_size, picture_sizes, stage};
 use crate::commands::ui::Screens;
 
 /// The name the bundled face is registered under.
@@ -41,7 +41,7 @@ pub(crate) fn capture(
     args: &[String],
     out: &mut dyn Write,
     screens: &mut Screens,
-    images: Vec<(String, u32, u32, Vec<u8>)>,
+    images: Vec<Picture>,
 ) -> Result<(), Error> {
     let chosen = flag_value(args, "--frame")
         .and_then(|value| value.parse::<usize>().ok())
@@ -83,7 +83,7 @@ pub(crate) fn capture_series(
     args: &[String],
     out: &mut dyn Write,
     screens: &mut Screens,
-    images: Vec<(String, u32, u32, Vec<u8>)>,
+    images: Vec<Picture>,
 ) -> Result<(), Error> {
     let dir = std::path::Path::new(dir);
     std::fs::create_dir_all(dir)
@@ -206,11 +206,7 @@ struct Film<'a> {
 
 impl<'a> Film<'a> {
     /// Builds a context: size, font, pictures, and a renderer.
-    fn new(
-        args: &[String],
-        screens: &'a mut Screens,
-        images: Vec<(String, u32, u32, Vec<u8>)>,
-    ) -> Result<Self, Error> {
+    fn new(args: &[String], screens: &'a mut Screens, images: Vec<Picture>) -> Result<Self, Error> {
         let size = parse_size(args).unwrap_or((1280, 720));
         let font = vela_text::Font::from_bytes(DEFAULT_FACE.to_vec(), 0)
             .ok_or_else(|| Error::internal("the bundled font failed to load".to_string()))?;
@@ -218,9 +214,10 @@ impl<'a> Film<'a> {
         text.add_font(FACE_NAME, font);
 
         let mut presenter = vela_render::Presenter::new(text, FACE_NAME, size);
-        // The sizes are kept and the bytes handed over: a screen needs a picture's dimensions to lay
-        // out and its texture to draw, and the texture only exists after the upload below.
-        let sizes = stage_pictures(&mut presenter, images);
+        // The sizes are kept and the pictures handed over: a screen needs a picture's dimensions to
+        // lay out and its texture to draw, and the texture only exists after the upload below.
+        let sizes = picture_sizes(&images);
+        stage(&mut presenter, images);
 
         let Some(mut capture) = vela_render::Capture::new(size.0, size.1) else {
             return Err(Error::internal(
@@ -281,25 +278,6 @@ impl<'a> Film<'a> {
             .save(&graph, &draw, path)
             .map_err(|error| Error::internal(format!("cannot write {}: {error}", path.display())))
     }
-}
-
-/// Hands the pictures to the presenter, and keeps what a screen will need to lay one out.
-///
-/// A picture is two facts — how big it is, and which texture it became — and only the second is the
-/// presenter's. The sizes come back rather than being asked for later, because the bytes are consumed
-/// here and a screen measures before anything is uploaded.
-fn stage_pictures(
-    presenter: &mut vela_render::Presenter,
-    images: Vec<(String, u32, u32, Vec<u8>)>,
-) -> Vec<(String, u32, u32)> {
-    let sizes = images
-        .iter()
-        .map(|(name, width, height, _)| (name.clone(), *width, *height))
-        .collect();
-    for (name, width, height, rgba) in images {
-        presenter.stage_image(name, width, height, rgba);
-    }
-    sizes
 }
 
 /// Tells the screens where their pictures are, now that the platform has uploaded them.

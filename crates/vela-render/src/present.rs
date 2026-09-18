@@ -93,6 +93,13 @@ pub struct Presenter {
     /// rest), which is why the distinction lives here rather than in the staged image: the presenter
     /// is the layer that knows what a backdrop and a sprite should look like.
     pub(super) backdrop: Option<String>,
+    /// Pictures that are one colour, by the name a scene stages them under.
+    ///
+    /// Not textures: `image black = 0x000000` is a picture with no pixels to sample and no size of
+    /// its own, and uploading a one-pixel texture to stretch over the frame would be a great deal of
+    /// machinery for a rectangle. It fills whatever it is put in, which is what Ren'Py's `Solid` does
+    /// and why `scene black` is a black screen rather than a named box.
+    solids: Vec<(String, Color)>,
     /// Images waiting to reach the GPU, by the name a scene stages them under.
     staged: Vec<(String, u32, u32, Vec<u8>)>,
     /// Where each staged image ended up, once it has been uploaded: its name, texture and size.
@@ -112,6 +119,7 @@ impl Presenter {
             menu: None,
             font: font.to_string(),
             backdrop: None,
+            solids: Vec::new(),
             staged: Vec::new(),
             uploaded: Vec::new(),
         }
@@ -124,6 +132,21 @@ impl Presenter {
     /// doing its job rather than a limitation.
     pub fn stage_image(&mut self, name: impl Into<String>, width: u32, height: u32, rgba: Vec<u8>) {
         self.staged.push((name.into(), width, height, rgba));
+    }
+
+    /// Records a picture that is one colour, under the name a scene stages it by.
+    pub fn stage_solid(&mut self, name: impl Into<String>, rgb: [u8; 3]) {
+        self.solids
+            .push((name.into(), Color::rgb(rgb[0], rgb[1], rgb[2])));
+    }
+
+    /// The colour a name is, when it names a solid rather than a picture.
+    #[must_use]
+    pub fn colour_of(&self, name: &str) -> Option<Color> {
+        self.solids
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, colour)| *colour)
     }
 
     /// Sends every staged image to the GPU, once.

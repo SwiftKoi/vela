@@ -315,3 +315,49 @@ fn text_tags_are_read_rather_than_drawn() {
         "the tag itself is read, never drawn"
     );
 }
+
+/// A solid picture fills the frame, whatever the frame is, and needs no texture to do it.
+///
+/// `image black = 0x000000` is how a story fades to black (`LANGUAGE.md §3`), and Ren'Py's own
+/// `image black = Solid("#000")` is the one built-in a project meets. Before this it drew the
+/// *placeholder* — a hash-tinted box labelled `black` — which is what a capture of a migrated
+/// ending showed.
+#[test]
+fn a_solid_fills_the_frame() {
+    let mut presenter = fresh();
+    presenter.stage_solid("black", [0, 0, 0]);
+    presenter.apply(&stage(vela_world::Stage::Scene, "black"));
+
+    let mut draw = DrawList::new();
+    presenter.build_backdrop(&mut draw);
+    // The last rectangle, not the first: the frame's own background is pushed before the stage.
+    let filled = draw
+        .quads()
+        .filter_map(|quad| match quad {
+            vela_render::Quad::Rect(rect) => Some(rect),
+            _ => None,
+        })
+        .last()
+        .expect("a rectangle");
+    assert_eq!((filled.x, filled.y), (0.0, 0.0));
+    assert_eq!((filled.width, filled.height), (1280.0, 720.0));
+    assert_eq!(filled.color.r, 0.0);
+    assert_eq!(filled.color.g, 0.0);
+    assert_eq!(filled.color.b, 0.0);
+
+    // And a solid is not a texture, so nothing was uploaded under its name.
+    assert_eq!(presenter.texture_of("black"), None);
+    assert_eq!(presenter.colour_of("black").map(|c| c.r), Some(0.0));
+}
+
+/// A name that is neither a texture nor a solid is still the placeholder: a picture the build has
+/// not produced is a build in progress rather than a broken screen.
+#[test]
+fn a_name_with_nothing_behind_it_is_a_placeholder() {
+    let mut presenter = fresh();
+    presenter.apply(&stage(vela_world::Stage::Scene, "nowhere"));
+    let mut draw = DrawList::new();
+    presenter.build_backdrop(&mut draw);
+    assert!(draw.quads().next().is_some(), "the placeholder draws");
+    assert_eq!(presenter.colour_of("nowhere"), None);
+}

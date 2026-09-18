@@ -21,6 +21,7 @@ pub(crate) mod waiting;
 
 use crate::command::Error;
 use crate::commands::play::waiting::waits_for_the_player;
+use crate::commands::run::{Picture, stage};
 use crate::commands::ui::{Screens, Stack, Watcher};
 use vela_ui::Value;
 use vela_ui::actions::Action as ScreenAction;
@@ -82,7 +83,7 @@ impl Player {
         screens: Screens,
         saves: PathBuf,
         schema: vela_replay::Schema,
-        images: Vec<(String, u32, u32, Vec<u8>)>,
+        images: Vec<Picture>,
     ) -> Result<Self, Error> {
         let font = Font::from_bytes(FACE.to_vec(), 0)
             .ok_or_else(|| Error::internal("the bundled font failed to load".to_string()))?;
@@ -98,7 +99,10 @@ impl Player {
         // window has uploaded the bytes (`SCREENS.md §3`).
         let image_sizes: Vec<(String, u32, u32)> = images
             .iter()
-            .map(|(name, width, height, _)| (name.clone(), *width, *height))
+            .map(|picture| match picture {
+                Picture::File(name, width, height, _) => (name.clone(), *width, *height),
+                Picture::Solid(name, _) => (name.clone(), 0, 0),
+            })
             .collect();
 
         Ok(Self {
@@ -107,9 +111,7 @@ impl Player {
             module: module.clone(),
             presenter: {
                 let mut presenter = Presenter::new(text, FACE_NAME, size);
-                for (name, width, height, rgba) in images {
-                    presenter.stage_image(name, width, height, rgba);
-                }
+                stage(&mut presenter, images);
                 presenter
             },
             surface: None,

@@ -115,6 +115,40 @@ fn a_renpy_project_migrates_into_one_that_checks() {
     let _ = std::fs::remove_dir_all(&out_dir);
 }
 
+/// A story that fades to black migrates to a black *picture*, not to a name nothing declares.
+///
+/// Ren'Py's `00definitions.rpy` defines `image black = Solid("#000")` as a built-in, so `scene black`
+/// is ordinary Ren'Py with no file behind it. Vela has no built-in, and a `scene` naming something
+/// nothing declares used to draw a placeholder box labelled `black` — which a capture of the
+/// migrated ending showed.
+#[test]
+fn renpys_built_in_black_becomes_a_solid() {
+    let base = std::env::temp_dir().join(format!("vela-migrate-solid-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("game")).expect("create project");
+    std::fs::write(
+        base.join("game").join("script.rpy"),
+        "label start:\n    scene black\n    \"We get married shortly after that.\"\n    return\n",
+    )
+    .expect("write the story");
+
+    let (code, out) = cli(&["migrate", &base.to_string_lossy()]);
+    assert_eq!(code, 0, "the migration failed:\n{out}");
+
+    let out_dir = migrated(&base);
+    let images = std::fs::read_to_string(out_dir.join("src/images.vela")).expect("declarations");
+    assert!(images.contains("image black = 0x0"), "{images}");
+    // And it is a translation rather than a refusal: nothing is left for a person (two files, the
+    // story and the declarations).
+    assert!(out.contains("migrated 2 source file(s)"), "{out}");
+
+    let (code, checked) = cli(&["check", &out_dir.to_string_lossy()]);
+    assert_eq!(code, 0, "the migrated project does not check:\n{checked}");
+
+    let _ = std::fs::remove_dir_all(&base);
+    let _ = std::fs::remove_dir_all(&out_dir);
+}
+
 /// A project that is not Ren'Py is a usage error, not a crash and not a silent empty migration.
 #[test]
 fn a_directory_that_is_not_a_renpy_project_is_refused() {

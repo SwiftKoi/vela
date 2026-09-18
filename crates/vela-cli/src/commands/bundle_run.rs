@@ -167,7 +167,7 @@ fn images(
     dir: &Path,
     manifest: &vela_assets::Manifest,
     out: &mut dyn Write,
-) -> Vec<(String, u32, u32, Vec<u8>)> {
+) -> Vec<crate::commands::run::Picture> {
     let mut images = Vec::new();
     for (name, artifact) in &manifest.images {
         let file = dir.join("assets").join(artifact);
@@ -179,7 +179,12 @@ fn images(
             }
         };
         match vela_assets::decode_png(&bytes) {
-            Ok(image) => images.push((name.clone(), image.width, image.height, image.rgba)),
+            Ok(image) => images.push(crate::commands::run::Picture::File(
+                name.clone(),
+                image.width,
+                image.height,
+                image.rgba,
+            )),
             Err(error) => {
                 let _ = writeln!(out, "image {name}: {error}");
             }

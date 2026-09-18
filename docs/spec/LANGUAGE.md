@@ -111,7 +111,7 @@ enum_decl      = "enum" IDENT variant+ ;
 variant        = IDENT [ "(" params ")" ] ;
 
 character_decl = "character" IDENT block ;
-image_decl     = "image" IDENT "=" ( path_lit | expr ) ;
+image_decl     = "image" IDENT "=" ( path_lit | expr ) ;   (* a path is a picture; a colour is a solid *)
 transform_decl = "transform" IDENT block ;
 screen_decl    = "screen" IDENT "(" [ params ] ")" block ;
 style_decl     = "style" IDENT [ "from" IDENT ] block ;

@@ -27,6 +27,12 @@ impl Presenter {
             .collect();
 
         for image in &images {
+            // A solid fills whatever it is in, backdrop or sprite: it has no size of its own, and
+            // Ren'Py's `Solid` takes the space it is given for the same reason.
+            if let Some(colour) = self.colour_of(image) {
+                draw.push_rect(RectQuad::from_corners(0.0, 0.0, width, height, colour));
+                continue;
+            }
             if self.backdrop.as_deref() == Some(image.as_str()) {
                 self.draw_backdrop(draw, image, width, height);
             } else {

@@ -224,7 +224,7 @@ pub(crate) fn wants_a_window(args: &[String]) -> bool {
 /// A picture that cannot be read is **reported and skipped**, not fatal: the story still plays,
 /// with the placeholder where the background would be, which is both more useful than refusing
 /// to start and more honest than an empty screen. `vela check` is what makes it an error.
-fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<(String, u32, u32, Vec<u8>)> {
+fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<Picture> {
     let Some(root) = project.source_root.parent() else {
         return Vec::new();
     };
@@ -241,7 +241,20 @@ fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<(String, u32, u32
                 continue;
             };
             let name = declaration.name.join(".");
+            // An image is a picture or it is a colour. A colour is a *solid* — `image black =
+            // 0x000000` — and it draws as a filled rectangle rather than as a texture, which is what
+            // makes Ren'Py's built-in `black`, and any project's own flat backdrop, come across.
+            if let vela_syntax::Expr::Int { value, .. } = &declaration.value
+                && let Ok(rgb) = u32::try_from(*value)
+            {
+                let bytes = rgb.to_be_bytes();
+                images.push(Picture::Solid(name, [bytes[1], bytes[2], bytes[3]]));
+                continue;
+            }
+
             let vela_syntax::Expr::Path { value, .. } = &declaration.value else {
+                // Any other value names nothing to draw, and the checker says so. Skipped here
+                // rather than reported twice.
                 continue;
             };
 
@@ -250,7 +263,9 @@ fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<(String, u32, u32
                 .map_err(|error| error.to_string())
                 .and_then(|bytes| vela_assets::decode(&bytes).map_err(|error| error.to_string()))
             {
-                Ok(image) => images.push((name, image.width, image.height, image.rgba)),
+                Ok(image) => {
+                    images.push(Picture::File(name, image.width, image.height, image.rgba))
+                }
                 Err(error) => {
                     let _ = writeln!(out, "image {name}: {error}");
                 }
@@ -258,6 +273,43 @@ fn stage_images(project: &Project, out: &mut dyn Write) -> Vec<(String, u32, u32
         }
     }
     images
+}
+
+/// One picture a project declares, as the presenter can take it.
+///
+/// Two kinds because there are two ways to name a picture: a file, which is decoded before it is
+/// staged, and a colour, which has no pixels at all.
+pub(crate) enum Picture {
+    /// A picture: its name, and the pixels it decoded to.
+    File(String, u32, u32, Vec<u8>),
+    /// A colour, as `image black = 0x000000`.
+    Solid(String, [u8; 3]),
+}
+
+/// Hands every picture to a presenter.
+pub(crate) fn stage(presenter: &mut vela_render::Presenter, pictures: Vec<Picture>) {
+    for picture in pictures {
+        match picture {
+            Picture::File(name, width, height, rgba) => {
+                presenter.stage_image(name, width, height, rgba)
+            }
+            Picture::Solid(name, rgb) => presenter.stage_solid(name, rgb),
+        }
+    }
+}
+
+/// The size of every picture that *is* one, for a screen that has to lay one out.
+///
+/// A solid has no size of its own — it fills — so it is not in this table: a screen that draws one
+/// measures the space it was given, which is the truth about it.
+pub(crate) fn picture_sizes(pictures: &[Picture]) -> Vec<(String, u32, u32)> {
+    pictures
+        .iter()
+        .filter_map(|picture| match picture {
+            Picture::File(name, width, height, _) => Some((name.clone(), *width, *height)),
+            Picture::Solid(..) => None,
+        })
+        .collect()
 }
 
 /// What a window is titled.
@@ -293,7 +345,7 @@ pub(crate) fn play(
     screens: Screens,
     saves: std::path::PathBuf,
     schema: vela_replay::Schema,
-    images: Vec<(String, u32, u32, Vec<u8>)>,
+    images: Vec<Picture>,
     bindings: vela_host::Bindings,
 ) -> Result<(), Error> {
     let size = parse_size(args).unwrap_or((1280, 720));
