@@ -10,6 +10,55 @@ use super::tables::*;
 use super::words::*;
 use super::*;
 
+/// A conditional or a loop: its condition decides whether the block draws at all.
+///
+/// A condition is read in two steps, and the order is the rule. First the theme: a `gui.<name>` is
+/// resolved the way a prop's is, and a name no value holds is *reported* and its arm dropped — the
+/// migrated `main_menu` guarded its title with `gui.show_name`, which `options.rpy` declares and the
+/// theme does not hold. Then the question: a call nothing answers cannot decide an arm, and the engine
+/// reports the same thing as `W4013`, so the arm is reported and left out rather than written to warn.
+fn condition(head: &str, rest: &str, node: &Node, depth: usize, out: &mut String, ctx: &mut Ctx) {
+    // `rest` still carries the header's colon, and a name with a colon on the end is not a name —
+    // `value` is what strips it, so the two are asked in one order.
+    let Some(condition) = ctx.resolved(&value(rest)) else {
+        return;
+    };
+    match ungrounded(&condition) {
+        Some(call) if head != "for" => {
+            ctx.gaps.unknown.push(format!(
+                "`{call}(…)` in a condition, which is the host's to answer and Vela's host does not \
+                 (`SCREENS.md §11`)"
+            ));
+            return;
+        }
+        // A loop's iterable is a *value* rather than an action (`SCREENS.md §2.4`), and `range(n)` is
+        // Python's: nothing in a Vela screen produces a sequence yet, so the loop is written and walks
+        // nothing — which is what §2.4's **Not yet** says.
+        Some(call) => ctx.gaps.unknown.push(format!(
+            "the `{call}(…)` a loop iterates, which no value in a screen produces"
+        )),
+        None => {}
+    }
+    // `else:` has nothing after the word, and an unconditional space before the colon is `else :` —
+    // which the parser reads as a name and then a colon with a gap in it.
+    let header = match condition.trim() {
+        "" => head.to_string(),
+        condition => format!("{head} {condition}"),
+    };
+    block(&header, "", &node.children, depth, out, ctx);
+}
+
+/// A `use`: a call with no arguments and no block, or one that hands over a block.
+///
+/// `use navigation` is the first; `use game_menu("About"):` is the second. Both are the same line and
+/// the colon is what tells them apart (`SCREENS.md §2.1`).
+fn use_line_step(rest: &str, node: &Node, depth: usize, out: &mut String, ctx: &mut Ctx) {
+    let line = format!("use {}", use_line(rest, ctx));
+    if !block(&line, "", &node.children, depth, out, ctx) {
+        emit(out, depth, &line);
+    }
+}
+
 /// One block of a screen body.
 pub(super) fn body(nodes: &[Node], depth: usize, out: &mut String, ctx: &mut Ctx) {
     // Ren'Py writes a position under a widget as often as on it, and the two spellings mean the
@@ -60,44 +109,8 @@ fn line(head: &str, rest: &str, node: &Node, depth: usize, out: &mut String, ctx
                 block(&widget, &props, &node.children, depth, out, ctx);
             }
         }
-        "if" | "elif" | "else" | "for" | "while" => {
-            let condition = value(rest);
-            match ungrounded(&condition) {
-                // An arm guarded by a call nothing answers cannot draw: the engine reports the
-                // same thing as `W4013` and answers the condition false, so writing the arm out
-                // would be a screen that warns about itself in the project it was migrated into.
-                Some(call) if head != "for" => {
-                    ctx.gaps.unknown.push(format!(
-                        "`{call}(…)` in a condition, which is the host's to answer and Vela's \
-                         host does not (`SCREENS.md §11`)"
-                    ));
-                    return;
-                }
-                // A loop's iterable is a *value* rather than an action (`SCREENS.md §2.4`), and
-                // `range(n)` is Python's: nothing in a Vela screen produces a sequence yet, so
-                // the loop is written and walks nothing — which is what §2.4's **Not yet** says.
-                Some(call) => ctx.gaps.unknown.push(format!(
-                    "the `{call}(…)` a loop iterates, which no value in a screen produces"
-                )),
-                None => {}
-            }
-            // `else:` has nothing after the word, and an unconditional space before the colon is
-            // `else :` — which the parser reads as a name and then a colon with a gap in it.
-            let header = match condition.trim() {
-                "" => head.to_string(),
-                condition => format!("{head} {condition}"),
-            };
-            block(&header, "", &node.children, depth, out, ctx);
-        }
-        "use" => {
-            // `use navigation` is a call with no arguments and no block; `use game_menu("x"):`
-            // hands it one. Both are the same line, and the colon is what tells them apart
-            // (`SCREENS.md §2.1`).
-            let line = format!("use {}", use_line(rest, ctx));
-            if !block(&line, "", &node.children, depth, out, ctx) {
-                emit(out, depth, &line);
-            }
-        }
+        "if" | "elif" | "else" | "for" | "while" => condition(head, rest, node, depth, out, ctx),
+        "use" => use_line_step(rest, node, depth, out, ctx),
         "transclude" => emit(out, depth, "transclude"),
         "default" => {
             if python_call(rest) {

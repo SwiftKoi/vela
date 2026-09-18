@@ -346,3 +346,29 @@ fn a_file_of_neither_is_left_alone() {
         .is_none()
     );
 }
+
+/// A condition reads the theme the way a prop does, and a name no value holds is reported.
+///
+/// Both halves came from the sample. `gui.nvl_height` *is* in the theme — 115 — and the condition
+/// kept the reference verbatim, so the number the theme recorded never reached the branch that asks
+/// whether it is set. `gui.show_name` is declared in `options.rpy` rather than `gui.rpy`, so nothing
+/// holds it, and the arm it guards was written into the migrated module with a name nothing
+/// declares — where it *checked clean*, because a screen condition is not a place the checker
+/// resolves names in.
+#[test]
+fn a_condition_reads_the_theme_and_reports_what_it_cannot() {
+    let (text, _) = lower_with(
+        "screen s():\n    if gui.nvl_height:\n        text \"nvl\"\n",
+        &[],
+        &[("gui.nvl_height", "115")],
+    );
+    assert!(text.contains("if 115:"), "{text}");
+
+    let (text, entries) = lower(
+        "screen s():\n    if gui.show_name:\n        text \"name\"\n",
+        &[],
+    );
+    assert!(!text.contains("show_name"), "{text}");
+    assert!(!text.contains("\"name\""), "{text}");
+    assert!(reported(&entries, "gui.show_name"), "{entries:?}");
+}
