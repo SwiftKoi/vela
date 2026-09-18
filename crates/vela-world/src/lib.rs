@@ -22,6 +22,9 @@ mod stage;
 mod value;
 mod world;
 
+#[cfg(test)]
+mod tests;
+
 pub use command::{Audio, Choice, Command, CommandKind, Stage};
 pub use input::Input;
 pub use rng::Rng;

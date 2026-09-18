@@ -45,6 +45,7 @@ pub fn lower(name: &ModuleName, tree: &Program, env: &Env) -> Lowered {
         funcs: BTreeMap::new(),
         constants: BTreeMap::new(),
         effects: BTreeMap::new(),
+        speakers: speakers(tree),
         diagnostics: Vec::new(),
     };
 
@@ -94,6 +95,35 @@ pub fn lower(name: &ModuleName, tree: &Program, env: &Env) -> Lowered {
     }
 }
 
+/// The display name of every character a file declares, by the name a `say` statement uses.
+///
+/// A character with no `name` setting keeps the name it was declared with, which is what Ren'Py
+/// does with a bare `define e = Character()`: the box shows the tag.
+fn speakers(tree: &Program) -> BTreeMap<String, String> {
+    let mut speakers = BTreeMap::new();
+    for item in &tree.items {
+        let Item::Character(decl) = item else {
+            continue;
+        };
+        let named = decl
+            .settings
+            .iter()
+            .find(|setting| setting.key == "name")
+            .and_then(|setting| match &setting.value {
+                Expr::Str { parts, .. } => match parts.as_slice() {
+                    [vela_syntax::StrPart::Literal { text, .. }] => Some(text.clone()),
+                    _ => None,
+                },
+                _ => None,
+            });
+        speakers.insert(
+            decl.name.clone(),
+            named.unwrap_or_else(|| decl.name.clone()),
+        );
+    }
+    speakers
+}
+
 /// The state of one lowering.
 pub(crate) struct Lowerer<'a> {
     /// The module's declarations.
@@ -117,6 +147,14 @@ pub(crate) struct Lowerer<'a> {
     pub(crate) constants: BTreeMap<String, ConstId>,
     /// Declared effects by name, so a dotted call can be told from a field access.
     pub(crate) effects: BTreeMap<String, u32>,
+    /// Each character's *display* name, by the name a `say` uses: `s` → `Sylvie`.
+    ///
+    /// A `say` names the character and a player reads its name, and the two are different strings
+    /// on purpose — `s "Hi"` is what an author writes, `Sylvie` is what the box shows. Nothing below
+    /// this can tell them apart, which is why the substitution happens while lowering rather than
+    /// at the point the box is drawn: the command carries what is on screen, and a save that is
+    /// loaded a year later draws the same words.
+    pub(crate) speakers: BTreeMap<String, String>,
     /// What lowering found.
     pub(crate) diagnostics: Vec<Diagnostic>,
 }

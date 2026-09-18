@@ -13,7 +13,7 @@ Binary: `vela`. Subcommands are registry entries (`CONVENTIONS.md §4.7`).
 | Command | Purpose | Notable flags |
 | --- | --- | --- |
 | `vela new <name>` | Scaffold a project | `--template minimal\|standard\|rich` |
-| `vela run` | Run with hot reload | `--headless`, `--start <label>`, `--seed <n>` |
+| `vela run` | Run with hot reload | `--headless`, `--start <label>`, `--seed <n>`, `--capture <png>`, `--capture-dir <dir>` |
 | `vela check` | Compile + lint, no run | `--deny-warnings`, `--format human\|json\|sarif`, `--watch` |
 | `vela build` | Package for targets | `--target web,win,mac,linux,android`, `--release`, `--patch-from <prev>`, `--patch-out <dir>`, `--verify-reproducible` |
 | `vela patch apply <patch> <bundle>` | Apply a delta patch to an existing build | — |
@@ -32,6 +32,31 @@ Design rules:
   `3` internal error. CI depends on this and it never changes.
 - `vela check` is the CI entry point; `vela run` is the developer entry point. They share the
   compiler and must never disagree.
+
+## 1.1 Seeing a story without a window
+
+`vela run --capture <png>` renders one frame — the last line, or the one `--frame <n>` names — with no
+display at all. `vela run --capture-dir <dir>` renders **the slides**: one frame per command that
+changes what is on screen (`say`, `scene`/`show`/`hide`, `menu`), numbered in the order they were
+taken and saying which command each came from. Both go through the same presenter the window does, so
+what a capture shows is what a player sees.
+
+A single screenshot answers *what does this look like*. A series answers *does this work*, which is
+the question a visual novel keeps failing, and which no still can answer:
+
+- **A frame with nothing on it.** `--capture-dir` measures each frame against its own pixels and
+  marks the one that is only the backdrop, because "the story opened on a grey rectangle" is a bug a
+  person sees in a second and a file listing reports to nobody.
+- **A frame that says what the one before it said.** The same check marks a frame identical to its
+  predecessor — a step that changed nothing, which is what a `with fade` looks like while transitions
+  are unbuilt (`SCREENS.md §6`, M13).
+- **A step that needed a click to say nothing.** A run waits for the player only on what the player
+  reads or answers (`play.rs`'s `waits_for_the_player`): a `scene` happens *now*. Before that rule,
+  the sample needed three presses to read one sentence, and the frames showed it as three images.
+
+The summary line is the verdict a person skims (`78 frame(s): 1 with nothing on screen, 0 unchanged`)
+and the images are what a person looks at. This is a *tool*, not a golden: the frames of a project
+are not committed, and `tests/golden/` stays what it is (`CONVENTIONS.md §3`).
 
 ## 2. Diagnostics contract
 

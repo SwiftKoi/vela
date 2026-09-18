@@ -41,21 +41,45 @@ impl SceneState {
         self.show(image);
     }
 
-    /// Adds an image, replacing one with the same name.
+    /// Adds an image, replacing one with the same **tag**.
+    ///
+    /// The tag is the first component of the name, which is Ren'Py's rule and the reason a second
+    /// expression is the same sprite with a different face: `show sylvie.green.smile` after
+    /// `show sylvie.green.normal` is one Sylvie, not two. Replacing in place rather than appending
+    /// and dropping keeps the order — a sprite shown in front stays in front when its expression
+    /// changes.
     pub fn show(&mut self, image: impl Into<String>) {
         let image = image.into();
-        self.images.retain(|staged| staged.image != image);
-        self.images.push(StagedImage {
-            image,
-            attributes: Vec::new(),
-            transforms: Vec::new(),
-        });
+        let tag = tag_of(&image);
+        match self
+            .images
+            .iter_mut()
+            .find(|staged| tag_of(&staged.image) == tag)
+        {
+            Some(staged) => {
+                staged.image = image;
+                staged.attributes.clear();
+            }
+            None => self.images.push(StagedImage {
+                image,
+                attributes: Vec::new(),
+                transforms: Vec::new(),
+            }),
+        }
     }
 
-    /// Removes an image.
+    /// Removes an image, by tag or by full name: `hide sylvie` and `hide sylvie.green.smile` are
+    /// the same instruction, which is what a layered name means.
     pub fn hide(&mut self, image: &str) {
-        self.images.retain(|staged| staged.image != image);
+        let tag = tag_of(image);
+        self.images
+            .retain(|staged| staged.image != image && tag_of(&staged.image) != tag);
     }
+}
+
+/// The tag of a dotted image name: the part before the first dot.
+fn tag_of(image: &str) -> &str {
+    image.split('.').next().unwrap_or(image)
 }
 
 /// What is playing.

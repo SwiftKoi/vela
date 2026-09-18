@@ -64,3 +64,28 @@ impl Player {
         }
     }
 }
+
+impl super::Player {
+    /// Steps back one command, replaying from the nearest snapshot.
+    pub(super) fn rollback(&mut self) {
+        let position = self.timeline.position();
+        if position == 0 {
+            return;
+        }
+        let reached = self.timeline.rollback(position - 1);
+        self.finished = false;
+        self.refresh_presentation();
+        println!("rollback {reached}");
+    }
+
+    /// Re-applies the command now on screen, so the presenter matches a restored state.
+    ///
+    /// The scene is *not* rebuilt: the presenter's staged images come from the command stream,
+    /// and a rollback or load only re-applies the current command. A rollback across a `scene`
+    /// change therefore leaves the old backdrop. Stated rather than implied.
+    pub(super) fn refresh_presentation(&mut self) {
+        if let Some(command) = self.timeline.current() {
+            self.presenter.apply(command);
+        }
+    }
+}

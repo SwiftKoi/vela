@@ -12,6 +12,8 @@
 use vela_text::TextEngine;
 use vela_world::{Command, SceneState, Stage};
 
+mod staging;
+
 use crate::draw::{Color, DrawList, ImageQuad, RectQuad};
 use crate::menu::Menu;
 use crate::renderer::Renderer;
@@ -72,22 +74,29 @@ impl Default for Style {
 /// The line currently being said.
 struct Dialogue {
     speaker: Option<String>,
-    text: String,
+    pub(super) text: String,
 }
 
 /// What is on stage, and what is being said.
 pub struct Presenter {
     text: TextEngine,
-    scene: SceneState,
-    style: Style,
+    pub(super) scene: SceneState,
+    pub(super) style: Style,
     size: (u32, u32),
     dialogue: Option<Dialogue>,
     menu: Option<Menu>,
-    font: String,
+    pub(super) font: String,
+    /// The image a `scene` put down, which is the one drawn to *fill* the frame.
+    ///
+    /// A `show` is a sprite: a person standing in the frame rather than a picture of the place. Both
+    /// are on stage and neither is a different kind of thing to the world (`Stage::Scene` clears the
+    /// rest), which is why the distinction lives here rather than in the staged image: the presenter
+    /// is the layer that knows what a backdrop and a sprite should look like.
+    pub(super) backdrop: Option<String>,
     /// Images waiting to reach the GPU, by the name a scene stages them under.
     staged: Vec<(String, u32, u32, Vec<u8>)>,
-    /// Where each staged image ended up, once it has been uploaded.
-    uploaded: Vec<(String, u32)>,
+    /// Where each staged image ended up, once it has been uploaded: its name, texture and size.
+    pub(super) uploaded: Vec<(String, u32, u32, u32)>,
 }
 
 impl Presenter {
@@ -102,6 +111,7 @@ impl Presenter {
             dialogue: None,
             menu: None,
             font: font.to_string(),
+            backdrop: None,
             staged: Vec::new(),
             uploaded: Vec::new(),
         }
@@ -124,7 +134,7 @@ impl Presenter {
     pub fn upload_images(&mut self, renderer: &mut Renderer) {
         for (name, width, height, rgba) in std::mem::take(&mut self.staged) {
             let id = renderer.upload_image(width, height, &rgba);
-            self.uploaded.push((name, id));
+            self.uploaded.push((name, id, width, height));
         }
     }
 
@@ -134,8 +144,18 @@ impl Presenter {
     pub fn texture_of(&self, name: &str) -> Option<u32> {
         self.uploaded
             .iter()
-            .find(|(candidate, _)| candidate == name)
-            .map(|(_, id)| *id)
+            .find(|(candidate, ..)| candidate == name)
+            .map(|(_, id, ..)| *id)
+    }
+
+    /// How big a picture is, as the platform uploaded it — what a sprite is drawn at, since a
+    /// screen or a stage that guessed would be drawing a different picture from the one it has.
+    #[must_use]
+    pub fn size_of(&self, name: &str) -> Option<(u32, u32)> {
+        self.uploaded
+            .iter()
+            .find(|(candidate, ..)| candidate == name)
+            .map(|(_, _, width, height)| (*width, *height))
     }
 
     /// The injected text engine, so a caller can upload the atlas.
@@ -178,6 +198,11 @@ impl Presenter {
         // on screen forever behind the dialogue that replaced it.
         if !matches!(command, Command::Menu { .. }) {
             self.menu = None;
+        } else {
+            // The line before a menu is not on screen while the menu is: the prompt is what is
+            // being said, and Ren'Py's own menu screens show it in the same box. Leaving the old
+            // dialogue up puts a stale sentence under the choices.
+            self.dialogue = None;
         }
 
         match command {
@@ -194,7 +219,10 @@ impl Presenter {
                 ));
             }
             Command::Stage { kind, image, .. } => match kind {
-                Stage::Scene => self.scene.scene(image.clone()),
+                Stage::Scene => {
+                    self.backdrop = Some(image.clone());
+                    self.scene.scene(image.clone());
+                }
                 Stage::Show => self.scene.show(image.clone()),
                 Stage::Hide => self.scene.hide(image),
             },
@@ -203,6 +231,19 @@ impl Presenter {
             | Command::Pause { .. }
             | Command::WaitClick => {}
         }
+    }
+
+    /// Clears what the commands so far put on screen — the dialogue, the menu and the stage.
+    ///
+    /// What the *platform* gave the presenter stays: the text engine's atlas, the picture names and
+    /// their textures. Those are facts about the project, not about the story's position, and a
+    /// caller rendering a series of frames hands them over once and replays the commands for each
+    /// one. Without this, frame twenty carries frame nineteen's line.
+    pub fn reset(&mut self) {
+        self.scene = SceneState::default();
+        self.backdrop = None;
+        self.dialogue = None;
+        self.menu = None;
     }
 
     /// The menu awaiting an answer, if one is.
@@ -262,69 +303,6 @@ impl Presenter {
         self.dialogue
             .as_ref()
             .map(|dialogue| (dialogue.speaker.as_deref(), dialogue.text.as_str()))
-    }
-
-    /// The staged images.
-    ///
-    /// Placeholders, and honestly so: decoding an image is an *asset* question
-    /// (`BUILD_AND_ASSETS.md`), not a presentation one, and there is no decoder yet. Each
-    /// placeholder is a rectangle tinted by a hash of the image's name, so the same story
-    /// always produces the same colours and a test can tell two images apart. The name is
-    /// drawn on it, because a wrong image is much easier to see than a wrong colour.
-    fn build_stage(&mut self, draw: &mut DrawList, width: f32, height: f32) {
-        let images: Vec<String> = self
-            .scene
-            .images()
-            .iter()
-            .map(|staged| staged.image.clone())
-            .collect();
-        let count = images.len().max(1);
-        let slot = width / count as f32;
-
-        for (index, image) in images.iter().enumerate() {
-            let left = index as f32 * slot;
-
-            // The picture, when there is one. A scene stages a *name*, so a name with no image
-            // behind it — a typo, or an asset the build has not produced — falls through to the
-            // placeholder rather than to nothing: a blank screen reads as a broken renderer, and
-            // a labelled one reads as a missing background.
-            if let Some(texture) = self.texture_of(image) {
-                draw.push_image(ImageQuad {
-                    x: left,
-                    y: 0.0,
-                    width: slot,
-                    height,
-                    uv: [0.0, 0.0, 1.0, 1.0],
-                    image: texture,
-                    color: Color {
-                        r: 1.0,
-                        g: 1.0,
-                        b: 1.0,
-                        a: 1.0,
-                    },
-                });
-                continue;
-            }
-
-            let tint = tint_of(image);
-            draw.push_rect(RectQuad::from_corners(left, 0.0, left + slot, height, tint));
-            text::place(
-                &mut self.text,
-                &self.font,
-                draw,
-                image,
-                Placement {
-                    size: self.style.size * 1.6,
-                    left: left + 24.0,
-                    top: 40.0,
-                    max_width: width,
-                },
-                Color {
-                    a: 0.9,
-                    ..Color::rgb(255, 255, 255)
-                },
-            );
-        }
     }
 
     /// The dialogue box, or nothing when no line is on screen.

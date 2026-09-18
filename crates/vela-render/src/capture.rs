@@ -132,7 +132,12 @@ impl Capture {
         read_back(&self.renderer, &buffer, padded, self.width, self.height)
     }
 
-    /// Renders a frame and writes it to `path` as a PNG.
+    /// Renders a frame, writes it to `path` as a PNG, and hands the pixels back.
+    ///
+    /// The pixels come back because a *check* needs them and a picture does not: a frame that is one
+    /// flat colour, or one identical to the frame before it, is a bug a person sees immediately and
+    /// a written PNG reports to nobody. Returning them also keeps the frame from being rendered
+    /// twice, which is what a separate `render` call would do.
     ///
     /// # Errors
     ///
@@ -143,7 +148,7 @@ impl Capture {
         graph: &RenderGraph,
         draw: &DrawList,
         path: &Path,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<Vec<u8>> {
         let pixels = self.render(graph, draw);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -155,7 +160,8 @@ impl Capture {
         encoder
             .write_header()
             .and_then(|mut writer| writer.write_image_data(&pixels))
-            .map_err(|error| std::io::Error::other(error.to_string()))
+            .map_err(|error| std::io::Error::other(error.to_string()))?;
+        Ok(pixels)
     }
 }
 

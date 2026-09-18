@@ -17,7 +17,10 @@ use vela_replay::Timeline;
 use vela_text::{Font, TextEngine};
 use vela_world::Input;
 
+pub(crate) mod waiting;
+
 use crate::command::Error;
+use crate::commands::play::waiting::waits_for_the_player;
 use crate::commands::ui::{Screens, Stack, Watcher};
 use vela_ui::Value;
 use vela_ui::actions::Action as ScreenAction;
@@ -135,7 +138,14 @@ impl Player {
                     let _ = writeln!(out, "present {command}");
                     let _ = out.flush();
                     self.presenter.apply(&command);
-                    return;
+                    // A `scene`, a sprite, a transition and a music cue happen *now*: they are
+                    // stage directions, not things to read. Only a line, a choice and a pause hold
+                    // the story for the player — which is why one press at the start of a scene
+                    // plus a line lands on the line, and why a `pause 2.0` advances itself.
+                    if waits_for_the_player(&command) {
+                        return;
+                    }
+                    step = self.timeline.answer(Input::Ack);
                 }
                 vela_vm::Step::Continue => step = self.timeline.advance(),
                 vela_vm::Step::Halt => {
@@ -174,29 +184,6 @@ impl Player {
         let step = self.timeline.answer(Input::Choice(index));
         let mut sink = std::io::stdout();
         self.consume(step, &mut sink);
-    }
-
-    /// Steps back one command, replaying from the nearest snapshot.
-    fn rollback(&mut self) {
-        let position = self.timeline.position();
-        if position == 0 {
-            return;
-        }
-        let reached = self.timeline.rollback(position - 1);
-        self.finished = false;
-        self.refresh_presentation();
-        println!("rollback {reached}");
-    }
-
-    /// Re-applies the command now on screen, so the presenter matches a restored state.
-    ///
-    /// The scene is *not* rebuilt: the presenter's staged images come from the command stream,
-    /// and a rollback or load only re-applies the current command. A rollback across a `scene`
-    /// change therefore leaves the old backdrop. Stated rather than implied.
-    fn refresh_presentation(&mut self) {
-        if let Some(command) = self.timeline.current() {
-            self.presenter.apply(command);
-        }
     }
 
     /// Recompiles the project's screens after an edit, and swaps them into the running window.

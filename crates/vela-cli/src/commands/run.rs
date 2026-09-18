@@ -106,6 +106,17 @@ impl Command for Run {
         let execution = vela_vm::run(&module, &entry, &mut host)
             .map_err(|fault| Error::internal(format!("{fault}")))?;
 
+        if let Some(dir) = flag_value(args, "--capture-dir") {
+            return frame::capture_series(
+                &execution.commands,
+                dir,
+                args,
+                out,
+                &mut screens,
+                images,
+            );
+        }
+
         if let Some(path) = flag_value(args, "--capture") {
             return frame::capture(&execution.commands, path, args, out, &mut screens, images);
         }
@@ -194,11 +205,13 @@ pub(crate) fn compile_project(
 
 /// Whether a run should open a window rather than print its commands.
 ///
-/// `--headless` and `--capture` are both ways of asking for no window, and either one decides
-/// it; a bundle run reaches the same question.
+/// `--headless`, `--capture` and `--capture-dir` are all ways of asking for no window, and any one
+/// of them decides it; a bundle run reaches the same question.
 #[must_use]
 pub(crate) fn wants_a_window(args: &[String]) -> bool {
-    !args.iter().any(|arg| arg == "--headless") && flag_value(args, "--capture").is_none()
+    !args.iter().any(|arg| arg == "--headless")
+        && flag_value(args, "--capture").is_none()
+        && flag_value(args, "--capture-dir").is_none()
 }
 
 /// Every `image` declaration's picture, decoded, by the name a scene stages it under.
@@ -333,6 +346,7 @@ pub(crate) fn positional(args: &[String]) -> Option<&str> {
         let arg = args[index].as_str();
         if arg == "--start"
             || arg == "--capture"
+            || arg == "--capture-dir"
             || arg == "--size"
             || arg == "--frame"
             || arg == "--screen"

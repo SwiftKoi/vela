@@ -52,7 +52,20 @@ impl Lowerer<'_> {
     /// `"…"` and `eileen "…"`.
     pub(crate) fn say(&mut self, say: &SayStmt) {
         let span = say.span;
-        let speaker = self.optional_text(say.speaker.as_deref());
+        // A `say` names the *character*; the box shows its display name. `speakers` is the
+        // declaration's `name` setting, and a speaker that is not a character — a bare `"…"`, or a
+        // name the file did not declare — is passed through as written.
+        let speaker = self.optional_text(
+            say.speaker
+                .as_deref()
+                .map(|who| {
+                    self.speakers
+                        .get(who)
+                        .cloned()
+                        .unwrap_or_else(|| who.to_string())
+                })
+                .as_deref(),
+        );
         let attributes = self.text_list(&say.attributes, span);
         let text = self.expr(&say.line);
 

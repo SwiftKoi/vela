@@ -14,7 +14,7 @@ label start():
     b2:
         _4 = []
         _5 = {}
-        cmd say("eileen", _4, "Hello.", _5, none)
+        cmd say("Eileen", _4, "Hello.", _5, none)
         yield say -> b3
     b3:
         _6 = []
