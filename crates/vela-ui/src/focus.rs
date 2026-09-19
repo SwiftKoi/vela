@@ -11,7 +11,7 @@
 
 use crate::actions::Action;
 use crate::layout::{Frame, Rect};
-use crate::tree::Node;
+use crate::tree::{Kind, Node};
 
 /// An action-bearing node, placed.
 #[derive(Clone, PartialEq, Debug)]
@@ -20,6 +20,13 @@ pub struct Hotspot {
     pub rect: Rect,
     /// What activating it does.
     pub action: Action,
+    /// What it *says*, as one string: every word drawn inside it, in tree order.
+    ///
+    /// This is how a control is named, and it is Ren'Py's own answer (`testfocus.find_focus` matches
+    /// a pattern against a widget's text) rather than the accessibility tree's `label` prop: what a
+    /// person clicking "Start" means is the button that *reads* Start, and at this point the string
+    /// is the resolved one, so a caption that came from data is named by what it says.
+    pub label: String,
 }
 
 /// Every action-bearing node under `root`, in focus order (tree order).
@@ -50,11 +57,33 @@ fn walk(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, out: &mut Vec<
                 height: frame.rect.height,
             },
             action: action.clone(),
+            label: words(node),
         });
     }
 
     for (child, child_frame) in node.children.iter().zip(&frame.children) {
         walk(child, child_frame, left, top, out);
+    }
+}
+
+/// Every word drawn inside a node, in tree order.
+#[must_use]
+pub fn words(node: &Node) -> String {
+    let mut out = String::new();
+    collect(node, &mut out);
+    out.trim().to_string()
+}
+
+/// Appends a node's text and its children's.
+fn collect(node: &Node, out: &mut String) {
+    if let Kind::Text { text, .. } = &node.kind {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(text);
+    }
+    for child in &node.children {
+        collect(child, out);
     }
 }
 

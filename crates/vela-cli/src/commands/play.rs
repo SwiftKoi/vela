@@ -22,7 +22,8 @@ pub(crate) mod waiting;
 use crate::command::Error;
 use crate::commands::play::waiting::waits_for_the_player;
 use crate::commands::run::{Picture, stage};
-use crate::commands::ui::{Screens, Stack, Watcher};
+use crate::commands::ui::{Screens, Watcher};
+use vela_ui::Stack;
 use vela_ui::Value;
 use vela_ui::actions::Action as ScreenAction;
 
@@ -203,7 +204,7 @@ impl Player {
             return;
         }
         self.overlays.relaid(
-            &self.screens,
+            self.screens.sets(),
             self.size,
             self.presenter.text_mut(),
             FACE_NAME,
@@ -233,7 +234,7 @@ impl Player {
             return;
         }
         if self.overlays.open(
-            &self.screens,
+            self.screens.sets(),
             "pause",
             self.size,
             self.presenter.text_mut(),
@@ -264,7 +265,7 @@ impl Player {
                     return;
                 };
                 if self.overlays.open(
-                    &self.screens,
+                    self.screens.sets(),
                     name,
                     self.size,
                     self.presenter.text_mut(),
@@ -305,7 +306,7 @@ impl Player {
                     return;
                 };
                 if self.overlays.set_variable(
-                    &self.screens,
+                    self.screens.sets(),
                     name,
                     value.clone(),
                     self.size,

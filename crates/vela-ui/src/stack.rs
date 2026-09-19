@@ -1,12 +1,71 @@
 //! The screens a story has open, bottom first, and what can be asked of the top one.
+//!
+//! The runtime's own state, and it lives here rather than in the player because *two* callers have a
+//! screen stack now: `vela run` shows one in a window, and a `vela test` will drive one without a
+//! window — a test that clicks a control is a player, minus the window (`TOOLING.md §5`). What the
+//! two share is everything below: which screen is on top, where focus is, what a control *says*, and
+//! what activating it asks for. What they do not share is what happens after an action — a window
+//! redraws, a test keeps stepping the story — which is why an action is returned rather than run.
+//!
+//! [`ScreenSource`] is the seam: this crate holds a laid screen, and the layer that can compile a
+//! project's `.vela` files produces one.
 
 use vela_render::{Color, DrawList, RectQuad};
 use vela_text::TextEngine;
-use vela_ui::actions::Action as ScreenAction;
-use vela_ui::screens::Laid;
-use vela_ui::{Args, Rect, ScreenState, Value};
 
-use super::screens::Screens;
+use crate::actions::Action as ScreenAction;
+use crate::screens::Laid;
+use crate::{Args, ImageTable, Rect, ScreenSet, ScreenState, Value};
+
+/// Where a stack gets its screens: the compiled screens of a project, by name.
+///
+/// A trait rather than a `ScreenSet` because a project's screens are *several* sets — one per source
+/// file, since a screen resolves within the file that declares it (`SCREENS.md §5`) — and the layer
+/// that knows which is which is the caller's.
+pub trait ScreenSource {
+    /// Evaluates and lays out a declared screen, or `None` when it is not declared.
+    fn lay(
+        &self,
+        name: &str,
+        args: &Args,
+        state: &ScreenState,
+        size: (u32, u32),
+        text: &mut TextEngine,
+        font: &str,
+    ) -> Option<Laid>;
+}
+
+/// One file's screens, which is what a small project has.
+impl ScreenSource for ScreenSet {
+    fn lay(
+        &self,
+        name: &str,
+        args: &Args,
+        state: &ScreenState,
+        size: (u32, u32),
+        text: &mut TextEngine,
+        font: &str,
+    ) -> Option<Laid> {
+        ScreenSet::lay(self, name, args, state, size, text, font)
+    }
+}
+
+/// A project's screens are one set per file, so the search is across them.
+impl ScreenSource for [ScreenSet] {
+    fn lay(
+        &self,
+        name: &str,
+        args: &Args,
+        state: &ScreenState,
+        size: (u32, u32),
+        text: &mut TextEngine,
+        font: &str,
+    ) -> Option<Laid> {
+        self.iter()
+            .find(|set| set.has(name))?
+            .lay(name, args, state, size, text, font)
+    }
+}
 
 /// One screen the story opened, laid out and ready to navigate.
 pub struct Overlay {
@@ -42,7 +101,7 @@ impl Stack {
     /// names a screen, and a screen with required parameters has nothing to bind them to.
     pub fn open(
         &mut self,
-        screens: &Screens,
+        screens: &(impl ScreenSource + ?Sized),
         name: &str,
         size: (u32, u32),
         text: &mut TextEngine,
@@ -92,7 +151,7 @@ impl Stack {
     /// rather than leave a press that did nothing unexplained.
     pub fn set_variable(
         &mut self,
-        screens: &Screens,
+        screens: &(impl ScreenSource + ?Sized),
         name: &str,
         value: Value,
         size: (u32, u32),
@@ -139,6 +198,39 @@ impl Stack {
         self.overlays.last()
     }
 
+    /// Moves focus to the top screen's control whose words contain `text`.
+    ///
+    /// Containment and casefolding, which is Ren'Py's own rule for a text selector
+    /// (`testfocus.find_focus`: *a pattern in the text*, both folded) — and the reason a test may say
+    /// `click "history"` for a button that reads `History`. Among the controls that match, the
+    /// *shortest* label wins: that is the one whose words are about the match rather than a container
+    /// that happens to hold a similar phrase.
+    ///
+    /// Focus rather than the action, so a caller that clicks does what a player does — the control is
+    /// selected, and the action is read from [`Stack::focused`]: one path to an action rather than
+    /// two, and a focus ring that lands where the click did.
+    pub fn focus_label(&mut self, text: &str) -> bool {
+        let wanted = text.to_lowercase();
+        let Some(top) = self.overlays.last_mut() else {
+            return false;
+        };
+        let found = top
+            .laid
+            .hotspots
+            .iter()
+            .enumerate()
+            .filter(|(_, hotspot)| hotspot.label.to_lowercase().contains(&wanted))
+            .min_by_key(|(_, hotspot)| hotspot.label.len())
+            .map(|(index, _)| index);
+        match found {
+            Some(index) => {
+                top.focus = index;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// The action the focused hotspot asks for, if the top screen has one.
     #[must_use]
     pub fn focused(&self) -> Option<&ScreenAction> {
@@ -172,12 +264,12 @@ impl Stack {
         text: &mut TextEngine,
         font: &str,
         draw: &mut DrawList,
-        images: &vela_ui::ImageTable,
+        images: &ImageTable,
     ) {
         let top = self.overlays.len().saturating_sub(1);
         for (index, overlay) in self.overlays.iter().enumerate() {
             let focused = (index == top).then_some(overlay.focus);
-            vela_ui::paint(
+            crate::paint(
                 &overlay.laid.node,
                 &overlay.laid.frame,
                 text,
@@ -204,7 +296,7 @@ impl Stack {
     /// answer to "you deleted this screen's declaration" than the screen still being there.
     pub fn relaid(
         &mut self,
-        screens: &Screens,
+        screens: &(impl ScreenSource + ?Sized),
         size: (u32, u32),
         text: &mut TextEngine,
         font: &str,

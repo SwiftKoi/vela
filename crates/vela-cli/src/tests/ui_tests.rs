@@ -36,16 +36,16 @@ fn a_write_to_a_screen_variable_lays_the_screen_out_again() {
     let screens = crate::commands::ui::Screens::load(&collected);
 
     let mut text = text_engine();
-    let mut stack = crate::commands::ui::Stack::default();
-    assert!(stack.open(&screens, "help", (1280, 720), &mut text, "sans"));
-    let laid = |stack: &crate::commands::ui::Stack| {
+    let mut stack = vela_ui::Stack::default();
+    assert!(stack.open(screens.sets(), "help", (1280, 720), &mut text, "sans"));
+    let laid = |stack: &vela_ui::Stack| {
         let top = stack.top().expect("a screen is open");
         first_text(&top.laid.node).map(str::to_string)
     };
     assert_eq!(laid(&stack).as_deref(), Some("keyboard"));
 
     assert!(stack.set_variable(
-        &screens,
+        screens.sets(),
         "tab",
         Value::Str("mouse".to_string()),
         (1280, 720),
@@ -58,7 +58,7 @@ fn a_write_to_a_screen_variable_lays_the_screen_out_again() {
     // a pack that carries a stale name cannot leave a variable nothing can read (`E5017` is the static
     // half of the same rule).
     assert!(stack.set_variable(
-        &screens,
+        screens.sets(),
         "device",
         Value::Str("mouse".to_string()),
         (1280, 720),
@@ -80,7 +80,7 @@ fn a_write_to_a_screen_variable_lays_the_screen_out_again() {
     // And a write with nothing open is refused rather than silently doing nothing.
     assert_eq!(stack.close().as_deref(), Some("help"));
     assert!(!stack.set_variable(
-        &screens,
+        screens.sets(),
         "tab",
         Value::Str("keyboard".to_string()),
         (1280, 720),
@@ -178,16 +178,16 @@ fn a_reload_picks_up_an_edited_screen() {
     let mut screens = crate::commands::ui::Screens::load(&collected);
     let mut text = text_engine();
 
-    let before = screens
-        .lay(
-            "menu",
-            &vela_ui::Args::new(),
-            &vela_ui::ScreenState::new(),
-            (1280, 720),
-            &mut text,
-            "sans",
-        )
-        .expect("declared");
+    let before = vela_ui::ScreenSource::lay(
+        screens.sets(),
+        "menu",
+        &vela_ui::Args::new(),
+        &vela_ui::ScreenState::new(),
+        (1280, 720),
+        &mut text,
+        "sans",
+    )
+    .expect("declared");
     assert_eq!(before.hotspots[0].action.name, "quit");
 
     let edited = source.replace("action quit()", "action close_screen()");
@@ -196,16 +196,16 @@ fn a_reload_picks_up_an_edited_screen() {
     let reloaded = screens.reload();
     assert_eq!(reloaded.errors, 0);
     assert_eq!(reloaded.screens, 1);
-    let after = screens
-        .lay(
-            "menu",
-            &vela_ui::Args::new(),
-            &vela_ui::ScreenState::new(),
-            (1280, 720),
-            &mut text,
-            "sans",
-        )
-        .expect("still declared");
+    let after = vela_ui::ScreenSource::lay(
+        screens.sets(),
+        "menu",
+        &vela_ui::Args::new(),
+        &vela_ui::ScreenState::new(),
+        (1280, 720),
+        &mut text,
+        "sans",
+    )
+    .expect("still declared");
     assert_eq!(after.hotspots[0].action.name, "close_screen");
 }
 
@@ -238,10 +238,10 @@ fn a_screen_stack_opens_focuses_and_paints() {
     let screens = crate::commands::ui::Screens::load(&collected);
 
     let mut text = text_engine();
-    let mut stack = crate::commands::ui::Stack::default();
+    let mut stack = vela_ui::Stack::default();
     assert!(stack.is_empty());
 
-    assert!(stack.open(&screens, "pause", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(screens.sets(), "pause", (1280, 720), &mut text, "sans"));
     // Focus starts on the first control and wraps at the end.
     assert_eq!(
         stack.focused().map(|action| action.name.as_str()),
@@ -284,16 +284,16 @@ fn the_examples_pause_menu_buttons_do_not_overlap() {
     let collected = crate::commands::check::collect(&dir).expect("the example is a project");
     let screens = crate::commands::ui::Screens::load(&collected);
     let mut text = text_engine();
-    let laid = screens
-        .lay(
-            "pause",
-            &vela_ui::Args::new(),
-            &vela_ui::ScreenState::new(),
-            (1280, 720),
-            &mut text,
-            "sans",
-        )
-        .expect("pause is declared");
+    let laid = vela_ui::ScreenSource::lay(
+        screens.sets(),
+        "pause",
+        &vela_ui::Args::new(),
+        &vela_ui::ScreenState::new(),
+        (1280, 720),
+        &mut text,
+        "sans",
+    )
+    .expect("pause is declared");
 
     assert!(
         laid.hotspots.len() >= 3,
@@ -317,8 +317,8 @@ fn opening_an_undeclared_screen_does_nothing() {
     let screens = crate::commands::ui::Screens::load(&collected);
 
     let mut text = text_engine();
-    let mut stack = crate::commands::ui::Stack::default();
-    assert!(!stack.open(&screens, "pause", (1280, 720), &mut text, "sans"));
+    let mut stack = vela_ui::Stack::default();
+    assert!(!stack.open(screens.sets(), "pause", (1280, 720), &mut text, "sans"));
     assert!(stack.is_empty());
     assert!(stack.focused().is_none());
     assert!(!stack.move_focus(1));
@@ -353,10 +353,10 @@ label start:
     let collected = crate::commands::check::collect(&project).expect("a valid project");
     let screens = crate::commands::ui::Screens::load(&collected);
     let mut text = text_engine();
-    let mut stack = crate::commands::ui::Stack::default();
+    let mut stack = vela_ui::Stack::default();
 
     assert!(stack.key_action("cancel").is_none(), "nothing is open");
-    assert!(stack.open(&screens, "confirm", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(screens.sets(), "confirm", (1280, 720), &mut text, "sans"));
     assert_eq!(
         stack
             .key_action("cancel")
@@ -369,7 +369,7 @@ label start:
     );
 
     // The screen underneath is not asked: its binding is behind the one on top.
-    assert!(stack.open(&screens, "credits", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(screens.sets(), "credits", (1280, 720), &mut text, "sans"));
     assert_eq!(
         stack
             .key_action("cancel")

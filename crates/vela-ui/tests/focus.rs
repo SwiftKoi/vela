@@ -107,3 +107,42 @@ fn a_screen_without_buttons_has_no_hotspots() {
         .expect("the screen is declared");
     assert!(laid.hotspots.is_empty());
 }
+
+/// A control is named by the words it draws, and a click finds it the way Ren'Py does.
+///
+/// `focus_label` is the test runner's click: it moves focus to the control whose label *contains* the
+/// text, case-insensitively — Ren'Py's own rule for a text selector (`testfocus.find_focus`) and the
+/// reason a test may say `click "history"` for a button that reads `History`. Among the matches the
+/// shortest wins, so a container holding a similar phrase does not shadow the control itself.
+#[test]
+fn a_control_is_found_by_the_words_it_draws() {
+    let source = "screen menu:\n    column:\n        button:\n            text \"Start\"\n            action quit()\n        button:\n            text \"History\"\n            action quit()\n";
+    let set = ScreenSet::from_items(&parse(FileId::from_raw(0), source).program.items);
+    let mut text = engine();
+    let mut stack = vela_ui::Stack::default();
+    let laid = set
+        .lay(
+            "menu",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
+        .expect("the screen lays out");
+    assert!(stack.open(&set, "menu", (1280, 720), &mut text, "sans"));
+
+    let labels: Vec<&str> = laid
+        .hotspots
+        .iter()
+        .map(|spot| spot.label.as_str())
+        .collect();
+    assert_eq!(labels, ["Start", "History"]);
+
+    assert!(stack.focus_label("history"), "case-insensitively");
+    assert!(matches!(stack.focused(), Some(action) if action.name == "quit"));
+    assert!(
+        !stack.focus_label("nowhere"),
+        "and it says so when nothing matches"
+    );
+}

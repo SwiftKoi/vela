@@ -5,8 +5,7 @@ use std::path::{Path, PathBuf};
 
 use vela_render::DrawList;
 use vela_text::TextEngine;
-use vela_ui::screens::Laid;
-use vela_ui::{Args, ScreenSet, ScreenState, Value};
+use vela_ui::{Args, ScreenSet, Value};
 
 use crate::commands::check::Project;
 
@@ -162,23 +161,11 @@ impl Screens {
         args
     }
 
-    /// Evaluates and lays out a declared screen, or `None` if it is not declared.
+    /// Every set the project compiled, which is what a screen stack lays against (`vela-ui`'s
+    /// `ScreenSource` is implemented for a slice of them).
     #[must_use]
-    pub fn lay(
-        &self,
-        name: &str,
-        args: &Args,
-        state: &ScreenState,
-        size: (u32, u32),
-        text: &mut TextEngine,
-        font: &str,
-    ) -> Option<Laid> {
-        for set in &self.sets {
-            if set.has(name) {
-                return set.lay(name, args, state, size, text, font);
-            }
-        }
-        None
+    pub fn sets(&self) -> &[ScreenSet] {
+        &self.sets
     }
 
     /// Paints a declared screen into `draw`, returning whether it was found.
