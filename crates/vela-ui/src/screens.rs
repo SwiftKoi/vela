@@ -206,6 +206,21 @@ impl ScreenSet {
         self.design
     }
 
+    /// The colours this set's theme declares.
+    #[must_use]
+    pub fn palette(&self) -> &Palette {
+        &self.palette
+    }
+
+    /// Replaces the colours this set resolves `theme.` tokens against (`SCREENS.md §2.7`).
+    ///
+    /// What a caller does with a *second* palette rather than a project's own: the engine's interface is
+    /// laid out with the game's colours laid over Vela's, so a frame drawn from the interface is the
+    /// game's colours. The tokens are the ones the set declares — [`Palette::over`] keeps both sides.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
     /// Replaces the widget vocabulary, which a plugin extends.
     #[must_use]
     pub fn with_registry(mut self, registry: WidgetRegistry) -> Self {

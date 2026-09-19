@@ -6,19 +6,21 @@
 #
 # What is here grows as M12.2's items land: `game_menu` is the frame the app screens are built on, and
 # the settings, save/load, history, help and notify screens follow. What an interface screen may rely on
-# is deliberate and narrow: widget defaults and `theme.*` tokens of its own theme, and no `style` names,
-# because a style resolves in the declaring module (SCREENS.md §5) and a project module using one of
-# these would resolve the name against its own table. The palette is meant to be the
-# project's — SCREENS.md §2.7 states it, and the injection that makes it true is not in yet, so this set
-# draws in its own theme's colours today.
+# is deliberate and narrow, because a style resolves in the declaring module (SCREENS.md §5) and a
+# project module using one of these would resolve the name against *its* table: the frame below — the one
+# screen a project is expected to `use` — names no style at all and draws from widget defaults plus the
+# `theme.*` colour a widget takes as a prop, while the app screens (which the interface *opens*, and which
+# are therefore laid out in this module) may use styles declared here. Colours are the project's: a caller
+# lays the game's palette over this one, token by token (SCREENS.md §2.7), so the three below are Vela's
+# *fallbacks* for a game that names none of them.
 
 theme interface:
-    color ink = 0xe8e8ee
-    color panel = 0x14161d
+    color bg = 0x14161d
+    color fg = 0xe8e8ee
     color accent = 0x5aa9e6
 
 screen game_menu(title):
-    box at = center, background = theme.panel:
+    box at = center, background = theme.bg:
         pad 32
         column gap = 16:
             text title

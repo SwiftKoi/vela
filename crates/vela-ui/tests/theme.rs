@@ -218,3 +218,44 @@ fn a_theme_without_fonts_declares_none() {
     let theme = theme_of("theme bare:\n    color bg = 0x10121a\n");
     assert!(fonts(&theme).is_empty());
 }
+
+/// One palette laid over another keeps both sides: the overlay wins where the names meet, and a name
+/// only it has is kept (`SCREENS.md §2.7`).
+///
+/// This is what makes a project's colours reach the engine's interface without the interface naming a
+/// thing: Vela declares `bg`, `fg`, `accent`, and a game that declares one of them changes one of them.
+#[test]
+fn a_palette_over_another_keeps_both_sides() {
+    let vela = palette(&theme_of(
+        "theme v:\n    color bg = 0x101010\n    color fg = 0xffffff\n",
+    ));
+    let game = palette(&theme_of(
+        "theme g:\n    color bg = 0x00ff00\n    color accent = 0xff0000\n",
+    ));
+
+    let merged = vela.over(&game);
+    assert_eq!(
+        merged.get("bg"),
+        Some(Rgb { r: 0, g: 255, b: 0 }),
+        "the game's"
+    );
+    assert_eq!(
+        merged.get("fg"),
+        Some(Rgb {
+            r: 255,
+            g: 255,
+            b: 255
+        }),
+        "Vela's, which the game did not name"
+    );
+    assert_eq!(
+        merged.get("accent"),
+        Some(Rgb { r: 255, g: 0, b: 0 }),
+        "a token only the game has is kept rather than dropped"
+    );
+    assert_eq!(
+        merged.colors.len(),
+        3,
+        "one entry per token, not per palette"
+    );
+}

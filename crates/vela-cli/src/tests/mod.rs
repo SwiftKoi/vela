@@ -6,6 +6,7 @@ mod bundle_tests;
 mod cli_tests;
 mod diff_tests;
 mod format_tests;
+mod interface_tests;
 mod linking_tests;
 mod lsp_parity;
 mod migrate_tests;

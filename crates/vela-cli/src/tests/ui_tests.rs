@@ -28,6 +28,7 @@ fn first_text(node: &Node) -> Option<&str> {
 /// the runtime holds; and the screen is laid out again with it. Keeping that store outside the screen is
 /// what makes a write survive the next frame instead of being undone by the declaration that declared
 /// the variable.
+
 #[test]
 fn a_write_to_a_screen_variable_lays_the_screen_out_again() {
     let source = "screen help:\n    default tab = \"keyboard\"\n    column:\n        text tab\n        button:\n            text \"Mouse\"\n            action set_screen_variable(tab, \"mouse\")\n\nlabel start:\n    \"Hi.\"\n    return\n";

@@ -34,7 +34,7 @@ impl Screens {
     pub fn load(project: &Project) -> Self {
         let mut sets = compile(&project.files).0;
         let project_screens: usize = sets.iter().map(|set| set.names().len()).sum();
-        sets.push(interface());
+        sets.push(interface(colours(&sets)));
         Self {
             sets,
             project: project_screens,
@@ -52,7 +52,7 @@ impl Screens {
     #[must_use]
     pub fn empty() -> Self {
         Self {
-            sets: vec![interface()],
+            sets: vec![interface(None)],
             project: 0,
             paths: Vec::new(),
             preferences: vela_world::Preferences::new(),
@@ -90,8 +90,8 @@ impl Screens {
             sets.push(vela_ui::ScreenPack::read(path)?.into_set());
         }
         // The interface last, so a project's screen of the same name is found first: the resolution order
-        // is the whole of the override rule (`SCREENS.md §2.1`).
-        sets.push(interface());
+        // is the whole of the override rule (`SCREENS.md §2.1`), and its palette comes from the game.
+        sets.push(interface(colours(&sets)));
         Ok(Self {
             sets,
             project: 0,
@@ -162,7 +162,7 @@ impl Screens {
             };
         }
         self.project = sets.iter().map(|set| set.names().len()).sum();
-        sets.push(interface());
+        sets.push(interface(colours(&sets)));
         self.sets = sets;
         Reloaded {
             screens: self.count(),
@@ -252,14 +252,31 @@ pub struct Reloaded {
     pub errors: usize,
 }
 
+/// The colours a game's screens declare, which are the ones the interface draws in.
+///
+/// The *first* set that declares a theme, because a set is one file and the rule is already "the first
+/// theme in a file is the active one" (`SCREENS.md §5`). A project with several themes has the open
+/// question that rule has — nothing selects between them yet — and a project with none gets `None`,
+/// which leaves the interface in Vela's own colours.
+fn colours(sets: &[vela_ui::ScreenSet]) -> Option<&vela_ui::Palette> {
+    sets.iter()
+        .map(|set| set.palette())
+        .find(|palette| !palette.is_empty())
+}
+
 /// The interface's set, every time a project is loaded or reloaded.
 ///
 /// A fresh set per load rather than one shared, because a set is mutated as a runner tells it things —
 /// where the pictures are, where it is running, which frame it was designed for
 /// (`set_images`/`set_variants`/`set_design`) — and two callers sharing one would be two callers sharing
-/// those answers.
-fn interface() -> vela_ui::ScreenSet {
-    vela_ui::interface::set()
+/// those answers. The game's colours go over Vela's, token by token (`SCREENS.md §2.7`).
+fn interface(colours: Option<&vela_ui::Palette>) -> vela_ui::ScreenSet {
+    let mut set = vela_ui::interface::set();
+    if let Some(colours) = colours {
+        let palette = set.palette().over(colours);
+        set.set_palette(palette);
+    }
+    set
 }
 
 /// Compiles every file's screens, and counts the files that would not parse.

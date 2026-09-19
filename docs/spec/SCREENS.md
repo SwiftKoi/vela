@@ -403,24 +403,30 @@ a main menu, settings, save/load, history, help and notify arriving as `M12.2`'s
 dependency — so a project can build a screen out of the frame *and* can replace it, without a second
 table anywhere: the rule is one line in `vela-ui::compose::find`, which is the one place all four arrive.
 
-**What an interface screen may rely on is narrow on purpose.** The widget defaults and the `theme.*`
-tokens of its own theme, and no `style` names: a style resolves in the declaring module (`§5`), so an
-interface screen naming one would draw with whatever the *project* happens to declare under that name —
-a screen whose look depends on who used it, which is what §2.1's purity rule rules out. A project that
-wants the frame to look different overrides it, which is the same rule as everything else.
+**What an interface screen may rely on is narrow on purpose.** A style resolves in the declaring module
+(`§5`), and expanding a `use` happens in the *caller's* context — so a screen a project `use`s is drawn
+with the project's style table, where the interface's style names do not exist. The frame (`game_menu`)
+is the screen a project is expected to `use`, so it names no style at all: widget defaults plus the
+`theme.*` colour a widget takes as a prop. A screen the interface *opens* — every app screen, since
+`open_screen` lays it out in the module that declares it — may use the interface's own styles, and those
+styles may name `theme.*` tokens freely. The consequence is stated rather than hidden: a project that
+`use`s an app screen instead of overriding it gets that screen's widget defaults and not its styles.
 
 **Colours are the project's.** An interface screen names `theme.*` rather than fixed colours, because
-the set is laid out with the project's palette over the interface's own — a palette is the project's
-*data* (`M12.2`'s item 10), and Vela's own theme is the fallback for tokens the project does not name,
-not the look. The original decision is Vela's; the skin, as `§2`'s cut says, is the project's.
+its set is laid out with the project's palette over Vela's, **token by token** — and the project's is the
+*first* theme its screens declare, which is the rule a set's own active theme already follows (§5). So a
+game that declares `bg`, `fg`, or `accent` — the three the interface names, and the three
+`examples/standard` uses — changes those colours in the engine's frame, while a token only Vela names
+keeps Vela's value and a token only the game names is kept rather than dropped. A palette is the
+project's *data* (`M12.2`'s item 10): Vela's theme is a fallback, not the look.
 
-> **Implemented (M12.2, in part).** The module, the resolution rule, and the frame: `game_menu` is
-> checked by the engine's own suite (nobody else's checker sees the interface — it is not a project file),
-> `crates/vela-ui/tests/interface.rs` pins that a project can `use` it and that a project's own
-> declaration of the name is the one found, and `vela run`/`vela test` search the interface's set after
-> the project's (`commands/ui/screens.rs`). **Not yet:** the palette injection the paragraph above
-> describes (the interface's set carries its own theme today), the rest of the screens, and
-> `vela doc screens`.
+> **Implemented (M12.2, in part).** The module, the resolution rule, the frame, and the colours:
+> `game_menu` is checked by the engine's own suite (nobody else's checker sees the interface — it is not a
+> project file), `crates/vela-ui/tests/interface.rs` pins that a project can `use` it and that a project's
+> own declaration of the name is the one found, `crates/vela-ui/tests/theme.rs` the palette merge, and
+> `vela run`/`vela test` search the interface's set after the project's and lay it out in the game's
+> colours (`commands/ui/screens.rs`, pinned by `crates/vela-cli/src/tests/ui_tests.rs`). **Not yet:** the
+> rest of the screens (`M12.2`'s items 4–9) and `vela doc screens`.
 
 ## 3. Widget tree
 

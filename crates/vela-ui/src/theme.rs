@@ -102,6 +102,25 @@ impl Palette {
     pub fn color(&self, token: &str) -> Option<Color> {
         self.get(token).map(Rgb::color)
     }
+
+    /// This palette with another's colours laid over it, token by token.
+    ///
+    /// What the engine's interface does with the project's theme (`SCREENS.md §2.7`): Vela's own tokens
+    /// are the fallback, a token the project names takes the project's colour, and a token only the
+    /// project has is kept — a second theme's palette is data, and dropping half of it would make
+    /// `theme.x` in an interface screen mean something different from `theme.x` anywhere else. Order is
+    /// this palette's, so a laid-out set resolves tokens the same way whichever palette won.
+    #[must_use]
+    pub fn over(&self, other: &Self) -> Self {
+        let mut colors = self.colors.clone();
+        for (token, colour) in &other.colors {
+            match colors.iter_mut().find(|(name, _)| name == token) {
+                Some(entry) => entry.1 = *colour,
+                None => colors.push((token.clone(), *colour)),
+            }
+        }
+        Self { colors }
+    }
 }
 
 /// The font names a theme declares.
