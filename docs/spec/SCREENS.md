@@ -741,21 +741,26 @@ refuse. Ren'Py learns this the hard way — `Preference("text speed")` is a *str
 time, so a misspelling is a control that silently does nothing, which is exactly what the sample's
 migrated settings screen was doing until this check existed (`TOOLING.md §8`).
 
-**A written name is what is checked.** `preference(which, 30)`, with `which` a parameter, is `E5020`
-rather than a call the checker guesses at. A *value* is checked only when it is a literal:
-`preference(text_speed, other)` is an expression, and reading `other` as a word would report a correct
-screen. A choice is therefore written as a string — `preference(display_mode, "fullscreen")`, the
-second spelling a word argument has — while a bare word stays a *name*, and where a name points is
-`E2001`'s question.
+**A name is written as a string, and a value is checked when it is a literal.** `preference("text_speed",
+30)` is the spelling the migration emits and the reference shows, because a bare word is an *expression*:
+`preference(display_mode, fullscreen)` is the name `fullscreen`, nothing declares it, and `E2001` is what
+says so — two diagnostics for one mistake is the thing the checker avoids. The exception is a name the
+*screen* itself declares: `preference(which, 30)` with `which` a parameter is `E5020`, because a computed
+setting cannot be checked and nothing else would say so. A *value* is checked only when it is a literal,
+for the same reason in reverse: `preference("text_speed", other)` is an expression, and reading `other` as
+a word would report a correct screen. A choice is therefore a string too —
+`preference("display_mode", "fullscreen")`.
 
 **A toggle is an action rather than a value word.** Ren'Py spells a flip as the value `"toggle"`; here
 it is `toggle_preference(name)`, because a value word would be a second vocabulary inside an argument
 that only the runtime could check — and a checkbox needs to flip a setting that no screen can read yet.
 
-> **Implemented (M12.2, in part).** The registry, the checker, and the migration are in; the *write*
-> and the *read* are not. Nothing dispatches `preference` yet and nothing draws a setting, so every
-> entry in the list carries `read: false` and the reference says so — a vocabulary that runs ahead of
-> its systems, labelled rather than implied (`docs/roadmap/M12.2-game-interface.md`).
+> **Implemented (M12.2, in part).** The registry, the checker, the migration and the *write* are in; the
+> *read* is not. `vela_ui::settings::write` is the one place the two actions are carried out, and both
+> callers use it: the windowed player, where a settings screen's button is how a player changes one (and
+> the settings file is rewritten at once), and the test runner, where a click is — so a settings button is
+> one a test can press rather than one that reports a headless run cannot. Nothing *draws* a setting yet,
+> so every entry in the list carries `read: false` and the reference says so (`RUNTIME.md §2.1`).
 
 ## 8. Reactivity
 

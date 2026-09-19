@@ -427,3 +427,28 @@ fn the_semantic_actions_match_the_hosts() {
         .collect();
     assert_eq!(ours.names(), host);
 }
+
+/// A setting a player chose is written beside their saves, and read back by the next session.
+///
+/// The exit criterion this exists for is *"a setting changed in one session is still set in the next,
+/// and is not in the save file"* (`docs/roadmap/M12.2-game-interface.md`), and these are its two halves:
+/// the write a player's session makes when a screen changes something, and the read a later one does at
+/// startup. The *save* half — that the value is in no save and in no snapshot — is asserted in
+/// `crates/vela-replay/tests/preferences.rs`, where the two lifetimes are visible.
+#[test]
+fn a_setting_survives_a_session() {
+    let dir = std::env::temp_dir().join(format!("vela-settings-cli-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let mut chosen = vela_world::Preferences::new();
+    chosen.set("text_speed", vela_world::Value::Int(30));
+    crate::commands::play::settings::write_settings(&dir, chosen.clone()).expect("write");
+
+    let read = crate::commands::play::settings::read_settings(&dir).expect("read");
+    assert_eq!(read.preferences, chosen, "the next session's settings");
+    assert_eq!(read.version, vela_replay::SETTINGS_VERSION);
+
+    // And a game whose player has never chosen anything simply has no file, which is not a failure.
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(crate::commands::play::settings::read_settings(&dir).is_none());
+}

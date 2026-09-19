@@ -17,6 +17,11 @@
 //! milestone's item 4. Saying so here is the same shape `ActionDecl::dispatched` has, and it is what
 //! stops "Vela has a text speed" from reading as "Vela types your dialogue out".
 
+use vela_world::{Preferences, Value};
+
+use crate::actions::{Action, PREFERENCE, TOGGLE_PREFERENCE};
+use crate::value::Value as ScreenValue;
+
 /// What a setting holds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SettingTy {
@@ -171,5 +176,65 @@ impl SettingDecl {
             .filter(|(distance, _)| *distance <= (name.chars().count() / 3).clamp(1, 3))
             .min_by_key(|(distance, _)| *distance)
             .map(|(_, candidate)| candidate)
+    }
+}
+
+/// Writes what a `preference` or `toggle_preference` action asks for, and answers the name it wrote.
+///
+/// One place, because both callers carry the same two actions out: the windowed player, where a
+/// settings screen's button is the only way a player can change one, and the test runner, where a click
+/// is. What they do with the answer differs — a player rewrites its settings file, a run says nothing —
+/// and what a setting *means* is here.
+///
+/// `None` when the action is neither of the two; when it names a setting this build does not have (not a
+/// typo the checker would have let through — `E5020` is where it is written — but a bundle built by a
+/// build whose vocabulary was different); or when the value is one the world cannot hold, which is an
+/// action or a record. Each of those is a caller's to report, and a caller that says so beats one that
+/// writes a setting nothing reads.
+///
+/// A **toggle flips**, reading the declaration's default when nothing is stored yet — which is what lets
+/// a checkbox flip a setting that no screen can read (`SCREENS.md §7.1`).
+pub fn write(preferences: &mut Preferences, action: &Action) -> Option<String> {
+    match action.name.as_str() {
+        PREFERENCE => {
+            let (name, value) = (action.first()?, action.args.get(1)?);
+            SettingDecl::named(name)?;
+            preferences.set(name, world_value(value)?);
+            Some(name.to_string())
+        }
+        TOGGLE_PREFERENCE => {
+            let name = action.first()?;
+            let setting = SettingDecl::named(name)?;
+            // Nothing stored yet is the declaration's default, so the first press of a checkbox is a
+            // *change* rather than a no-op on a value the player never chose.
+            let stored = match preferences.get(name) {
+                Some(Value::Bool(stored)) => *stored,
+                _ => setting.default == "true",
+            };
+            preferences.set(name, Value::Bool(!stored));
+            Some(name.to_string())
+        }
+        _ => None,
+    }
+}
+
+/// A screen's value as the world holds one.
+///
+/// The two types are different on purpose — a screen's value may be an *action*, and the world's may be a
+/// struct — so this crossing is where what a setting can hold is decided: a string, a number, a boolean,
+/// a list of those, or nothing at all. An action or a record is refused rather than flattened into
+/// something that looks like it worked.
+fn world_value(value: &ScreenValue) -> Option<Value> {
+    match value {
+        ScreenValue::Str(text) => Some(Value::Str(text.clone())),
+        ScreenValue::Num(number) => Some(Value::Float(*number)),
+        ScreenValue::Bool(flag) => Some(Value::Bool(*flag)),
+        ScreenValue::List(items) => items
+            .iter()
+            .map(world_value)
+            .collect::<Option<Vec<_>>>()
+            .map(Value::List),
+        ScreenValue::None => Some(Value::None),
+        ScreenValue::Action(_) | ScreenValue::Record(_) => None,
     }
 }

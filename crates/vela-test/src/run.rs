@@ -114,7 +114,7 @@ fn tail(
             // ended is still on the stack, and a press on it is still a press.
             StepKind::Click { function, source } => {
                 if let Some(wanted) = text(session, function, source, next.span, outcome) {
-                    click(stage, &wanted, next.span, outcome);
+                    click(session, stage, &wanted, next.span, outcome);
                 }
             }
             // A wait the story never satisfied is why the run stopped, and saying *what it wanted*
@@ -285,7 +285,7 @@ fn assertions(
                 let Some(wanted) = text(session, function, source, next.span, outcome) else {
                     return false;
                 };
-                click(stage, &wanted, next.span, outcome);
+                click(session, stage, &wanted, next.span, outcome);
                 script.index += 1;
             }
             StepKind::AdvanceUntil { function, source } => {

@@ -135,16 +135,21 @@ fn named(
 
 /// The word an argument writes, when it writes one rather than computing one.
 ///
-/// A word argument has two spellings — `preference(text_speed, 30)` and `preference("text_speed", 30)`
-/// — and both are checkable *if* the name is not one the screen has: a bare name the screen declares is
-/// its own value, which is what the evaluator does with it too (`SCREENS.md §2.5`).
+/// A setting's name is **written as a string** — `preference("text_speed", 30)`, which is what the
+/// migration emits and what the reference shows — because a bare word is an *expression*, and a name
+/// nothing declares is `E2001`'s to report rather than this check's: two diagnostics for one mistake is
+/// the thing the checker avoids (`check/actions.rs` says the same about `W4013` and `E5012`).
+///
+/// The exception is a name the *screen* declares, and it is here for the same reason in reverse: a
+/// computed setting cannot be checked, and nothing else would say so — the name is in scope, so `E2001`
+/// is silent about it.
 fn word(expr: &Expr, scope: Scope<'_>) -> Option<String> {
     match expr {
         Expr::Str { parts, .. } => match parts.as_slice() {
             [StrPart::Literal { text, .. }] => Some(text.clone()),
             _ => None,
         },
-        Expr::Name { name, .. } if !scope.has(name) => Some(name.clone()),
+        Expr::Name { name, .. } if scope.has(name) => Some(name.clone()),
         Expr::Paren { inner, .. } => word(inner, scope),
         _ => None,
     }

@@ -134,7 +134,7 @@ fn a_setting_says_whether_anything_reads_it() {
 #[test]
 fn an_unknown_setting_is_reported_with_a_suggestion() {
     let found = diagnostics(
-        "screen s():\n    button:\n        text \"Fast\"\n        action preference(text_speeed, 30)\n",
+        "screen s():\n    button:\n        text \"Fast\"\n        action preference(\"text_speeed\", 30)\n",
     );
     assert_eq!(found[0].code.as_str(), "E5020");
     let help = found[0].help.clone().unwrap_or_default();
@@ -142,7 +142,7 @@ fn an_unknown_setting_is_reported_with_a_suggestion() {
 
     // A name nowhere near anything declared gets the code and no guess.
     let stranger = diagnostics(
-        "screen s():\n    button:\n        text \"Go\"\n        action toggle_preference(teleport)\n",
+        "screen s():\n    button:\n        text \"Go\"\n        action toggle_preference(\"teleport\")\n",
     );
     assert_eq!(stranger[0].code.as_str(), "E5020");
     assert!(stranger[0].help.is_none(), "{:?}", stranger[0].help);
@@ -167,20 +167,20 @@ fn a_setting_name_that_is_not_written_out_is_reported() {
 fn a_value_the_setting_does_not_take_is_reported() {
     assert_eq!(
         codes(
-            "screen s():\n    button:\n        text \"Go\"\n        action preference(display_mode, \"sideways\")\n"
+            "screen s():\n    button:\n        text \"Go\"\n        action preference(\"display_mode\", \"sideways\")\n"
         ),
         vec!["E5021"]
     );
     assert_eq!(
         codes(
-            "screen s():\n    button:\n        text \"Go\"\n        action preference(skip_unseen, \"yes\")\n"
+            "screen s():\n    button:\n        text \"Go\"\n        action preference(\"skip_unseen\", \"yes\")\n"
         ),
         vec!["E5021"]
     );
     // A boolean has nothing to flip out of, so the toggle form says so under the same code.
     assert_eq!(
         codes(
-            "screen s():\n    button:\n        text \"Go\"\n        action toggle_preference(text_speed)\n"
+            "screen s():\n    button:\n        text \"Go\"\n        action toggle_preference(\"text_speed\")\n"
         ),
         vec!["E5021"]
     );
@@ -208,14 +208,104 @@ fn a_bare_word_as_a_value_is_left_to_the_screen_name_check() {
 fn a_setting_a_screen_can_write_reports_nothing() {
     assert!(
         codes(
-            "screen s(level):\n    button:\n        text \"Go\"\n        action preference(text_speed, level)\n"
+            "screen s(level):\n    button:\n        text \"Go\"\n        action preference(\"text_speed\", level)\n"
         )
         .is_empty()
     );
     assert!(
         codes(
-            "screen s():\n    button:\n        text \"Window\"\n        action preference(display_mode, window)\n    button:\n        text \"Fullscreen\"\n        action preference(\"display_mode\", \"fullscreen\")\n    button:\n        text \"Skip\"\n        action toggle_preference(skip_unseen)\n"
+            "screen s():\n    button:\n        text \"Window\"\n        action preference(\"display_mode\", window)\n    button:\n        text \"Fullscreen\"\n        action preference(\"display_mode\", \"fullscreen\")\n    button:\n        text \"Skip\"\n        action toggle_preference(skip_unseen)\n"
         )
         .is_empty()
     );
+}
+
+/// `preference` writes the value the screen resolved, and `toggle_preference` flips.
+///
+/// The flip is the half worth pinning: a checkbox cannot read the setting (`SCREENS.md §7.1`), so a
+/// toggle has to start from the *declaration's* default — `skip_unseen` is `false`, so the first press
+/// makes it true, and `skip_after_choices` is `true`, so its first press makes it false.
+#[test]
+fn a_setting_is_written_by_the_action_a_screen_gives_it() {
+    use vela_ui::actions::Action;
+    use vela_ui::settings::write;
+    use vela_ui::value::Value as ScreenValue;
+    use vela_world::Value;
+
+    let mut preferences = vela_world::Preferences::new();
+
+    let speed = Action::new(
+        "preference",
+        vec![name("text_speed"), ScreenValue::Num(30.0)],
+    );
+    assert_eq!(
+        write(&mut preferences, &speed),
+        Some("text_speed".to_string())
+    );
+    assert_eq!(
+        preferences.get("text_speed"),
+        Some(&Value::Float(30.0)),
+        "the number the screen resolved, not the words it wrote"
+    );
+
+    let skip = Action::new("toggle_preference", vec![name("skip_unseen")]);
+    assert_eq!(
+        write(&mut preferences, &skip),
+        Some("skip_unseen".to_string())
+    );
+    assert_eq!(preferences.get("skip_unseen"), Some(&Value::Bool(true)));
+    write(&mut preferences, &skip);
+    assert_eq!(
+        preferences.get("skip_unseen"),
+        Some(&Value::Bool(false)),
+        "and a second press flips it back"
+    );
+
+    let after = Action::new("toggle_preference", vec![name("skip_after_choices")]);
+    write(&mut preferences, &after);
+    assert_eq!(
+        preferences.get("skip_after_choices"),
+        Some(&Value::Bool(false)),
+        "a default of `true` is what the first press flips *from*"
+    );
+}
+
+/// An action that is not a setting, a name this build has not got, or a value the world cannot hold
+/// writes nothing and answers nothing — a caller's to report.
+#[test]
+fn a_setting_that_cannot_be_written_is_refused() {
+    use vela_ui::actions::Action;
+    use vela_ui::settings::write;
+    use vela_ui::value::Value as ScreenValue;
+
+    let mut preferences = vela_world::Preferences::new();
+    assert_eq!(write(&mut preferences, &Action::new("quit", vec![])), None);
+    assert_eq!(
+        write(
+            &mut preferences,
+            &Action::new("preference", vec![name("teleport"), ScreenValue::Num(1.0)])
+        ),
+        None,
+        "a name the checker would have refused where it was written"
+    );
+    assert_eq!(
+        write(
+            &mut preferences,
+            &Action::new(
+                "preference",
+                vec![
+                    name("skip_unseen"),
+                    ScreenValue::Action(Action::new("quit", vec![]))
+                ]
+            )
+        ),
+        None,
+        "an action is a value a screen can hold and not one a setting can"
+    );
+    assert!(preferences.is_empty(), "nothing was written");
+}
+
+/// A setting's name, as a screen writes it.
+fn name(text: &str) -> vela_ui::value::Value {
+    vela_ui::value::Value::Str(text.to_string())
 }

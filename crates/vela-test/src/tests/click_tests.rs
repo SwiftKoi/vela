@@ -15,8 +15,8 @@ use crate::stage::Stage;
 
 use super::support::{suite, with_test};
 
-/// The screens a click presses: a pause menu, the screen one of its buttons opens, and one button
-/// that asks for something a headless run has no answer for.
+/// The screens a click presses: a pause menu, the screen one of its buttons opens, one button that asks
+/// for something a headless run has no answer for, and one that changes one of the player's settings.
 const SCREENS: &str = "\
 screen pause:
     column gap 12:
@@ -29,6 +29,9 @@ screen pause:
         button:
             text \"Quit\"
             action quit()
+        button:
+            text \"Skip\"
+            action toggle_preference(\"skip_unseen\")
 
 screen settings:
     button:
@@ -103,7 +106,7 @@ fn a_click_does_not_answer_the_command_behind_it() {
     assert!(failures.is_empty(), "{failures:?}");
     assert_eq!(
         controls,
-        ["Settings", "Return", "Quit"],
+        ["Settings", "Return", "Quit", "Skip"],
         "back on the pause menu"
     );
 }
@@ -128,7 +131,8 @@ fn a_click_that_names_nothing_offers_the_words_that_were_there() {
         &vec![
             "Settings".to_string(),
             "Return".to_string(),
-            "Quit".to_string()
+            "Quit".to_string(),
+            "Skip".to_string()
         ]
     );
     assert!(
@@ -153,7 +157,7 @@ fn a_click_that_asks_for_the_vm_is_reported_as_such() {
         panic!("expected a refused action, got {failures:?}");
     };
     assert_eq!(action, "quit()", "the action as the screen wrote it");
-    assert_eq!(offered.len(), 3);
+    assert_eq!(offered.len(), 4);
     assert!(
         failures[0]
             .message()
@@ -161,6 +165,17 @@ fn a_click_that_asks_for_the_vm_is_reported_as_such() {
         "{}",
         failures[0].message()
     );
+}
+
+/// A click that changes one of the player's settings is carried out, not refused: a setting is the
+/// *player's* state and a run has a player (`RUNTIME.md §2.1`), so a test can drive a settings screen the
+/// same way a person does — which is the difference between a settings button a test can press and one
+/// that reports that a headless run cannot.
+#[test]
+fn a_click_that_changes_a_setting_is_carried_out() {
+    let (failures, _) = clicked("    run from start\n    click \"Skip\"\n");
+
+    assert!(failures.is_empty(), "{failures:?}");
 }
 
 /// A click with no screens at all is a failure rather than a step that quietly does nothing — the

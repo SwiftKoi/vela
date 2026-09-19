@@ -158,13 +158,13 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
             arg("value", PropType::Value, "What to set it to."),
         ],
         doc: "Change one of the player's settings.",
-        dispatched: false,
+        dispatched: true,
     },
     ActionDecl {
         name: TOGGLE_PREFERENCE,
         args: &[arg("name", PropType::Word, "Which setting to flip.")],
         doc: "Flip a boolean setting, for a control that cannot read it.",
-        dispatched: false,
+        dispatched: true,
     },
     ActionDecl {
         name: "file_page",

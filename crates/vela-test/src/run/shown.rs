@@ -155,6 +155,7 @@ pub(super) fn text(
 /// what a control does is the screen's business — which is why this is called where the *assertions*
 /// are consumed (`run.rs`) rather than where the answers are.
 pub(super) fn click(
+    session: &mut Session,
     stage: &mut Option<&mut Stage<'_>>,
     wanted: &str,
     span: Span,
@@ -190,6 +191,14 @@ pub(super) fn click(
         });
         return;
     };
+
+    // A setting is the *player's* state, and a run has a player (`RUNTIME.md §2.1`): the two setting
+    // actions are carried out against the session's world, exactly as the windowed player carries them
+    // out. So a test can press a settings button and the store changes, rather than the press being
+    // refused as something a headless run cannot do.
+    if vela_ui::settings::write(session.preferences_mut(), &action).is_some() {
+        return;
+    }
 
     // Everything the stack does not own needs the VM or the host, and a headless run has neither. Saying
     // so is the difference between a press that did nothing and a press that says it could not.

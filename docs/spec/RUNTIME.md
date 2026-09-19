@@ -160,10 +160,10 @@ pub struct World {
 > and `vela run` reads the file at startup: a start is the one moment those settings exist in
 > `Preferences` and nowhere else.
 >
-> **Not yet.** The two halves that make a setting *do* something: nothing writes one (the `preference`
-> action is dispatched by nobody, so there is nothing for the file to be written *from*) and nothing reads
-> one (no screen draws a setting, and the transport that would obey a text speed is item 4's). The
-> *vocabulary* and the *file* are in; every registry entry says `read: false` until one of those lands.
+> **Not yet.** The *read* half of a setting. Nothing draws one — no screen shows a text speed, and the
+> transport that would obey one is item 4 — so every registry entry says `read: false` until it does. The
+> store, the file, and the write are in: `vela_ui::settings::write` carries the two actions out for both
+> callers (`SCREENS.md §7.1`), and a player's change is written to the file immediately.
 
 ## 3. Capabilities / host interface
 

@@ -119,8 +119,12 @@ fn an_action_says_whether_it_is_dispatched() {
             "quick_save",
             "quick_load",
             "rollback",
-            // The one action that writes a screen's *own* store rather than the world's, and the first
-            // of them that is a *value* rather than a name (`SCREENS.md §2.5`).
+            // The two that write the *player's* store rather than the story's: a window and a headless
+            // run both carry them out, and nothing draws one yet (`RUNTIME.md §2.1`).
+            "preference",
+            "toggle_preference",
+            // The action that writes a screen's *own* store, and the first of them that is a *value*
+            // rather than a name (`SCREENS.md §2.5`).
             "set_screen_variable"
         ]
     );
