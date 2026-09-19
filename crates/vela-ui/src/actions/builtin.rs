@@ -19,6 +19,13 @@ use super::decl::ActionDecl;
 /// screens the game declares (`check/opens.rs`), and the stack is what opens one.
 pub const OPEN_SCREEN: &str = "open_screen";
 
+/// The action that shows a screen *instead of* the one asking, which is what a menu page does.
+///
+/// A constant because the stack, the migration's table, and the interface all name it: `ShowMenu` in
+/// Ren'Py replaces the current menu screen rather than stacking over it, and a vocabulary that had only
+/// `open_screen` made every menu press a new layer.
+pub const REPLACE_SCREEN: &str = "replace_screen";
+
 /// The action that writes a setting (`RUNTIME.md §2.1`).
 ///
 /// A constant for the reason [`SET_SCREEN_VARIABLE`] is one: the checker holds the first argument to
@@ -125,6 +132,19 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
             "arguments",
             PropType::Value,
             "Passed to the screen it opens, in that screen's parameter order.",
+        )),
+    },
+    ActionDecl {
+        name: REPLACE_SCREEN,
+        args: &[arg("screen", PropType::Target, "Which screen.")],
+        doc: "Show a screen in place of this one, which is what a menu page is.",
+        dispatched: true,
+        // The same shape as `open_screen`'s, and for the same reason: what follows the name is the
+        // screen's own (`SCREENS.md §2.1`).
+        rest: Some(arg(
+            "arguments",
+            PropType::Value,
+            "Passed to the screen it shows, in that screen's parameter order.",
         )),
     },
     ActionDecl {

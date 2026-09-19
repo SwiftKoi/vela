@@ -439,7 +439,7 @@ non-zero exit, so a team can track migration progress as a number that goes to z
 > The widget tree comes across — `hbox`/`vbox`/`add`/`null`/`fixed`/`frame`/`window`/`label`/
 > `textbutton`/`vpgrid` all lower mechanically — as do the conditions, the loops, the `use`
 > composition, the `default` variables and the actions Vela has a name for (17 of the sample's 20;
-> `ShowMenu`/`Return` are `open_screen`/`close_screen`, and `Start`, `MainMenu` and `InvertedSelected`
+> `ShowMenu`/`Return` are `replace_screen`/`close_screen`, and `Start`, `MainMenu` and `InvertedSelected`
 > are reported). A style's *paint* is carried and its *placement* is not: `xpos 240` is a skin's
 > business (`SCREENS.md §4.2`), while a matched `xalign`/`yalign` pair — written on a widget's line or
 > as two lines under it — is one of Vela's nine anchors.

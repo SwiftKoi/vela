@@ -795,11 +795,19 @@ The action set is a registry, and the checker **reads** it: a call whose name is
 `E5012`, and one whose argument count does not match is `E5013`. Adding an action is a registry
 entry, not a UI-core edit.
 
-**One entry takes more than it declares.** `open_screen`'s arguments after the screen's name belong to
-the screen it opens — its parameters, in its order (§2.1) — so the registry states a *floor* for that
-entry rather than a count, and the reference writes its signature with a trailing ellipsis. Nothing
-else takes a variable number: the checker can hold a call to a fixed list, and a vocabulary that
-admitted one everywhere would be one nobody could check.
+**Two entries take more than they declare.** `open_screen`'s and `replace_screen`'s arguments after the
+screen's name belong to the screen they name — its parameters, in its order (§2.1) — so the registry
+states a *floor* for those two rather than a count, and the reference writes their signatures with a
+trailing ellipsis. Nothing else takes a variable number: the checker can hold a call to a fixed list, and
+a vocabulary that admitted one everywhere would be one nobody could check.
+
+**`open_screen` stacks and `replace_screen` does not**, and that pair is a menu's two needs. A screen
+shown with `open_screen` sits above whatever was there, so closing it comes back — which is what a title
+screen wants, since it has something to return to. `replace_screen` closes the top and shows the new one
+in its place, so a *menu* stays one page deep however many pages the player visits, and a page's Return
+leaves the menu rather than walking back through it. Ren'Py spells that pair `Show` and `ShowMenu`, and
+the migration maps `ShowMenu` onto `replace_screen`, which is why the sample's `navigation` no longer
+piles: until this existed, every menu press in a migrated project was another layer.
 
 Two things the registry also says, because a reader of the reference deserves both. An entry is
 either **dispatched** — the runtime acts on it — or *declared, not dispatched yet*, which is the
@@ -819,7 +827,8 @@ each one takes.
 > **Implemented (M12.1).** An action is a value a screen can be given and a widget can hold, and the
 > checker holds the vocabulary to the registry: `E5012` for a name that is not registered, `E5013` for
 > the wrong number of arguments, and a bare name that is a parameter is left alone because that is how
-> an action arrives. Of the twenty-seven entries, eleven are dispatched (`jump`, `open_screen`,
+> an action arrives. Of the twenty-eight entries, twelve are dispatched (`jump`, `open_screen`,
+> `replace_screen`,
 > `close_screen`, `hide`, `quit`, `quick_save`, `quick_load`, `rollback`, `preference`,
 > `toggle_preference`, `set_screen_variable`) — the rest need the VM or `World`, and the reference page,
 > the hover, and an activation that reaches one all say so rather than doing nothing quietly. `jump` is

@@ -67,6 +67,15 @@ Show a screen above this one.
 | `screen` | a label or screen | Which screen. |
 | `…` | a value | Passed to the screen it opens, in that screen's parameter order. |
 
+## `replace_screen(screen, …)`
+
+Show a screen in place of this one, which is what a menu page is.
+
+| argument | takes | meaning |
+| --- | --- | --- |
+| `screen` | a label or screen | Which screen. |
+| `…` | a value | Passed to the screen it shows, in that screen's parameter order. |
+
 ## `close_screen()`
 
 Dismiss the screen this action is in.

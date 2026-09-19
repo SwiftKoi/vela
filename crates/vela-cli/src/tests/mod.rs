@@ -14,3 +14,4 @@ mod play_tests;
 mod runner_tests;
 mod support;
 mod ui_tests;
+mod vocabulary_tests;

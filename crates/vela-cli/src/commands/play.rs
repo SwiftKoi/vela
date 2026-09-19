@@ -262,6 +262,7 @@ impl Player {
         );
         match done {
             Done::Opened(name) => println!("screen open {name}"),
+            Done::Replaced(name) => println!("screen replace {name}"),
             Done::Missing(name) => println!("screen missing {name}"),
             Done::Closed(name) => println!("screen close {name}"),
             Done::Hidden(name) => println!("screen hide {name}"),

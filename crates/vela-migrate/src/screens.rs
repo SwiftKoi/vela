@@ -32,8 +32,10 @@ mod body;
 mod globals;
 mod props;
 mod report;
-mod tables;
+pub(crate) mod tables;
 mod words;
+pub use tables::known_actions;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::gui::Names;

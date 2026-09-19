@@ -27,6 +27,8 @@ use super::{ScreenSource, Stack};
 pub enum Done {
     /// `open_screen`: the screen was laid out and pushed.
     Opened(String),
+    /// `replace_screen`: the top screen was popped and this one was pushed in its place.
+    Replaced(String),
     /// `open_screen`: no screen by that name is declared.
     Missing(String),
     /// `close_screen`: the top screen was popped.
@@ -69,6 +71,28 @@ impl Stack {
                 match self.open(screens, name, &action.args[1..], size, text, font) {
                     true => Done::Opened(name.to_string()),
                     false => Done::Missing(name.to_string()),
+                }
+            }
+            crate::actions::REPLACE_SCREEN => {
+                let Some(name) = action.first() else {
+                    return Done::Nothing;
+                };
+                // One menu page at a time, which is what Ren'Py's `ShowMenu` means and what a stack of
+                // menus cannot express: the screen being replaced is the one that asked. A page shown
+                // over an empty stack has nothing to replace, which is the right answer too — there is
+                // nothing under it to come back to, so it is simply open.
+                //
+                // The screen goes only once its replacement is *found*: a name nothing declares is a
+                // missing screen, not a menu dismissed by a typo.
+                let replaced = self.overlays.pop();
+                match self.open(screens, name, &action.args[1..], size, text, font) {
+                    true => Done::Replaced(name.to_string()),
+                    false => {
+                        if let Some(overlay) = replaced {
+                            self.overlays.push(overlay);
+                        }
+                        Done::Missing(name.to_string())
+                    }
                 }
             }
             "close_screen" => match self.close() {

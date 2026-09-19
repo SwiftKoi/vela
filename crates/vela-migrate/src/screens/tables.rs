@@ -99,9 +99,27 @@ pub(super) const WIDGET_PROPS: &[&str] = &[
 /// is what `crates/vela-ui/src/actions/builtin.rs` registered — the two vocabularies were built
 /// from the same screens.
 pub(super) const ACTIONS: &[(&str, &str)] =
-    &[("ShowMenu", "open_screen"), ("Return", "close_screen")];
+    &[("ShowMenu", "replace_screen"), ("Return", "close_screen")];
 
-/// Every action Vela registers, by Vela's name.
+/// The actions the migration can lower today, by Vela's name.
+///
+/// **Not every action Vela has**, and the difference is deliberate: this list is "what the migration can
+/// fill in", not "what the language has". An action is here when lowering it produces a project that
+/// passes `vela check`, which is the migration's invariant — and some actions have arguments the
+/// migration cannot supply yet. `file_action(slot)` is the example that says why: the sample's
+/// `file_slots` computes `slot` in a `$ slot = i + 1` line, which is reported as uncarried, so lowering
+/// the action would write a call on a name nothing declares and the sample would stop checking. Those
+/// are dropped and reported by name instead, which is honest about the gap rather than hiding it behind
+/// an action that does not work.
+///
+/// So the direction that matters is one-way, and `vela-cli`'s `tests::vocabulary_tests` asserts it:
+/// every name here must be one the registry has. The other direction is a to-do list, and the *missing*
+/// ones are the actions whose arguments wait on something (`M12.2`'s items 5–9 for the file and language
+/// vocabulary).
+///
+/// Why it matters that the one-way check exists: when `replace_screen` was added, the registry had it
+/// and this list did not — so `ShowMenu`, mapped to it, lowered to nothing and the sample's whole
+/// `navigation` lost every button while the report called `ShowMenu` unsupported.
 pub(super) const KNOWN_ACTIONS: &[&str] = &[
     "call",
     "close_screen",
@@ -120,12 +138,23 @@ pub(super) const KNOWN_ACTIONS: &[&str] = &[
     "quick_load",
     "quick_save",
     "quit",
+    "replace_screen",
     "rollback",
     "set",
     "set_screen_variable",
     "skip",
     "stop",
 ];
+
+/// The actions the migration can lower, by Vela's name.
+///
+/// Public because the one crate that can compare this list with the registry is `vela-cli`, and a list
+/// that decides whether a button keeps its action is worth a test rather than a promise (`KNOWN_ACTIONS`
+/// says which direction that comparison runs in).
+#[must_use]
+pub fn known_actions() -> &'static [&'static str] {
+    KNOWN_ACTIONS
+}
 
 /// Statements that name a system Vela has no counterpart for, and which one.
 pub(super) const SYSTEMS: &[(&str, &str)] = &[

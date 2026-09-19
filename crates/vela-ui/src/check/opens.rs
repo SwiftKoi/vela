@@ -1,4 +1,7 @@
-//! `open_screen`'s target: a screen the whole *game* declares (`SCREENS.md §2.1`).
+//! The screen a call opens: a name the whole *game* declares (`SCREENS.md §2.1`).
+//!
+//! Both of them — `open_screen` and `replace_screen` — because a menu page is a screen like any other and
+//! a mistyped one is the same silent button (`§7`).
 //!
 //! The one screen question that is not per file. A `use` names a screen in the file that writes it, so
 //! the checker is given that file's declarations (`check/screen.rs`) — but an `open_screen` names a
@@ -17,12 +20,12 @@ use vela_diag::Diagnostic;
 use vela_span::Span;
 use vela_syntax::{Expr, ScreenDecl, StrPart};
 
-use crate::actions::OPEN_SCREEN;
+use crate::actions::{OPEN_SCREEN, REPLACE_SCREEN};
 
 use super::actions::each_call;
 use super::screen::diag;
 
-/// Checks every `open_screen` in a project against the screens the game declares.
+/// Checks every screen a call opens in a project against the screens the game declares.
 ///
 /// `files` is one slice of declarations per source file: the callers are walked per file so a diagnostic
 /// carries the span it was written at, and the targets are the union, because a screen may be declared
@@ -39,7 +42,7 @@ pub fn check_open_screens(files: &[&[&ScreenDecl]]) -> Vec<Diagnostic> {
     for file in files {
         for screen in *file {
             each_call(&screen.body, &mut |name, args, span| {
-                if name == OPEN_SCREEN {
+                if name == OPEN_SCREEN || name == REPLACE_SCREEN {
                     check_open(&game, args, span, &mut out);
                 }
             });

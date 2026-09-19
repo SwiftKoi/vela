@@ -158,6 +158,12 @@ fn an_interface_screen_is_a_target() {
     let menu = "screen pause:\n    button:\n        text \"Preferences\"\n        action open_screen(\"preferences\")\n";
     assert!(diagnose(&[menu]).is_empty(), "{:?}", diagnose(&[menu]));
 
+    // A menu page names a screen the same way, and is held to the same rule.
+    let page = "screen pause:\n    button:\n        text \"Settings\"\n        action replace_screen(\"preferences\")\n";
+    assert!(diagnose(&[page]).is_empty(), "{:?}", diagnose(&[page]));
+    let typo = "screen pause:\n    button:\n        text \"Settings\"\n        action replace_screen(\"preferances\")\n";
+    assert_eq!(diagnose(&[typo])[0].0, "E5009");
+
     // And a mistyped one gets the interface's name rather than nothing: one candidate list, which is the
     // project's declarations and the interface's together.
     let typo = "screen pause:\n    button:\n        text \"Preferences\"\n        action open_screen(\"preferances\")\n";

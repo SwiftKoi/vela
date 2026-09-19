@@ -59,6 +59,11 @@ screen main_menu:
 # called `pause` when nothing is open (`SCREENS.md §2`). So this screen is what makes Escape work in a
 # project that declares no menu — and it is the game menu, with Save and Load to come when the slots have
 # screens (M12.2's item 5).
+#
+# Its pages *replace* it rather than stack over it, which is what a menu is: one page at a time, and a
+# page's Return closes back to the story. The title screen's buttons use `open_screen` instead, because a
+# title has something to come back *to*; that is the whole difference between the two actions, and it is
+# why Ren'Py has both `Show` and `ShowMenu`.
 screen pause:
     box at = center, background = theme.bg:
         pad 32
@@ -67,10 +72,10 @@ screen pause:
                 action close_screen()
                 text "Resume", style = interface_choice
             button:
-                action open_screen("preferences")
+                action replace_screen("preferences")
                 text "Settings", style = interface_choice
             button:
-                action open_screen("about")
+                action replace_screen("about")
                 text "About", style = interface_choice
             button:
                 action quit()

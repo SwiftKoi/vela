@@ -237,7 +237,9 @@ fn the_doorway_screens_ask_for_what_they_say() {
         (
             "pause",
             ["Resume", "Settings", "About", "Quit"].as_slice(),
-            ["close_screen", "open_screen", "open_screen", "quit"].as_slice(),
+            // Pages *replace* the menu, which is what keeps it one page deep; the title's buttons stack
+            // over the title instead, because a title has something to come back to.
+            ["close_screen", "replace_screen", "replace_screen", "quit"].as_slice(),
         ),
     ] {
         let laid = vela_ui::ScreenSource::lay(

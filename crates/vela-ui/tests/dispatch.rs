@@ -124,6 +124,54 @@ fn the_stack_carries_out_what_a_screen_asks() {
     assert!(stack.is_empty());
 }
 
+/// `replace_screen` shows a screen *in place of* the one asking, which is what a menu page is
+/// (`SCREENS.md §7`).
+///
+/// The assertion is the stack's *depth*, because that is the whole difference between it and
+/// `open_screen`: after a replacement one close empties the stack, and after an open it does not.
+#[test]
+fn a_menu_page_replaces_the_screen_it_was_opened_from() {
+    let (set, mut text, mut stack) = opened();
+    let size = (1280, 720);
+    let replace = |screen: &str| action("replace_screen", vec![name(screen)]);
+
+    assert_eq!(
+        stack.dispatch(&replace("settings"), &set, size, &mut text, "sans"),
+        Done::Replaced("settings".to_string())
+    );
+    assert_eq!(
+        stack.top().map(|screen| screen.name.as_str()),
+        Some("settings")
+    );
+    assert_eq!(stack.close().as_deref(), Some("settings"));
+    assert!(
+        stack.is_empty(),
+        "the screen it replaced is not still under it"
+    );
+
+    // A name nothing declares is a missing screen and leaves the menu where it was: the page goes only
+    // once its replacement is found.
+    assert_eq!(
+        stack.dispatch(
+            &action("open_screen", vec![name("settings")]),
+            &set,
+            size,
+            &mut text,
+            "sans"
+        ),
+        Done::Opened("settings".to_string())
+    );
+    assert_eq!(
+        stack.dispatch(&replace("nosuchscreen"), &set, size, &mut text, "sans"),
+        Done::Missing("nosuchscreen".to_string())
+    );
+    assert_eq!(
+        stack.top().map(|screen| screen.name.as_str()),
+        Some("settings"),
+        "a typo does not dismiss the menu"
+    );
+}
+
 /// What the stack cannot do comes back named rather than done quietly — the caller has a VM and a
 /// save system, or it has neither and says so.
 #[test]

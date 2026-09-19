@@ -87,6 +87,7 @@ fn the_default_set_is_the_documented_one() {
         "file_action",
         "file_delete",
         "set_screen_variable",
+        "replace_screen",
         "toggle_preference",
         "language",
         "end_replay",
@@ -94,7 +95,7 @@ fn the_default_set_is_the_documented_one() {
     ] {
         assert!(registry.get(name).is_some(), "`{name}` is missing");
     }
-    assert_eq!(registry.len(), 27, "SCREENS.md §7 lists twenty-seven");
+    assert_eq!(registry.len(), 28, "SCREENS.md §7 lists twenty-eight");
 }
 
 /// The registry says which entries the runtime acts on, and most of them it does not yet.
@@ -114,6 +115,7 @@ fn an_action_says_whether_it_is_dispatched() {
         vec![
             "jump",
             "open_screen",
+            "replace_screen",
             "close_screen",
             "hide",
             "quit",
@@ -205,7 +207,7 @@ fn a_plugin_action_is_a_registry_entry() {
         rest: None,
     });
     assert_eq!(registry.names(), before, "a replacement moved the list");
-    assert_eq!(registry.len(), 27, "a duplicate was added");
+    assert_eq!(registry.len(), 28, "a duplicate was added");
     assert_eq!(
         registry.get("set").unwrap().arity(),
         0,
@@ -224,7 +226,7 @@ fn a_plugin_action_is_a_registry_entry() {
         dispatched: true,
         rest: None,
     });
-    assert_eq!(registry.len(), 28);
+    assert_eq!(registry.len(), 29);
     assert_eq!(registry.names().last(), Some(&"teleport"));
 }
 
@@ -344,12 +346,12 @@ fn an_action_with_the_wrong_arity_is_reported() {
     );
 }
 
-/// One entry declares a *rest*, and it is the only one.
+/// The two entries that name a screen declare a *rest*, and nothing else does.
 ///
 /// The alternative — letting any action take any number of arguments — is a vocabulary nobody could
 /// hold a call to, so the shape is a field on the entry rather than a rule about actions in general.
 #[test]
-fn open_screen_takes_the_arguments_of_the_screen_it_opens() {
+fn an_action_that_opens_a_screen_takes_that_screen_s_arguments() {
     let registry = ActionRegistry::builtin();
     let open = registry
         .get("open_screen")
@@ -363,7 +365,7 @@ fn open_screen_takes_the_arguments_of_the_screen_it_opens() {
         .into_iter()
         .filter(|name| registry.get(name).is_some_and(ActionDecl::takes_rest))
         .collect();
-    assert_eq!(rest, vec!["open_screen"]);
+    assert_eq!(rest, vec!["open_screen", "replace_screen"]);
 }
 
 /// An action *handed in* is a name, not a call, and there is nothing to check it against — the screen
