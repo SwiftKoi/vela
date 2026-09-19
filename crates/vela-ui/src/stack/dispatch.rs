@@ -63,7 +63,10 @@ impl Stack {
                 let Some(name) = action.first() else {
                     return Done::Nothing;
                 };
-                match self.open(screens, name, size, text, font) {
+                // Everything after the name belongs to the opened screen (`SCREENS.md §2.1`): the
+                // registry declares the shape, and the screen's own declaration is what says which name
+                // each value lands in.
+                match self.open(screens, name, &action.args[1..], size, text, font) {
                     true => Done::Opened(name.to_string()),
                     false => Done::Missing(name.to_string()),
                 }

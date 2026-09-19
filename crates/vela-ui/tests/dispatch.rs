@@ -34,6 +34,10 @@ screen settings:
     button:
         text \"Video\"
         action set_screen_variable(tab, \"video\")
+
+screen detail(title, page = 2):
+    text title
+    text page
 ";
 
 /// A stack with `menu` open, and the sets to lay against.
@@ -41,7 +45,7 @@ fn opened() -> (ScreenSet, TextEngine, Stack) {
     let set = ScreenSet::from_items(&parse(FileId::from_raw(0), SCREENS).program.items);
     let mut text = engine();
     let mut stack = Stack::default();
-    assert!(stack.open(&set, "menu", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(&set, "menu", &[], (1280, 720), &mut text, "sans"));
     (set, text, stack)
 }
 
@@ -61,8 +65,8 @@ fn the_stack_carries_out_what_a_screen_asks() {
     let (set, mut text, mut stack) = opened();
     let size = (1280, 720);
 
-    // `open_screen` lays the named screen out and pushes it — no arguments, because a screen's
-    // parameters have to have defaults for a name to be enough (`SCREENS.md §2.1`).
+    // `open_screen` lays the named screen out and pushes it. A name with no arguments is a call that
+    // passes none: a screen whose parameters all have defaults opens from a name alone.
     assert_eq!(
         stack.dispatch(
             &action("open_screen", vec![name("settings")]),
@@ -165,4 +169,81 @@ fn what_the_stack_does_not_own_comes_back_unhandled() {
         stack.dispatch(&action("hide", vec![]), &set, size, &mut text, "sans"),
         Done::Nothing
     );
+}
+
+/// Every word the top screen draws, in tree order — what a laid-out screen *says*.
+fn words(stack: &Stack) -> Vec<String> {
+    fn walk(node: &vela_ui::Node, out: &mut Vec<String>) {
+        if let vela_ui::Kind::Text { text, .. } = &node.kind {
+            out.push(text.clone());
+        }
+        for child in &node.children {
+            walk(child, out);
+        }
+    }
+    let mut out = Vec::new();
+    if let Some(top) = stack.top() {
+        walk(&top.laid.node, &mut out);
+    }
+    out
+}
+
+/// `open_screen(name, …)` passes the rest of the call to the screen it opens (`SCREENS.md §2.1`).
+///
+/// The values bind in the opened screen's **parameter order** — what a runtime can know, since an
+/// action carries values and no argument names — and a parameter the call leaves out keeps its
+/// declared default, which is the rule `use` binds by. What the screen *draws* is the assertion: a
+/// binding that landed in a default instead would draw `2` where the call passed `7`.
+#[test]
+fn a_screen_opens_with_the_arguments_the_call_passed() {
+    let (set, mut text, mut stack) = opened();
+    let size = (1280, 720);
+
+    assert_eq!(
+        stack.dispatch(
+            &action(
+                "open_screen",
+                vec![name("detail"), name("Chapter one"), Value::Num(7.0)]
+            ),
+            &set,
+            size,
+            &mut text,
+            "sans"
+        ),
+        Done::Opened("detail".to_string())
+    );
+    assert_eq!(words(&stack), ["Chapter one", "7"]);
+
+    // One argument is enough for a screen whose second parameter has a default — and the default is
+    // evaluated by the same rule a `use` uses.
+    assert_eq!(stack.close().as_deref(), Some("detail"));
+    assert_eq!(
+        stack.dispatch(
+            &action("open_screen", vec![name("detail"), name("Chapter two")]),
+            &set,
+            size,
+            &mut text,
+            "sans"
+        ),
+        Done::Opened("detail".to_string())
+    );
+    assert_eq!(words(&stack), ["Chapter two", "2"]);
+
+    // More values than the screen has parameters are dropped rather than refused: the checker is what
+    // reports a call that cannot mean anything, and a screen mid-edit still opens.
+    assert_eq!(stack.close().as_deref(), Some("detail"));
+    assert_eq!(
+        stack.dispatch(
+            &action(
+                "open_screen",
+                vec![name("detail"), name("One"), Value::Num(3.0), name("extra")]
+            ),
+            &set,
+            size,
+            &mut text,
+            "sans"
+        ),
+        Done::Opened("detail".to_string())
+    );
+    assert_eq!(words(&stack), ["One", "3"]);
 }

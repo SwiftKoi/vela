@@ -96,7 +96,9 @@ fn the_vocabulary_answers_widgets_and_actions() {
 
     let action = docs::lookup("open_screen").expect("`open_screen` is an action");
     assert_eq!(action.kind, "action");
-    assert_eq!(action.signature, "open_screen(screen)");
+    // The signature a hover shows is the reference's heading, ellipsis and all: the arguments after
+    // the screen's name belong to the screen it opens (`SCREENS.md §7`).
+    assert_eq!(action.signature, "open_screen(screen, …)");
     assert_eq!(
         (action.page, action.title),
         ("actions.md", "Action reference")

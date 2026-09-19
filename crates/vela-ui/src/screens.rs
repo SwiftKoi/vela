@@ -9,23 +9,23 @@
 //! (`check.rs` records why): a style table is read where it is declared, so a screen is
 //! compiled against the styles in its own module and a cross-module reference is not yet seen.
 //! A [`ScreenSet`] is therefore one file's worth, and a caller with several files keeps several.
+//!
+//! How a screen becomes something to look at is `laying.rs`, beside this.
 
-use vela_render::DrawList;
 use vela_syntax::{Item, ScreenDecl, StyleDecl};
-use vela_text::TextEngine;
 
 use crate::actions::Action;
-use crate::eval::{Args, Ctx, ScreenState};
-use crate::focus::{self, Hotspot};
+use crate::eval::{Ctx, ScreenState};
+use crate::focus::Hotspot;
 use crate::images::ImageTable;
-use crate::instantiate;
-use crate::layout::{Constraints, Frame, layout};
+use crate::layout::Frame;
 use crate::pack::PackedSet;
-use crate::paint;
 use crate::theme::{self, Fonts, Palette};
-use crate::tree::{Node, Size};
+use crate::tree::Node;
 use crate::variants::Variants;
 use crate::widgets::WidgetRegistry;
+
+mod laying;
 
 /// A screen evaluated and laid out, ready to paint and to be navigated.
 #[derive(Clone, PartialEq, Debug)]
@@ -286,96 +286,5 @@ impl ScreenSet {
             screens: &screens,
         };
         visit(&ctx)
-    }
-
-    /// Evaluates a screen to a widget tree, or `None` if it is not declared.
-    #[must_use]
-    pub fn build(
-        &self,
-        name: &str,
-        args: &Args,
-        state: &mut ScreenState,
-        text: &mut TextEngine,
-        font: &str,
-        max_width: f32,
-    ) -> Option<Node> {
-        let screen = self.screen(name)?;
-        Some(self.with_ctx(|ctx| {
-            instantiate::build(&screen.body, ctx, args, state, text, font, max_width)
-        }))
-    }
-
-    /// Evaluates and lays out a screen, collecting where it goes and what can be activated.
-    ///
-    /// A caller that only wants a picture can `paint` the result; a caller that also wants to
-    /// *drive* the screen — a runtime with a focus cursor — reads `hotspots`. Doing both from
-    /// one walk is what keeps the drawn button and the focusable button the same button.
-    #[must_use]
-    pub fn lay(
-        &self,
-        name: &str,
-        args: &Args,
-        state: &ScreenState,
-        size: (u32, u32),
-        text: &mut TextEngine,
-        font: &str,
-    ) -> Option<Laid> {
-        let (width, height) = (size.0 as f32, size.1 as f32);
-        let screen = self.screen(name)?;
-        // The variants this frame adds to what the bundle declared (`§2.6`): a screen laid out in a
-        // frame with less room than the game was designed for is `small`, and the frame is the only
-        // thing that knows.
-        let args = args
-            .clone()
-            .with_variants(self.variants.for_frame(width, height, self.design));
-        // The screen's variables start from what the caller kept: a write survives a layout, and a
-        // screen that has never been laid out initializes them from its own `default`s.
-        let mut state = state.clone();
-        // One context, two questions: the tree, and the input bindings that are not part of it.
-        let (node, keys, timers) = self.with_ctx(|ctx| {
-            let node = instantiate::build(&screen.body, ctx, &args, &mut state, text, font, width);
-            let (keys, timers) = instantiate::bindings(&screen.body, ctx, &args);
-            (node, keys, timers)
-        });
-        let frame = layout(&node, Constraints::exact(Size::new(width, height)));
-        let hotspots = focus::hotspots(&node, &frame);
-        Some(Laid {
-            node,
-            frame,
-            hotspots,
-            keys,
-            timers,
-            state,
-        })
-    }
-
-    /// Lays out and paints a screen into `draw`, returning whether it was found.
-    ///
-    /// No focus cursor: this draws a screen as it stands, which is what a still frame wants. A caller
-    /// with a cursor — a runtime the player is navigating — paints a [`Laid`] through
-    /// [`paint::paint`], which takes the focused hotspot's index so the node under it draws in its
-    /// `selected` state (`SCREENS.md §5`).
-    pub fn draw(
-        &self,
-        name: &str,
-        args: &Args,
-        size: (u32, u32),
-        text: &mut TextEngine,
-        font: &str,
-        draw: &mut DrawList,
-    ) -> bool {
-        let Some(laid) = self.lay(name, args, &ScreenState::new(), size, text, font) else {
-            return false;
-        };
-        paint::paint(
-            &laid.node,
-            &laid.frame,
-            text,
-            font,
-            draw,
-            None,
-            &self.images,
-        );
-        true
     }
 }

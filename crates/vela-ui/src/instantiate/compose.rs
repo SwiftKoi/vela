@@ -92,11 +92,15 @@ impl<'a> Compose<'a> {
 /// The arguments a `use` binds, in the used screen's own parameter names.
 ///
 /// Positional arguments bind in order and named ones by name; a parameter the call did not mention
-/// keeps its default. A parameter with neither is `none` — the checker has already reported the
-/// mismatch, and a screen somebody is midway through editing should draw something rather than
-/// nothing.
+/// keeps its default, which is [`crate::compose::with_defaults`] — the same rule an `open_screen` a
+/// runtime performs follows, so the two ways a screen is called cannot drift apart.
 fn bind(callee: &ScreenDecl, args: &[ScreenArg], caller: &Args) -> Args {
-    let mut bound = Args::new();
+    // What the host says travels with the call: `variant(...)` and `setting(...)` must answer the same
+    // in a *used* screen as in the caller, and a scope built from nothing would answer the defaults —
+    // which is the one way a `use` could draw differently from the same screen opened by name.
+    let mut bound = Args::new()
+        .with_variants(caller.variants())
+        .with_preferences(caller.preferences().clone());
     let mut next = 0usize;
 
     for arg in args {
@@ -115,17 +119,5 @@ fn bind(callee: &ScreenDecl, args: &[ScreenArg], caller: &Args) -> Args {
         }
     }
 
-    // Defaults last, and evaluated against what is already bound, so a default may name a parameter
-    // that *was* passed rather than only a literal.
-    for param in &callee.params {
-        if bound.get(&param.name).is_some() {
-            continue;
-        }
-        let Some(default) = &param.default else {
-            continue;
-        };
-        let value = value_of(default, &bound);
-        bound.set(param.name.clone(), value);
-    }
-    bound
+    crate::compose::with_defaults(callee, bound)
 }

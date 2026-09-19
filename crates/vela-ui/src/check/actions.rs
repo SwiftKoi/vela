@@ -219,7 +219,11 @@ fn check_action(
         return;
     };
 
-    if action.arity() != args.len() {
+    // A call must give the arguments the action declares, and no more *unless* the entry declares a
+    // rest (`open_screen`'s belong to the screen it opens) — so this is a floor plus a ceiling that
+    // some entries do not have.
+    let given = args.len();
+    if given < action.arity() || (given > action.arity() && !action.takes_rest()) {
         out.push(
             diag(
                 "E5013",
@@ -227,7 +231,7 @@ fn check_action(
                     "`{}` takes {} argument(s), but was given {}",
                     action.name,
                     action.arity(),
-                    args.len()
+                    given
                 ),
                 span,
                 "the arguments do not match the action",

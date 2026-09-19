@@ -58,13 +58,14 @@ Stop a sound. Declared, not dispatched yet: the runtime does not act on it.
 | --- | --- | --- |
 | `channel` | a word | Which channel. |
 
-## `open_screen(screen)`
+## `open_screen(screen, …)`
 
 Show a screen above this one.
 
 | argument | takes | meaning |
 | --- | --- | --- |
 | `screen` | a label or screen | Which screen. |
+| `…` | a value | Passed to the screen it opens, in that screen's parameter order. |
 
 ## `close_screen()`
 

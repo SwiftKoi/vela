@@ -53,11 +53,14 @@ keeps rendering one-directional and testable.
 > the focused one instead of the story. The focus highlight is drawn by the runtime, not the
 > screen, because focus has to be visible and a screen can forget to draw it.
 >
-> Of the action set, **`open_screen`, `close_screen`, and `quit` are dispatched**; the rest
-> (`jump`, `set`, `play`, `call`, …) need the VM or `World` and are not wired. A screen opened
-> this way takes no arguments yet, so its parameters must have defaults. Pointer hit-testing
-> exists (`vela_ui::focus::at`) but the host delivers semantic actions rather than coordinates
-> (§11), so nothing calls it. Stated plainly rather than implied.
+> Of the action set, **`open_screen`, `close_screen`, `hide`, `quit`, `quick_save`, `quick_load`,
+> `rollback`, `set_screen_variable`, `preference`, and `toggle_preference` are dispatched**; the rest
+> (`jump`, `set`, `play`, `call`, …) need the VM or `World` and are not wired. A screen opened this way
+> is **called**: `open_screen(save, 2)` passes values in the opened screen's parameter order and a
+> parameter the call leaves out keeps its default — §2.1's calling convention, one layer up, with the
+> values already resolved because a runtime carries values rather than the syntax that wrote them.
+> Pointer hit-testing exists (`vela_ui::focus::at`) but the host delivers semantic actions rather than
+> coordinates (§11), so nothing calls it. Stated plainly rather than implied.
 
 Compile-time checks:
 - A `use`'s arguments must match the screen's declared parameters (`E5010`, §2.1).
@@ -104,6 +107,14 @@ Three rules, and all three follow from §2's "a screen is a pure function of its
 Arguments bind as a call reads: positional values in order, named ones by name, and a parameter the
 call omits keeps its default. A parameter's type may be absent, in which case it accepts any argument
 (`LANGUAGE.md §5.4`) — which is how most migrated screens are written.
+
+**The two ways a screen is called bind alike.** `use name(args)` is a call written in the screen
+language, and `open_screen(name, values)` is one a *runtime* performs, where the values are what the
+screen behind the action had already resolved. Both bind in the callee's own parameter order, both fill
+an omitted parameter from its default, and both carry what the **host** says — the variants of §2.6 and
+the player's settings of `RUNTIME.md §2.1` — into the callee, so a screen cannot answer a question
+differently depending on who used it. What a runtime cannot do is name an argument: an action carries
+values, so an argument list from one is positional.
 
 The checker refuses a `use` of a screen that does not exist (`E5009`), a call whose arguments do not
 fit the screen's parameters (`E5010`), and a composition that loops (`E5011`). A cycle is not a slow
@@ -712,6 +723,12 @@ through `use` arguments like any other value (`§2.1`).
 The action set is a registry, and the checker **reads** it: a call whose name is not registered is
 `E5012`, and one whose argument count does not match is `E5013`. Adding an action is a registry
 entry, not a UI-core edit.
+
+**One entry takes more than it declares.** `open_screen`'s arguments after the screen's name belong to
+the screen it opens — its parameters, in its order (§2.1) — so the registry states a *floor* for that
+entry rather than a count, and the reference writes its signature with a trailing ellipsis. Nothing
+else takes a variable number: the checker can hold a call to a fixed list, and a vocabulary that
+admitted one everywhere would be one nobody could check.
 
 Two things the registry also says, because a reader of the reference deserves both. An entry is
 either **dispatched** — the runtime acts on it — or *declared, not dispatched yet*, which is the

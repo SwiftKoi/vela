@@ -242,6 +242,17 @@ fn actions(out: &mut dyn Write) {
                 sentence(argument.doc)
             );
         }
+        // An entry with a *rest* takes more than its declaration says, and the table is where a reader
+        // would otherwise conclude the list is closed (`SCREENS.md §7`): the ellipsis in the heading is
+        // explained by the row it is talking about.
+        if let Some(rest) = action.rest {
+            let _ = writeln!(
+                out,
+                "| `…` | {} | {} |",
+                rest.ty.describe(),
+                sentence(rest.doc)
+            );
+        }
         let _ = writeln!(out);
     }
 }

@@ -130,7 +130,7 @@ fn a_control_is_found_by_the_words_it_draws() {
             "sans",
         )
         .expect("the screen lays out");
-    assert!(stack.open(&set, "menu", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(&set, "menu", &[], (1280, 720), &mut text, "sans"));
 
     let labels: Vec<&str> = laid
         .hotspots

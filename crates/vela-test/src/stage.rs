@@ -51,7 +51,7 @@ impl<'a> Stage<'a> {
     /// screen means: a window says so and carries on, and a test reports it.
     pub fn open(&mut self, name: &str) -> bool {
         self.overlays
-            .open(self.screens, name, FRAME, self.text, self.font)
+            .open(self.screens, name, &[], FRAME, self.text, self.font)
     }
 
     /// Whether nothing is open.

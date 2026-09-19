@@ -249,6 +249,7 @@ impl Player {
         if self.overlays.open(
             self.screens.sets(),
             "pause",
+            &[],
             self.size,
             self.presenter.text_mut(),
             FACE_NAME,

@@ -25,6 +25,20 @@ use crate::actions::Action as ScreenAction;
 use crate::screens::Laid;
 use crate::{Args, ImageTable, Rect, ScreenSet, ScreenState, Value};
 
+/// A screen a *runtime* opened: the values a call passed, and what the host says (`SCREENS.md §2.1`).
+///
+/// Together because they are one scope by the time a screen reads either: opening binds `values` into
+/// the parameters of the screen being opened, over the answers `scope` already carries. A runtime has no
+/// argument *names* — an action carries values — so `values` is positional, and a parameter the call
+/// leaves out keeps its declared default.
+#[derive(Clone, Copy, Debug)]
+pub struct Call<'a> {
+    /// The values after the screen's name, in the opened screen's parameter order.
+    pub values: &'a [Value],
+    /// What the host says: the variants and the player's settings.
+    pub scope: &'a Args,
+}
+
 /// Where a stack gets its screens: the compiled screens of a project, by name.
 ///
 /// A trait rather than a `ScreenSet` because a project's screens are *several* sets — one per source
@@ -36,6 +50,21 @@ pub trait ScreenSource {
         &self,
         name: &str,
         args: &Args,
+        state: &ScreenState,
+        size: (u32, u32),
+        text: &mut TextEngine,
+        font: &str,
+    ) -> Option<Laid>;
+
+    /// Lays out a screen a *runtime* opened, binding a call's values to its parameters.
+    ///
+    /// A separate method rather than a caller that builds `Args` itself, because binding positional
+    /// values needs the *names* a screen's declaration gives them, and only the source that holds the
+    /// declaration has those (`SCREENS.md §2.1`).
+    fn lay_opened(
+        &self,
+        name: &str,
+        call: &Call<'_>,
         state: &ScreenState,
         size: (u32, u32),
         text: &mut TextEngine,
@@ -56,6 +85,18 @@ impl ScreenSource for ScreenSet {
     ) -> Option<Laid> {
         ScreenSet::lay(self, name, args, state, size, text, font)
     }
+
+    fn lay_opened(
+        &self,
+        name: &str,
+        call: &Call<'_>,
+        state: &ScreenState,
+        size: (u32, u32),
+        text: &mut TextEngine,
+        font: &str,
+    ) -> Option<Laid> {
+        ScreenSet::lay_opened(self, name, call, state, size, text, font)
+    }
 }
 
 /// A project's screens are one set per file, so the search is across them.
@@ -72,6 +113,20 @@ impl ScreenSource for [ScreenSet] {
         self.iter()
             .find(|set| set.has(name))?
             .lay(name, args, state, size, text, font)
+    }
+
+    fn lay_opened(
+        &self,
+        name: &str,
+        call: &Call<'_>,
+        state: &ScreenState,
+        size: (u32, u32),
+        text: &mut TextEngine,
+        font: &str,
+    ) -> Option<Laid> {
+        self.iter()
+            .find(|set| set.has(name))?
+            .lay_opened(name, call, state, size, text, font)
     }
 }
 
@@ -121,20 +176,28 @@ impl Stack {
         self.overlays.is_empty()
     }
 
-    /// Opens a screen, laying it out without arguments.
+    /// Opens a screen, laying it out with the arguments a call passed.
     ///
-    /// Returns `false` if no such screen is declared, so a caller can say so rather than
-    /// presenting an empty frame. Screen *arguments* are not passed yet: an `open_screen` call
-    /// names a screen, and a screen with required parameters has nothing to bind them to.
+    /// Returns `false` if no such screen is declared, so a caller can say so rather than presenting an
+    /// empty frame. The call's values bind in the opened screen's parameter order, and a parameter the
+    /// call leaves out keeps its default (`SCREENS.md §2.1`). More values than parameters are dropped
+    /// rather than refused — the checker is what reports that — so a screen somebody is midway through
+    /// editing still opens.
     pub fn open(
         &mut self,
         screens: &(impl ScreenSource + ?Sized),
         name: &str,
+        values: &[Value],
         size: (u32, u32),
         text: &mut TextEngine,
         font: &str,
     ) -> bool {
-        let Some(laid) = screens.lay(name, &self.args(), &ScreenState::new(), size, text, font)
+        let scope = self.args();
+        let call = Call {
+            values,
+            scope: &scope,
+        };
+        let Some(laid) = screens.lay_opened(name, &call, &ScreenState::new(), size, text, font)
         else {
             return false;
         };

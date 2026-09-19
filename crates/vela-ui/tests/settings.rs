@@ -412,3 +412,54 @@ fn a_question_that_names_no_setting_is_reported() {
         vec!["E5020"]
     );
 }
+
+/// A `use`d screen asks the host the same questions its caller does (`SCREENS.md §2.1`, §2.6).
+///
+/// What the host says travels with a call, the way an argument does: a screen that answered `setting(…)`
+/// differently depending on who used it would be two screens. The failure this pins is the quiet one —
+/// a scope built from nothing answers every setting with its *declaration*, so a panel `use`d inside a
+/// settings screen would draw the engine's default while the screen around it drew what the player chose.
+#[test]
+fn a_used_screen_answers_the_store_its_caller_had() {
+    use vela_text::{Font, TextEngine};
+    use vela_ui::{Args, Kind, Node, ScreenSet, ScreenState};
+
+    // The used screen is the one asking; the caller only places it.
+    let source = "screen inner():\n    text setting(\"text_speed\")\n\nscreen outer():\n    column:\n        use inner\n";
+    let parsed = vela_syntax::parse(vela_span::FileId::from_raw(0), source);
+    assert!(parsed.diagnostics.is_empty(), "the fixture must parse");
+    let set = ScreenSet::from_items(&parsed.program.items);
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/fonts/LiberationSans-Regular.ttf");
+    let font = Font::from_bytes(std::fs::read(path).expect("read font"), 0).expect("load font");
+    let mut text = TextEngine::new();
+    text.add_font("sans", font);
+
+    /// Every text a laid screen draws, in tree order.
+    fn texts(node: &Node, out: &mut Vec<String>) {
+        if let Kind::Text { text, .. } = &node.kind {
+            out.push(text.clone());
+        }
+        for child in &node.children {
+            texts(child, out);
+        }
+    }
+
+    let mut chosen = vela_world::Preferences::new();
+    chosen.set("text_speed", vela_world::Value::Int(45));
+    let laid = set
+        .lay(
+            "outer",
+            &Args::new().with_preferences(chosen),
+            &ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
+        .expect("the screen is declared");
+
+    let mut drawn = Vec::new();
+    texts(&laid.node, &mut drawn);
+    assert_eq!(drawn, ["45"], "the used screen saw the caller's store");
+}

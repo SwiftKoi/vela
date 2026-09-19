@@ -85,13 +85,29 @@ pub struct ActionDecl {
     /// reader of the reference, or of a hover, gets the same answer `vela check` would not otherwise
     /// give.
     pub dispatched: bool,
+    /// What may follow the declared arguments, when the call is *another declaration's* shape.
+    ///
+    /// One action needs it: `open_screen` hands its extra arguments to the screen it opens, whose
+    /// parameters this registry cannot know (`SCREENS.md §2.1`). Declared rather than assumed, because
+    /// the alternative is a checker that lets any action take any number of arguments — a vocabulary
+    /// nobody could hold a call to.
+    pub rest: Option<PropDecl>,
 }
 
 impl ActionDecl {
-    /// How many arguments it takes.
+    /// How many arguments a call must give at least.
+    ///
+    /// A minimum rather than the number, because an entry with [`rest`](Self::rest) takes more: what
+    /// the extra ones are is the *target's* shape, and only the target knows.
     #[must_use]
     pub fn arity(&self) -> usize {
         self.args.len()
+    }
+
+    /// Whether more arguments may follow the declared ones.
+    #[must_use]
+    pub fn takes_rest(&self) -> bool {
+        self.rest.is_some()
     }
 
     /// The argument names, for a suggestion.
@@ -104,9 +120,15 @@ impl ActionDecl {
     ///
     /// One spelling, used by the reference page's heading, by hover, and by the anchor a link into
     /// either is built from — so a link an editor produces lands on the heading it was written for.
+    /// The trailing ellipsis is an entry with [`rest`](Self::rest): the arguments after the named ones
+    /// belong to what it opens, and the reference says whose they are.
     #[must_use]
     pub fn signature(&self) -> String {
-        format!("{}({})", self.name, self.arg_names().join(", "))
+        let mut names = self.arg_names();
+        if self.takes_rest() {
+            names.push("…");
+        }
+        format!("{}({})", self.name, names.join(", "))
     }
 
     /// One sentence: what it does, and whether the runtime acts on it yet.

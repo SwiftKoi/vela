@@ -37,7 +37,7 @@ fn a_write_to_a_screen_variable_lays_the_screen_out_again() {
 
     let mut text = text_engine();
     let mut stack = vela_ui::Stack::default();
-    assert!(stack.open(screens.sets(), "help", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(screens.sets(), "help", &[], (1280, 720), &mut text, "sans"));
     let laid = |stack: &vela_ui::Stack| {
         let top = stack.top().expect("a screen is open");
         first_text(&top.laid.node).map(str::to_string)
@@ -241,7 +241,7 @@ fn a_screen_stack_opens_focuses_and_paints() {
     let mut stack = vela_ui::Stack::default();
     assert!(stack.is_empty());
 
-    assert!(stack.open(screens.sets(), "pause", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(screens.sets(), "pause", &[], (1280, 720), &mut text, "sans"));
     // Focus starts on the first control and wraps at the end.
     assert_eq!(
         stack.focused().map(|action| action.name.as_str()),
@@ -318,7 +318,7 @@ fn opening_an_undeclared_screen_does_nothing() {
 
     let mut text = text_engine();
     let mut stack = vela_ui::Stack::default();
-    assert!(!stack.open(screens.sets(), "pause", (1280, 720), &mut text, "sans"));
+    assert!(!stack.open(screens.sets(), "pause", &[], (1280, 720), &mut text, "sans"));
     assert!(stack.is_empty());
     assert!(stack.focused().is_none());
     assert!(!stack.move_focus(1));
@@ -356,7 +356,14 @@ label start:
     let mut stack = vela_ui::Stack::default();
 
     assert!(stack.key_action("cancel").is_none(), "nothing is open");
-    assert!(stack.open(screens.sets(), "confirm", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(
+        screens.sets(),
+        "confirm",
+        &[],
+        (1280, 720),
+        &mut text,
+        "sans"
+    ));
     assert_eq!(
         stack
             .key_action("cancel")
@@ -369,7 +376,14 @@ label start:
     );
 
     // The screen underneath is not asked: its binding is behind the one on top.
-    assert!(stack.open(screens.sets(), "credits", (1280, 720), &mut text, "sans"));
+    assert!(stack.open(
+        screens.sets(),
+        "credits",
+        &[],
+        (1280, 720),
+        &mut text,
+        "sans"
+    ));
     assert_eq!(
         stack
             .key_action("cancel")

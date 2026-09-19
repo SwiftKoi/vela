@@ -24,6 +24,8 @@ use vela_diag::{Code, Diagnostic};
 use vela_span::Span;
 use vela_syntax::{ScreenArg, ScreenDecl, ScreenLine};
 
+use crate::eval::{self, Args};
+
 /// Builds a diagnostic for a registered code.
 ///
 /// # Panics
@@ -274,6 +276,32 @@ fn reaches(screens: &[&ScreenDecl], root: &str, current: &str, seen: &mut Vec<St
         }
     }
     false
+}
+
+/// Fills in the parameters a call did not mention, each from its own default.
+///
+/// Shared by the two ways a screen is called — `use`, whose arguments are *syntax* bound in the
+/// caller's scope, and an `open_screen` a runtime performs, whose arguments are already values
+/// (`SCREENS.md §2.1`, §2.3) — because a default that meant one thing for one and something else for
+/// the other would be two calling conventions in one language.
+///
+/// Defaults go last, and each is evaluated against what is already bound, so a default may name a
+/// parameter that *was* passed rather than only a literal. A parameter with neither a value nor a
+/// default is left unbound: the checker has already reported the mismatch, and a screen somebody is
+/// midway through editing should draw something rather than nothing.
+#[must_use]
+pub(crate) fn with_defaults(callee: &ScreenDecl, mut bound: Args) -> Args {
+    for param in &callee.params {
+        if bound.get(&param.name).is_some() {
+            continue;
+        }
+        let Some(default) = &param.default else {
+            continue;
+        };
+        let value = eval::value_of(default, &bound);
+        bound.set(param.name.clone(), value);
+    }
+    bound
 }
 
 /// The nearest declared screen name, if one is close enough to be worth offering.

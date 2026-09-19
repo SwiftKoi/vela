@@ -201,6 +201,7 @@ fn a_plugin_action_is_a_registry_entry() {
         args: &[],
         doc: "A project's own `set`.",
         dispatched: true,
+        rest: None,
     });
     assert_eq!(registry.names(), before, "a replacement moved the list");
     assert_eq!(registry.len(), 27, "a duplicate was added");
@@ -220,6 +221,7 @@ fn a_plugin_action_is_a_registry_entry() {
         }],
         doc: "A plugin's action.",
         dispatched: true,
+        rest: None,
     });
     assert_eq!(registry.len(), 28);
     assert_eq!(registry.names().last(), Some(&"teleport"));
@@ -329,6 +331,38 @@ fn an_action_with_the_wrong_arity_is_reported() {
         codes("screen s:\n    button:\n        text \"Go\"\n        action quit(\"now\")\n"),
         vec!["E5013"]
     );
+
+    // And one entry takes *more*: everything after `open_screen`'s screen name belongs to the screen
+    // it opens, whose parameters this registry cannot know — so what it states is a floor, and a call
+    // that gives more is not this check's to refuse (`SCREENS.md §2.1`).
+    assert!(
+        codes(
+            "screen s:\n    button:\n        text \"Go\"\n        action open_screen(detail, 1, \"two\")\n"
+        )
+        .is_empty()
+    );
+}
+
+/// One entry declares a *rest*, and it is the only one.
+///
+/// The alternative — letting any action take any number of arguments — is a vocabulary nobody could
+/// hold a call to, so the shape is a field on the entry rather than a rule about actions in general.
+#[test]
+fn open_screen_takes_the_arguments_of_the_screen_it_opens() {
+    let registry = ActionRegistry::builtin();
+    let open = registry
+        .get("open_screen")
+        .expect("`open_screen` is registered");
+    assert_eq!(open.arity(), 1, "the screen's name is the one argument");
+    assert!(open.takes_rest());
+    assert_eq!(open.signature(), "open_screen(screen, …)");
+
+    let rest: Vec<&str> = registry
+        .names()
+        .into_iter()
+        .filter(|name| registry.get(name).is_some_and(ActionDecl::takes_rest))
+        .collect();
+    assert_eq!(rest, vec!["open_screen"]);
 }
 
 /// An action *handed in* is a name, not a call, and there is nothing to check it against — the screen
