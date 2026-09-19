@@ -14,6 +14,8 @@ vela-bytecode.workspace = true
 vela-diag.workspace = true
 vela-span.workspace = true
 vela-syntax.workspace = true
+vela-text.workspace = true
+vela-ui.workspace = true
 vela-vm.workspace = true
 vela-world.workspace = true
 

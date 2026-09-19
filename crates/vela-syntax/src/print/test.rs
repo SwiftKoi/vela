@@ -33,6 +33,7 @@ fn text(directive: &Directive) -> String {
             format!("advance until shown {}", expr::text(text))
         }
         DirectiveKind::Choose { text } => format!("choose {}", expr::text(text)),
+        DirectiveKind::Click { text } => format!("click {}", expr::text(text)),
         DirectiveKind::Expect { expr } => format!("expect {}", expr::text(expr)),
         DirectiveKind::ExpectShown { text, negated } => {
             let not = if *negated { "not " } else { "" };

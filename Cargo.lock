@@ -2287,7 +2287,9 @@ dependencies = [
  "vela-mir",
  "vela-span",
  "vela-syntax",
+ "vela-text",
  "vela-types",
+ "vela-ui",
  "vela-vm",
  "vela-world",
 ]

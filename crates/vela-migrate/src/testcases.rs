@@ -2,20 +2,22 @@
 //!
 //! A Ren'Py testcase drives the *interface*: it clicks a control by its text, waits for the picture to
 //! say something, asserts what is on screen. Vela's test language is about the story — `run from`,
-//! `advance <n>`, `choose <text>`, `expect <expr>` against the world — so this pass translates the
-//! steps that name a *story* thing and reports the ones that name a screen, rather than writing a step
-//! the runner cannot run (`docs/roadmap/M12.1-screen-language.md`, item 18).
+//! `advance <n>`, `choose <text>`, `expect <expr>` against the world — and about the controls a screen
+//! draws (`click <text>`), so this pass translates the steps that name one of those and reports the
+//! rest rather than writing a step the runner cannot run
+//! (`docs/roadmap/M12.1-screen-language.md`, item 18).
 //!
 //! # The one judgement call, and why it is a rule rather than a guess
 //!
 //! `click "ask her later"` and `click "Start"` are the same instruction to Ren'Py — find the focus whose
 //! text contains the pattern, and activate it — and different things to Vela: the first is a *menu
-//! option*, which `choose <text>` already is, and the second is a screen control, which Vela has no step
-//! for. The migrator can tell them apart from the *project* rather than by guessing: a click whose text
-//! is contained in exactly one menu option in the story is that option (`choose "Ask her later."`), and
-//! anything else is reported. Containment, case-insensitively, is Ren'Py's own rule for a text selector
-//! (`renpy/test/testfocus.py`), which is why the sample may write `"ask her later"` for a screen that
-//! shows `Ask her later.` — and "exactly one" is what keeps an ambiguous click out of the translation.
+//! option*, which `choose <text>` is, and the second is a *screen control*, which `click <text>` is. The
+//! migrator can tell them apart from the *project* rather than by guessing: a click whose text is
+//! contained in exactly one menu option in the story is that option (`choose "Ask her later."`), and
+//! anything else is a control (`click "Start"`). Containment, case-insensitively, is Ren'Py's own rule
+//! for a text selector (`renpy/test/testfocus.py`), which is why the sample may write `"ask her
+//! later"` for a screen that shows `Ask her later.` — and "exactly one" is what keeps an ambiguous
+//! click out of the translation.
 
 use std::collections::BTreeSet;
 
@@ -52,9 +54,9 @@ pub fn lower(
     }
 
     let mut out = String::from(
-        "# The project's testcases, migrated from Ren'Py by `vela migrate`. A step that names a\n\
-         # *screen* — a click on a control, a wait for a screen name, a keypress — has no Vela\n\
-         # equivalent yet, and `MIGRATION.md` lists each one.\n",
+        "# The project's testcases, migrated from Ren'Py by `vela migrate`. A step that names the\n\
+         # *interface* rather than a control — a wait for a screen name, a keypress, a wall-clock\n\
+         # wait — has no Vela equivalent yet, and the report lists each one (`TOOLING.md §5`).\n",
     );
     let mut written = 0usize;
 
@@ -83,7 +85,8 @@ pub fn lower(
             relative,
             1,
             &format!("{relative} ({} testcase(s))", tests.len()),
-            "every step of every testcase here names the interface, so there is no `test` item to              write: the entries above are the steps, and each is ported by hand (`TOOLING.md §5`)",
+            "no testcase here could be translated whole, so there is no `test` item to write: the \
+             entries above are the steps, and each is ported by hand (`TOOLING.md §5`)",
         );
         return None;
     }
@@ -114,16 +117,16 @@ fn test_item(
         }
         match step(text, menus) {
             Reading::Directive(line) => lines.push(line),
-            Reading::Screen => {
+            Reading::Condition => {
                 missing += 1;
                 report.push(
                     relative,
                     node.line,
                     text,
-                    "this step names the *interface* — a screen control, a screen name, a keypress or \
-                     a wall-clock wait — and Vela's test language has no step for one yet, so the \
-                     testcase around it is not translated either. What it checks is ported by hand \
-                     (`TOOLING.md §5`)",
+                    "this step waits on a *condition* — Ren'Py's test conditions ask which screen is up, \
+                     or match one of several texts — and Vela's `advance until shown` takes a single \
+                     text, so there is no step to write. The testcase around it is not translated \
+                     either: what it checks is ported by hand (`TOOLING.md §5`)",
                 );
             }
             Reading::Unreadable(reason) => {
@@ -164,27 +167,30 @@ fn test_item(
 enum Reading {
     /// A Vela directive.
     Directive(String),
-    /// A step about the *interface*: a screen control, a screen name, a keypress, a wall-clock wait.
-    /// Vela's test language has no step for one yet, and the entry says so.
-    Screen,
+    /// A step about the *interface* that waits on a condition rather than text: Ren'Py's `screen "x"`,
+    /// which asks which screen is up, or a pattern with `or` in it. Vela's `advance until shown` takes
+    /// text, so there is nothing to write.
+    Condition,
     /// A step this pass does not read at all, with the reason to print.
     ///
-    /// Kept apart from [`Reading::Screen`] because the two are different work: a screen step needs a
-    /// step the language has not got, and an unreadable one usually needs a person to look at the
-    /// line — a condition, a trailing comment, or Ren'Py's own runner configuration.
+    /// Kept apart from [`Reading::Condition`] because the two are different work: a condition needs a
+    /// test language that can ask it, and an unreadable one needs either a step Vela has not got (a
+    /// keypress, a wall-clock wait) or a person to look at the line — Ren'Py's own runner
+    /// configuration, or something this pass has never seen.
     Unreadable(&'static str),
 }
 
 /// One Ren'Py test step, read.
 fn step(text: &str, menus: &BTreeSet<String>) -> Reading {
     if let Some(rest) = text.strip_prefix("click ") {
-        // A click is a *menu option* when the project's own menus offer one that contains the text,
-        // and a screen control otherwise — which is the difference between a step Vela has and one it
-        // does not.
+        // A click is a *menu option* when the project's own menus offer one that contains the text, and
+        // a screen control otherwise — the difference between `choose` and `click`.
         return match unquote(rest) {
             Some(wanted) => match exactly_one(menus, &wanted) {
                 Some(option) => Reading::Directive(format!("choose {option:?}")),
-                None => Reading::Screen,
+                // Vela's `click` names a control by the words it draws, which is Ren'Py's own rule for
+                // the same instruction and the text this pass already has.
+                None => Reading::Directive(format!("click {wanted:?}")),
             },
             None => Reading::Unreadable("this `click` is not a quoted text"),
         };
@@ -194,7 +200,7 @@ fn step(text: &str, menus: &BTreeSet<String>) -> Reading {
             Some(wanted) => Reading::Directive(format!("advance until shown {wanted:?}")),
             // A condition — `screen "choice"`, or `("a" or "b")` — is Ren'Py's own condition
             // language, and it is what a wait is for there.
-            None => Reading::Screen,
+            None => Reading::Condition,
         };
     }
     if let Some(rest) = text.strip_prefix("assert not ") {

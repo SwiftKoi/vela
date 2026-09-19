@@ -5,6 +5,8 @@
 //! the same renderer every other diagnostic goes through, and the caret points at the author's line
 //! rather than at a sentence about it.
 
+use std::fmt;
+
 use vela_span::Span;
 
 /// What running a suite produced.
@@ -121,12 +123,17 @@ pub enum Failure {
         /// The assertion, as the author wrote it.
         source: String,
     },
-    /// An assertion could not be read as a value.
-    Unreadable {
-        /// The directive's span.
+    /// An assertion could not be read as a value, or a step could not be carried out.
+    ///
+    /// One variant per *outcome* rather than one per reason: what a caller knows is what stopped it,
+    /// and what this file knows is how that reads. So a step that reads nothing out of the live
+    /// story, a `click` that names no control, and a control that asked for something a headless run
+    /// does not carry out are one failure — the step did not happen — with three explanations.
+    Uncarried {
+        /// The step's span.
         span: Span,
-        /// Why not.
-        message: String,
+        /// What stopped it.
+        reason: Reason,
     },
     /// `cover labels` found labels the run never reached.
     Uncovered {
@@ -164,7 +171,7 @@ impl Failure {
             | Self::NotShown { span, .. }
             | Self::Shown { span, .. }
             | Self::Assertion { span, .. }
-            | Self::Unreadable { span, .. }
+            | Self::Uncarried { span, .. }
             | Self::Uncovered { span, .. }
             | Self::Runaway { span, .. }
             | Self::StoryEnded { span } => *span,
@@ -202,9 +209,7 @@ impl Failure {
                 false => format!("`{wanted}` is not on screen, which shows {shown}"),
             },
             Self::Assertion { source, .. } => format!("`{source}` is not true"),
-            Self::Unreadable { message, .. } => {
-                format!("the assertion could not be read: {message}")
-            }
+            Self::Uncarried { reason, .. } => reason.to_string(),
             Self::Uncovered { labels, .. } => {
                 format!("the run never reached {}", quoted(labels))
             }
@@ -215,6 +220,69 @@ impl Failure {
             Self::StoryEnded { .. } => {
                 "the story is over, and the script has not finished".to_string()
             }
+        }
+    }
+}
+
+/// Why a step could not be carried out.
+///
+/// The sentence for each one is written here, once: a caller knows *what* happened, and this file is
+/// the one that knows how a failure reads. So a reason cannot arrive without its wording, and two
+/// sites that stop a step for the same reason cannot word it differently.
+#[derive(Debug)]
+pub enum Reason {
+    /// The expression a step reads did not produce what the step needs — not a `bool` where an
+    /// assertion wanted one, not text where a text was wanted, or a fault while evaluating it.
+    Unreadable {
+        /// What was wrong, in the words of the site that saw it.
+        message: String,
+    },
+    /// The story ended before the step could be carried out.
+    Ended,
+    /// A `click` in a run with no screens at all: the caller loaded none, so there is nothing to press.
+    NoScreens,
+    /// A `click` with no screen open: there was nothing to match the words against.
+    NothingOpen,
+    /// A `click` found no control on the screen reading those words.
+    NoSuchControl {
+        /// What the test named.
+        wanted: String,
+        /// Every word the top screen's controls read.
+        offered: Vec<String>,
+    },
+    /// A control asked for an action a headless run does not carry out: a `jump`, a save, a
+    /// preference — everything that is the VM's or the host's rather than the screen stack's.
+    NotOurs {
+        /// The action, as the screen wrote it: `quit`, `jump(forest)`, …
+        action: String,
+        /// Every word the top screen's controls read.
+        offered: Vec<String>,
+    },
+}
+
+impl fmt::Display for Reason {
+    /// The sentence a failure prints.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unreadable { message } => write!(f, "the step could not be read: {message}"),
+            Self::Ended => write!(f, "the story ended before this step could be carried out"),
+            Self::NoScreens => write!(f, "this run has no screens, so nothing can be clicked"),
+            Self::NothingOpen => write!(
+                f,
+                "no screen is open, so there is no control to click: what opens the first one is a \
+                 key binding or the game's own menu (`SCREENS.md §2.3`)"
+            ),
+            Self::NoSuchControl { wanted, offered } => write!(
+                f,
+                "no control on the screen reads `{wanted}`; it offers {}",
+                quoted(offered)
+            ),
+            Self::NotOurs { action, offered } => write!(
+                f,
+                "the control asked for `{action}`, which a headless run does not carry out; the \
+                 screen offers {}",
+                quoted(offered)
+            ),
         }
     }
 }

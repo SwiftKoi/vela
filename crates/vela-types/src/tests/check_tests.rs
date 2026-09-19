@@ -371,7 +371,8 @@ fn an_assertion_that_is_not_a_bool_is_reported() {
     assert_eq!(reported, vec!["E3007"], "{reported:?}");
 }
 
-/// `choose` picks a menu option by its text, so its argument has to be text.
+/// `choose` picks a menu option by its text and `click` presses a control by its words, so both
+/// take text.
 #[test]
 fn a_choice_that_is_not_text_is_reported() {
     let reported = codes(
@@ -380,6 +381,13 @@ fn a_choice_that_is_not_text_is_reported() {
     );
 
     assert_eq!(reported, vec!["E3007"], "{reported:?}");
+
+    let clicked = codes(
+        "label start:\n    return\n\n\
+         test \"wrong\":\n    click 1\n",
+    );
+
+    assert_eq!(clicked, vec!["E3007"], "{clicked:?}");
 }
 
 /// And a well-typed test reports nothing, which is what says the assertion above is about a mistake
@@ -387,8 +395,8 @@ fn a_choice_that_is_not_text_is_reported() {
 #[test]
 fn a_well_typed_test_reports_nothing() {
     let reported = codes(
-        "default trust: int = 0\n\nlabel start:\n    return\n\n\
-         test \"right\":\n    run\n    expect trust == 0\n    choose \"Leave\"\n",
+        "label start:\n    return\n\n\
+         test \"right\":\n    run\n    expect trust == 0\n    choose \"Leave\"\n    click \"Settings\"\n",
     );
 
     assert!(reported.is_empty(), "{reported:?}");

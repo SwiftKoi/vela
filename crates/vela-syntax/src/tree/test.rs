@@ -79,6 +79,16 @@ pub enum DirectiveKind {
         /// once and use it twice.
         text: Expr,
     },
+    /// `click <text>`: activate the control whose words contain this text.
+    ///
+    /// A step about the *interface*, where `choose` is about the story's menu: the control is a
+    /// hotspot of the screen the run has open, named the way Ren'Py names one
+    /// (`testfocus.find_focus` matches a pattern against a widget's text), and what activating it
+    /// asks for is carried out by the runtime rather than answered to the story.
+    Click {
+        /// The control's words. An expression, for the same reason `choose`'s is one.
+        text: Expr,
+    },
     /// `expect <expr>`: assert that this holds.
     Expect {
         /// The assertion. A real expression, so the checker types it and a mistake in a test is a

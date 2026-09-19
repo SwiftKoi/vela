@@ -2,15 +2,18 @@
 //!
 //! The step loop in `run` answers commands and decides what a script meant; this is everything a step
 //! *says*: calling the function an expression was compiled into (`text`, `assert`), reading what the
-//! story is showing a player (`shows`, `shown_text`, `screen_text`), and the assertion about it. One
-//! child module because they are one subject — the live run as a step finds it — and because none of
-//! them advances the story: a helper that did would be the loop's, and the loop is the parent.
+//! story is showing a player (`shows`, `shown_text`, `screen_text`), the assertion about it, and the
+//! click that presses what a screen offers (`click`). One child module because they are one subject —
+//! the live run as a step finds it — and because none of them advances the story: a helper that did
+//! would be the loop's, and the loop is the parent.
 
 use vela_span::Span;
+use vela_ui::Done;
 use vela_vm::Session;
 use vela_world::{Command, Value};
 
-use crate::report::{Failure, Outcome};
+use crate::report::{Failure, Outcome, Reason};
+use crate::stage::Stage;
 
 /// Calls an assertion and reports it if it is not `true`.
 pub(super) fn assert(
@@ -26,13 +29,17 @@ pub(super) fn assert(
             span,
             source: source.to_string(),
         }),
-        Ok(other) => outcome.failures.push(Failure::Unreadable {
+        Ok(other) => outcome.failures.push(Failure::Uncarried {
             span,
-            message: format!("it produced {}", other.type_name()),
+            reason: Reason::Unreadable {
+                message: format!("it produced {}", other.type_name()),
+            },
         }),
-        Err(fault) => outcome.failures.push(Failure::Unreadable {
+        Err(fault) => outcome.failures.push(Failure::Uncarried {
             span,
-            message: fault.to_string(),
+            reason: Reason::Unreadable {
+                message: fault.to_string(),
+            },
         }),
     }
 }
@@ -117,18 +124,82 @@ pub(super) fn text(
     match session.call(name) {
         Ok(Value::Str(wanted)) => Some(wanted),
         Ok(other) => {
-            outcome.failures.push(Failure::Unreadable {
+            outcome.failures.push(Failure::Uncarried {
                 span,
-                message: format!("`{source}` produced {}", other.type_name()),
+                reason: Reason::Unreadable {
+                    message: format!("`{source}` produced {}", other.type_name()),
+                },
             });
             None
         }
         Err(fault) => {
-            outcome.failures.push(Failure::Unreadable {
+            outcome.failures.push(Failure::Uncarried {
                 span,
-                message: fault.to_string(),
+                reason: Reason::Unreadable {
+                    message: fault.to_string(),
+                },
             });
             None
         }
+    }
+}
+
+/// Clicks the control whose words contain `text`, and carries out what it asks for.
+///
+/// A click is a player minus the window, so it goes through what a player's press goes through: the
+/// control is *focused* — the words the test wrote are matched against what the control draws, which is
+/// Ren'Py's rule for a text selector (`testfocus.find_focus`) — and the action is read from the focused
+/// hotspot, so a click and a keypress cannot disagree about what a control does.
+///
+/// Nothing here answers the story. The story is waiting on a command and a screen is drawn over it, so
+/// what a control does is the screen's business — which is why this is called where the *assertions*
+/// are consumed (`run.rs`) rather than where the answers are.
+pub(super) fn click(
+    stage: &mut Option<&mut Stage<'_>>,
+    wanted: &str,
+    span: Span,
+    outcome: &mut Outcome,
+) {
+    let Some(stage) = stage.as_deref_mut() else {
+        outcome.failures.push(Failure::Uncarried {
+            span,
+            reason: Reason::NoScreens,
+        });
+        return;
+    };
+
+    // Nothing open is its own answer, not "the screen has no such control": what is on screen is the
+    // question, and with nothing on the stack there was nothing to compare the words against. It is
+    // also the state a test starts in — a screen is opened by a control or a key, and the first one has
+    // to come from somewhere.
+    if stage.is_empty() {
+        outcome.failures.push(Failure::Uncarried {
+            span,
+            reason: Reason::NothingOpen,
+        });
+        return;
+    }
+
+    let Some(action) = stage.focus(wanted) else {
+        outcome.failures.push(Failure::Uncarried {
+            span,
+            reason: Reason::NoSuchControl {
+                wanted: wanted.to_string(),
+                offered: stage.controls(),
+            },
+        });
+        return;
+    };
+
+    // Everything the stack does not own needs the VM or the host, and a headless run has neither. Saying
+    // so is the difference between a press that did nothing and a press that says it could not.
+    if stage.carry_out(&action) == Done::NotOurs {
+        outcome.failures.push(Failure::Uncarried {
+            span,
+            reason: Reason::NotOurs {
+                action: action.to_string(),
+                offered: stage.controls(),
+            },
+        });
     }
 }

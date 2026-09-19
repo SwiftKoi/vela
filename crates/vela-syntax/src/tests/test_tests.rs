@@ -30,13 +30,14 @@ fn a_test_parses_its_name_and_every_directive() {
         "test \"picking the forest sets trust\":\n\
          \x20   run from chapters.forest.clearing\n\
          \x20   choose \"Explore\"\n\
+         \x20   click \"Settings\"\n\
          \x20   advance 4\n\
          \x20   expect trust == 1\n\
          \x20   cover variants\n",
     );
 
     assert_eq!(test.name, "picking the forest sets trust");
-    assert_eq!(test.directives.len(), 5);
+    assert_eq!(test.directives.len(), 6);
 
     match &test.directives[0].kind {
         DirectiveKind::Run { target, .. } => {
@@ -52,15 +53,19 @@ fn a_test_parses_its_name_and_every_directive() {
         test.directives[1].kind,
         DirectiveKind::Choose { .. }
     ));
-    match &test.directives[2].kind {
+    assert!(matches!(
+        test.directives[2].kind,
+        DirectiveKind::Click { .. }
+    ));
+    match &test.directives[3].kind {
         DirectiveKind::Advance { count } => assert_eq!(*count, 4),
         other => panic!("expected an `advance`, got {other:?}"),
     }
     assert!(matches!(
-        test.directives[3].kind,
+        test.directives[4].kind,
         DirectiveKind::Expect { .. }
     ));
-    match &test.directives[4].kind {
+    match &test.directives[5].kind {
         DirectiveKind::Cover { mode } => assert_eq!(*mode, CoverMode::Variants),
         other => panic!("expected a `cover`, got {other:?}"),
     }
@@ -79,9 +84,9 @@ fn a_bare_run_names_no_label() {
     }
 }
 
-/// The directives are contextual, so a story keeps `run`, `advance`, `choose`, `expect`, and `cover` as
-/// names. `expect` is the interesting one: it is a perfectly ordinary label name, and reserving it would
-/// have taken it away from every story in the repository.
+/// The directives are contextual, so a story keeps `run`, `advance`, `choose`, `click`, `expect`, and
+/// `cover` as names. `expect` is the interesting one: it is a perfectly ordinary label name, and
+/// reserving it would have taken it away from every story in the repository.
 #[test]
 fn the_directive_names_are_still_ordinary_names() {
     let result = parse_src(

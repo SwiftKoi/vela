@@ -170,7 +170,7 @@ fn renpys_built_in_black_becomes_a_solid() {
     let _ = std::fs::remove_dir_all(&out_dir);
 }
 
-/// A testcase migrates when every step of it is about the story, and is reported when it is not.
+/// A testcase migrates when every step of it is one Vela has, and is reported when it is not.
 ///
 /// A test is a *sequence*: `advance until …` then `expect …` asserts what the wait left behind, so a
 /// testcase with a step missing is a different test rather than a smaller one — it would run to a
@@ -188,9 +188,13 @@ fn a_testcase_migrates_whole_or_is_reported() {
     .expect("write the story");
     // `click "take the left"` names a menu option — the option is spelled with a capital and a full
     // stop, which is Ren'Py's own containment rule and the reason this is a rule rather than a guess.
+    // `click "Start"` names a *control*, which is the `click` step's own subject and not a report
+    // entry; what stops the second testcase is the line after it, a condition about which *screen* is
+    // up — a subject Vela's `advance until shown` does not have (it waits for text).
     std::fs::write(
         base.join("game").join("testcases.rpy"),
-        "testcase the left way:\n    click \"take the left\"\n    assert \"Left it is.\"\n\ntestcase by the menu:\n    click \"Start\"\n",
+        "testcase the left way:\n    click \"take the left\"\n    assert \"Left it is.\"\n\n\
+         testcase by the menu:\n    click \"Start\"\n    advance until screen \"main_menu\"\n",
     )
     .expect("write the testcases");
 
@@ -205,14 +209,57 @@ fn a_testcase_migrates_whole_or_is_reported() {
         tests.contains("    expect shown \"Left it is.\"\n"),
         "{tests}"
     );
-    // The one that clicks a screen control is not written at all, and says so.
+    // The one that waits on a screen's *name* is not written at all, and says so.
     assert!(!tests.contains("by the menu"), "{tests}");
     let report = std::fs::read_to_string(out_dir.join("MIGRATION.md")).expect("the report");
-    assert!(report.contains("click \"Start\""), "{report}");
+    assert!(
+        !report.contains("click \"Start\""),
+        "a click on a control is a step Vela has: {report}"
+    );
+    assert!(report.contains("main_menu"), "{report}");
 
     // And the translated test runs, which is the only claim worth making about it.
     let (code, tested) = cli(&["test", &out_dir.to_string_lossy()]);
     assert_eq!(code, 0, "the migrated test does not pass:\n{tested}");
+
+    let _ = std::fs::remove_dir_all(&base);
+    let _ = std::fs::remove_dir_all(&out_dir);
+}
+
+/// A click that names a control migrates to `click`, and the words it names are the ones Ren'Py
+/// matched on — the control's own text.
+///
+/// The test is written, not *run*, and the reason is a gap this milestone names rather than hides: a
+/// click presses a control on a screen the run has open, and what opens the first one — the game's own
+/// menu (`M12.2`) or a key binding (`M12.3`) — is not on this milestone's list
+/// (`docs/roadmap/M12.1-screen-language.md`, item 18).
+#[test]
+fn a_click_on_a_control_becomes_a_click_step() {
+    let base = std::env::temp_dir().join(format!("vela-migrate-click-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(base.join("game")).expect("create project");
+    std::fs::write(
+        base.join("game").join("script.rpy"),
+        "label start:\n    \"One.\"\n    return\n",
+    )
+    .expect("write the story");
+    std::fs::write(
+        base.join("game").join("testcases.rpy"),
+        "testcase the menu:\n    click \"Start\"\n    assert \"One.\"\n",
+    )
+    .expect("write the testcases");
+
+    let (code, out) = cli(&["migrate", &base.to_string_lossy()]);
+    assert_eq!(code, 0, "the migration failed:\n{out}");
+
+    let out_dir = migrated(&base);
+    let tests = std::fs::read_to_string(out_dir.join("src/testcases.vela")).expect("test items");
+    assert!(tests.contains("    click \"Start\"\n"), "{tests}");
+    assert!(tests.contains("    expect shown \"One.\"\n"), "{tests}");
+
+    // And the migrator's own invariant holds: what it wrote compiles.
+    let (code, checked) = cli(&["check", &out_dir.to_string_lossy()]);
+    assert_eq!(code, 0, "the migrated project does not check:\n{checked}");
 
     let _ = std::fs::remove_dir_all(&base);
     let _ = std::fs::remove_dir_all(&out_dir);

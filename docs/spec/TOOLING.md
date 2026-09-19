@@ -232,16 +232,22 @@ test "the left way is the good one":
     expect shown "Left it is."
     expect not shown "Right it is."
     expect trust == 1                     # and the world, where the story put it
+
+test "the pause menu's settings open":
+    run
+    click "Settings"                      # presses the control whose words contain this, on the screen on top
 ```
 
-**Two subjects, and the words say which one a step is about.** `expect <expr>` is a claim about the
-`World` — `trust == 1` — and `expect shown <text>` is a claim about the *picture*: the line the story
-is waiting on, or a menu's prompt and options. `shown` matches by **containment, case-insensitively**,
-which is Ren'Py's own rule for a text selector (`renpy/test/testfocus.py`: *a pattern in the text*, both
-casefolded) — and the reason a test may write `"take the left"` for an option a screen spells
-`Take the left.` A test that had to reproduce the punctuation of what it waits for would be a test
-about spelling. `advance until shown <text>` is the same subject as a step: run the story on until it
-is true, and fail with what *was* on screen when the story ends first.
+**Three subjects, and the words say which one a step is about.** `expect <expr>` is a claim about the
+`World` — `trust == 1`; `expect shown <text>` is a claim about the *picture*: the line the story
+is waiting on, or a menu's prompt and options; and `click <text>` is a step in the *interface* — a
+control of the screen on top, which is not the story's menu but a screen drawn over it. `shown` and
+`click` both match by **containment, case-insensitively**, which is Ren'Py's own rule for a text
+selector (`renpy/test/testfocus.py`: *a pattern in the text*, both casefolded) — and the reason a test
+may write `"take the left"` for an option a screen spells `Take the left.` A test that had to
+reproduce the punctuation of what it names would be a test about spelling. `advance until shown <text>`
+is the same subject as a step: run the story on until it is true, and fail with what *was* on screen
+when the story ends first.
 
 Capabilities:
 
@@ -251,6 +257,7 @@ Capabilities:
 | Seeded RNG | Reproducible randomness |
 | Story-graph assertions | `cover labels`, `cover variants`, `no_dead_ends` |
 | World assertions | Typed expressions evaluated against `World` |
+| Screen steps | `click "<control>"` presses a control on the screen on top |
 | Command assertions | Assert the *exact* command stream (golden) or a shape (matcher) |
 | Golden frames | Render at a scripted point, compare to a stored PNG (tolerance-based) |
 | Locale sweep | Re-run the suite under every locale, failing on overflow/missing strings |
@@ -274,13 +281,26 @@ is always reviewed.
 > about a whole playthrough; the labels are recorded by the machine (`Vm::entered_labels`), which is
 > observational state and deliberately not part of a save.
 >
-> **Not yet.** A step that names the *interface* — `click "<control>"`, `assert screen "<name>"`, a
-> keypress — has no directive, because the runner drives the VM and holds no screens: it is a step loop
-> over `Session`, and `session.current()` is the closest thing it has to what a player is looking at.
-> The presentation a click needs (the control's label, its action, the stack it sits in) lives in
-> `vela-ui`, and the runner reaches it only once that runtime is somewhere both callers can use —
-> which is what the screen steps wait on, and what `vela migrate` reports per step
-> (`docs/roadmap/M12.1-screen-language.md`, item 18).
+> **Implemented (M12.1).** A step that names the *interface* has its first directive: `click <text>`
+> presses the control whose words contain that text, on the screen on top. The runner holds screens now
+> — `vela-test`'s `Stage` is a `vela-ui` stack, the project's compiled sets, and a text engine, which is
+> what `vela run` holds minus the window — so a click is a player's press: the control is *focused*
+> first and the action is read from the focused hotspot, which is why a click and a keypress cannot
+> disagree about what a button does. The action is then carried out by the same dispatcher a window uses
+> (`SCREENS.md §7`); anything the screen stack does not own — a `jump`, a save, `quit` — fails with the
+> action named, because a headless run has no VM answer behind it.
+>
+> A click is consumed where the *assertions* are, not where the answers are, and that is the difference
+> between a test and a recording: a player clicking a pause menu is not advancing the line behind it, so
+> `click "History"` then `click "Return"` then `advance 1` is one sequence — two presses and one line —
+> rather than three advances.
+>
+> **Not yet.** What *opens the first screen* is not the test language's: a screen is opened by a
+> control's `open_screen` or by the host, so the game's own menu (`M12.2`) and the key bindings that open
+> a pause menu (`M12.3`) are what a test that begins by clicking a control waits on. A click with
+> nothing open fails saying exactly that. So does the rest of the interface steps: a wait on which screen
+> is *up* (`advance until screen "…"`) and a keypress (`keysym`) have no directive, which is why
+> `vela migrate` still reports a testcase containing one (`TOOLING.md §8`).
 >
 > **Not yet.** Golden frames (`--update`, `--seed`) and the locale sweep are named and unimplemented:
 > rendering at a scripted point and comparing to a stored image is `vela-render`'s to produce, and a
@@ -413,7 +433,7 @@ non-zero exit, so a team can track migration progress as a number that goes to z
 > | `gui.rpy` | **Translated** into the theme and its styles, one module with the screens (see above). |
 > | `screens.rpy` | **Translated** into `screen` and `style` declarations, in the same module as the theme. |
 > | `options.rpy` | **Reported, declaration by declaration** — one entry per kind of knob, naming all of them. `config.name` is translated (`vela.toml`'s `[project] name`); the transitions, the audio flags, the window knobs, the version, the save path, the build rules and the `preferences.*` defaults have no counterpart, and each entry says which work owns it. |
-> | `testcases.rpy` | **Reported, step by step**: a testcase migrates whole or not at all, and a step about the *screen* is what stops it (`docs/roadmap/M12.1-screen-language.md`, item 18). |
+> | `testcases.rpy` | **Translated step by step, or reported whole**: a `click` whose text is one of the story's menu options becomes `choose`, one that is not becomes `click` — a control on a screen — and a testcase with any step Vela has not got (a wait on which screen is *up*, a keypress, a wall-clock wait) is reported instead of translated, because a test is a sequence (`docs/roadmap/M12.1-screen-language.md`, item 18). |
 > | everything else | **Reported**, once by file: what is neither a story nor one of the four above, and `tl/**`. |
 >
 > The widget tree comes across — `hbox`/`vbox`/`add`/`null`/`fixed`/`frame`/`window`/`label`/

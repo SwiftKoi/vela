@@ -50,8 +50,9 @@ pub fn check(tree: &Program, env: &Env) -> Vec<Diagnostic> {
                             let ty = checker.expr(expr);
                             checker.expect(&Ty::Bool, &ty, expr.span());
                         }
-                        // The runner matches this against a menu option's text, so it has to be text.
-                        DirectiveKind::Choose { text } => {
+                        // The runner matches these against text — a menu option's, a control's words —
+                        // so both have to be text.
+                        DirectiveKind::Choose { text } | DirectiveKind::Click { text } => {
                             let ty = checker.expr(text);
                             checker.expect(&Ty::Str, &ty, text.span());
                         }

@@ -1,11 +1,12 @@
 # Tests live beside the story they exercise (`TOOLING.md §5`), written in the same language: the same
 # parser, the same checker, the same formatter. The directives are ordinary identifiers in the first
-# position of a line, so `run`, `advance`, `choose`, `expect`, and `cover` stay usable as names
+# position of a line, so `run`, `advance`, `choose`, `click`, `expect`, and `cover` stay usable as names
 # everywhere else in a story.
 
 test "picking the forest sets trust":
     run from chapters.forest.clearing
     choose "Explore"
+    click "History"
     advance 4
     expect trust == 1
     expect visited(chapters.forest.river)

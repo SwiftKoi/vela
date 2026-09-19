@@ -1,109 +1,12 @@
-//! Running tests: what passes, and what a failure looks like when it does not.
-//!
-//! Every fixture here goes through the whole front end — parse, check, lower, compile, verify — because
-//! that is what the runner does: the assertions it reads are functions in the same module as the story,
-//! compiled by the same compiler. A fixture that only parsed would test a runner nobody will run.
+//! What a scripted run does, and what a failure looks like when it does not.
 
-use vela_bytecode::Module;
-use vela_diag::Severity;
 use vela_span::FileId;
 
-use crate::plan::{Plan, StepKind, prepare};
+use crate::plan::{StepKind, prepare};
 use crate::report::Failure;
 use crate::run::run;
 
-/// A story with a menu, an ending, and one label nothing reaches.
-const STORY: &str = "\
-default trust: int = 0
-
-label start:
-    \"One.\"
-    jump menued
-
-label menued:
-    menu \"Which way?\":
-        \"Left\":
-            trust = trust + 1
-            jump ending
-        \"Right\":
-            jump ending
-
-label ending:
-    \"Done.\"
-    return
-
-label extra:
-    \"Nobody comes here.\"
-    return
-";
-
-/// Compiles a fixture through the front end, asserting every stage is clean.
-fn module(text: &str) -> Module {
-    let file = FileId::from_raw(0);
-    let parsed = vela_syntax::parse(file, text);
-    assert!(
-        parsed.diagnostics.is_empty(),
-        "the fixture does not parse: {:?}",
-        parsed
-            .diagnostics
-            .iter()
-            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
-            .collect::<Vec<_>>()
-    );
-
-    let (env, _) = vela_types::Env::build(&parsed.program);
-    let checked = vela_types::check(&parsed.program, &env);
-    assert!(
-        checked.iter().all(|d| d.severity() != Severity::Error),
-        "the fixture does not check: {:?}",
-        checked
-            .iter()
-            .map(|d| format!("{}: {}", d.code.as_str(), d.message))
-            .collect::<Vec<_>>()
-    );
-
-    let lowered = vela_mir::lower(&vela_hir::ModuleName::new("main"), &parsed.program, &env);
-    assert!(
-        lowered.diagnostics.is_empty(),
-        "the fixture does not lower: {:?}",
-        lowered
-            .diagnostics
-            .iter()
-            .map(|d| d.code.as_str())
-            .collect::<Vec<_>>()
-    );
-
-    let module = vela_bytecode::compile(&lowered.module, true);
-    assert!(
-        vela_bytecode::verify(&module).is_empty(),
-        "the fixture does not verify"
-    );
-    module
-}
-
-/// Prepares and compiles a suite: the story, plus the functions the tests' expressions need.
-fn suite(text: &str) -> (Module, Vec<Plan>) {
-    let prepared = prepare(FileId::from_raw(0), text);
-    (module(&prepared.text), prepared.plans)
-}
-
-/// The story with one test appended.
-fn with_test(directives: &str) -> String {
-    format!("{STORY}\ntest \"a test\":\n{directives}")
-}
-
-/// Runs one test and returns its failures.
-fn failures(directives: &str) -> Vec<Failure> {
-    let (module, plans) = suite(&with_test(directives));
-    assert_eq!(plans.len(), 1, "one test");
-    let report = run(&module, "start", &plans);
-    report
-        .outcomes
-        .into_iter()
-        .next()
-        .expect("one outcome")
-        .failures
-}
+use super::support::{STORY, failures, suite, with_test};
 
 /// Answers with `advance`, then asserts what the run left behind.
 #[test]
@@ -218,7 +121,7 @@ fn cover_labels_passes_when_the_run_reaches_everything() {
         format!("{text}\ntest \"all of it\":\n    run\n    choose \"Right\"\n    cover labels\n");
 
     let (module, plans) = suite(&text);
-    let report = run(&module, "start", &plans);
+    let report = run(&module, "start", &plans, None);
 
     assert!(report.is_ok(), "{:?}", report.outcomes[0].failures);
 }
@@ -232,7 +135,7 @@ fn a_suite_reports_each_test() {
          test \"does not\":\n    run from start\n    advance 1\n    expect trust == 9\n"
     );
     let (module, plans) = suite(&text);
-    let report = run(&module, "start", &plans);
+    let report = run(&module, "start", &plans, None);
 
     assert_eq!(report.outcomes.len(), 2);
     assert_eq!(report.passed(), 1);
@@ -311,7 +214,7 @@ test \"after it is over\":
     expect trust == 2
 ";
     let (module, plans) = suite(text);
-    let report = run(&module, "start", &plans);
+    let report = run(&module, "start", &plans, None);
 
     assert!(report.is_ok(), "{:?}", report.outcomes[0].failures);
 }

@@ -1,9 +1,10 @@
 //! `vela test` — the headless story runner, and the accessibility sweep.
 //!
 //! Two subjects, one command. A project's `test` items (`TOOLING.md §5`) are its suite: scripted input,
-//! world assertions, and coverage of the labels a run reaches, run headless against the same compiled
-//! program `vela run` plays. `--a11y` adds the M7 sweep — every screen's focus order, failing on a
-//! focusable node with nothing to announce, which is `W4010` enforced as a gate.
+//! world assertions, coverage of the labels a run reaches, and — since a test may click — the screens
+//! the run has open, laid out against the project's own compiled sets. `--a11y` adds the M7 sweep:
+//! every screen's focus order, failing on a focusable node with nothing to announce, which is `W4010`
+//! enforced as a gate.
 //!
 //! The loading is this command's, not `vela-test`'s: the crate is handed a compiled program and the
 //! tests read out of the session's files, and it never looks at a directory. That is the same division
@@ -18,14 +19,17 @@ use vela_compile::Session;
 use vela_diag::Severity;
 use vela_span::{FileId, Span};
 use vela_syntax::{Item, ScreenDecl, parse};
-use vela_test::{Plan, Report};
+use vela_test::{Plan, Report, Stage};
+use vela_text::{Font, TextEngine};
 use vela_ui::WidgetRegistry;
 use vela_ui::a11y::A11yNode;
 
 use crate::command::{Command, Error};
 use crate::commands::check::{Project, collect, load};
+use crate::commands::frame::{DEFAULT_FACE, FACE_NAME};
 use crate::commands::resolve::{self, Table};
 use crate::commands::run::flag_value;
+use crate::commands::ui::Screens;
 
 /// The `vela test` command.
 pub struct Test {
@@ -124,7 +128,14 @@ fn tests(project: &Project, args: &[String], out: &mut dyn Write) -> Result<(), 
         ));
     }
 
-    let report = vela_test::run(&module, &entry, &plans);
+    // The screens a step may click, and the face to lay them out with: the same compiled sets and the
+    // same bundled font `vela run` uses, so a test presses the control a player would press and the
+    // two cannot disagree about what a button does (`TOOLING.md §5`).
+    let screens = Screens::load(project);
+    let mut text = text_engine()?;
+    let mut stage = Stage::new(screens.sets(), &mut text, FACE_NAME);
+
+    let report = vela_test::run(&module, &entry, &plans, Some(&mut stage));
     render(&session, &report, out);
 
     if report.is_ok() {
@@ -134,6 +145,16 @@ fn tests(project: &Project, args: &[String], out: &mut dyn Write) -> Result<(), 
         "{} test(s) failed",
         report.failed()
     )))
+}
+
+/// The text engine a laid screen is sized with: the face the windowed runner uses, under the same
+/// name, so a screen laid out by a test measures what it measures in a window.
+fn text_engine() -> Result<TextEngine, Error> {
+    let font = Font::from_bytes(DEFAULT_FACE.to_vec(), 0)
+        .ok_or_else(|| Error::internal("the bundled font failed to load".to_string()))?;
+    let mut text = TextEngine::new();
+    text.add_font(FACE_NAME, font);
+    Ok(text)
 }
 
 /// Reads the project's tests, prepares each file, and resolves where each test starts.

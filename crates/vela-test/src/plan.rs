@@ -60,6 +60,7 @@ impl Plan {
         for step in &mut self.steps {
             let function = match &mut step.kind {
                 StepKind::Choose { function, .. }
+                | StepKind::Click { function, .. }
                 | StepKind::Expect { function, .. }
                 | StepKind::AdvanceUntil { function, .. }
                 | StepKind::ExpectShown { function, .. } => function,
@@ -87,6 +88,13 @@ pub enum StepKind {
     /// Answer the next choice with the option whose text this function produces.
     Choose {
         /// The synthesized function that produces the text.
+        function: String,
+        /// The expression as the author wrote it, for a failure message.
+        source: String,
+    },
+    /// Activate the control whose words this function produces, on the screen on top.
+    Click {
+        /// The synthesized function that produces the words.
         function: String,
         /// The expression as the author wrote it, for a failure message.
         source: String,
@@ -192,49 +200,41 @@ fn step(
             }
             StepKind::Advance(*count)
         }
-        // The two `shown` directives are one question asked twice — *is this on screen now*, and
-        // *run on until it is* — so they are read once, in `shown`.
+        // The directives whose subject is an expression are one reading, in `read`: what differs is the
+        // type the function returns and what the runner does with the value, and both are here.
         DirectiveKind::AdvanceUntil { text: expr } => {
-            match shown(expr, text, appended, counter, None) {
-                Some(step) => step,
-                None => {
-                    plan.notes
-                        .push("this `advance until` could not be read".to_string());
-                    return;
-                }
+            match read("advance until", "str", expr, text, appended, counter, plan) {
+                Some((function, source)) => StepKind::AdvanceUntil { function, source },
+                None => return,
             }
         }
         DirectiveKind::ExpectShown {
             text: expr,
             negated,
-        } => match shown(expr, text, appended, counter, Some(*negated)) {
-            Some(step) => step,
-            None => {
-                plan.notes
-                    .push("this `expect shown` could not be read".to_string());
-                return;
-            }
+        } => match read("expect shown", "str", expr, text, appended, counter, plan) {
+            Some((function, source)) => StepKind::ExpectShown {
+                function,
+                source,
+                negated: *negated,
+            },
+            None => return,
         },
         DirectiveKind::Choose { text: expr } => {
-            let Some(source) = source_of(text, expr.span()) else {
-                plan.notes
-                    .push("this `choose` could not be read".to_string());
-                return;
-            };
-            StepKind::Choose {
-                function: function(appended, counter, "choose", "str", source),
-                source: one_line(source),
+            match read("choose", "str", expr, text, appended, counter, plan) {
+                Some((function, source)) => StepKind::Choose { function, source },
+                None => return,
+            }
+        }
+        DirectiveKind::Click { text: expr } => {
+            match read("click", "str", expr, text, appended, counter, plan) {
+                Some((function, source)) => StepKind::Click { function, source },
+                None => return,
             }
         }
         DirectiveKind::Expect { expr } => {
-            let Some(source) = source_of(text, expr.span()) else {
-                plan.notes
-                    .push("this `expect` could not be read".to_string());
-                return;
-            };
-            StepKind::Expect {
-                function: function(appended, counter, "expect", "bool", source),
-                source: one_line(source),
+            match read("expect", "bool", expr, text, appended, counter, plan) {
+                Some((function, source)) => StepKind::Expect { function, source },
+                None => return,
             }
         }
         DirectiveKind::Cover { mode } => match cover_mode(*mode, plan) {
@@ -275,29 +275,33 @@ fn start_of(kind: &vela_syntax::DirectiveKind, plan: &mut Plan) {
     plan.start_span = *target_span;
 }
 
-/// A step whose subject is what is *on screen*, or `None` when the expression could not be read.
+/// The expression a directive's subject is, compiled into a function — or `None`, with the note that
+/// says which directive could not be read.
 ///
-/// `negated` is `None` for a wait and `Some(false)`/`Some(true)` for an assertion, which is the only
-/// difference between the two directives: one runs the story on until the subject holds, the other
-/// asks whether it does.
-fn shown(
+/// The five directives that carry an expression are one reading: slice the author's text out of the
+/// file by its span, append a nullary function that returns it, and keep the text for a failure
+/// message. `ret` is what the function promises — a `choose`, a `click` and the two `shown` directives
+/// want text, an `expect` a `bool` — and the *name* is what the note calls the directive.
+fn read(
+    name: &str,
+    ret: &str,
     expr: &vela_syntax::Expr,
     text: &str,
     appended: &mut String,
     counter: &mut u32,
-    negated: Option<bool>,
-) -> Option<StepKind> {
-    let source = source_of(text, expr.span())?;
-    let function = function(appended, counter, "shown", "str", source);
-    let source = one_line(source);
-    match negated {
-        Some(negated) => Some(StepKind::ExpectShown {
-            function,
-            source,
-            negated,
-        }),
-        None => Some(StepKind::AdvanceUntil { function, source }),
-    }
+    plan: &mut Plan,
+) -> Option<(String, String)> {
+    let Some(source) = source_of(text, expr.span()) else {
+        plan.notes.push(format!("this `{name}` could not be read"));
+        return None;
+    };
+    // `advance until` is two words and a function name is one, so the note's name is joined the way
+    // this language joins names rather than passed twice.
+    let what = name.replace(' ', "_");
+    Some((
+        function(appended, counter, &what, ret, source),
+        one_line(source),
+    ))
 }
 
 /// The source text of a span inside the file it came from.

@@ -94,6 +94,11 @@ impl Parser<'_> {
             "choose" => DirectiveKind::Choose {
                 text: self.parse_expr(),
             },
+            // A control on a screen, which is the other half of naming something by its text: a menu
+            // option is the *story's*, a control is the interface's (`TOOLING.md §5`).
+            "click" => DirectiveKind::Click {
+                text: self.parse_expr(),
+            },
             // `expect shown "x"` is about the screen and `expect x == 1` is about the world: the
             // word `shown` is what tells them apart, and it is looked for rather than reserved so a
             // story may still call a variable `shown`.
@@ -116,7 +121,7 @@ impl Parser<'_> {
                 self.diagnostics.push(error::unexpected(
                     start.to(self.prev_span()),
                     &format!("`{name}`"),
-                    "one of `run`, `advance`, `choose`, `expect`, or `cover`",
+                    "one of `run`, `advance`, `choose`, `click`, `expect`, or `cover`",
                 ));
                 self.skip_line();
                 self.end_statement();
