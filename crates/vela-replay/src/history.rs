@@ -19,7 +19,7 @@ use std::collections::VecDeque;
 
 use vela_bytecode::Module;
 use vela_vm::{DebugLocal, Fault, FrameInfo, Session, Site, Snapshot, Step};
-use vela_world::{Command, Input, World};
+use vela_world::{Command, Input, Preferences, World};
 
 /// How often a snapshot is taken, per `RUNTIME.md §7.2`.
 pub const DEFAULT_INTERVAL: u64 = 64;
@@ -87,13 +87,25 @@ impl Timeline {
     ///
     /// This is what a load does: the state is restored and the command the snapshot was
     /// waiting on is presented again, but the rollback history starts empty (`RUNTIME.md
-    /// §7.3`) and refills as the player continues.
+    /// §7.3`) and refills as the player continues. `preferences` are the player's own — the
+    /// snapshot carries none — so the caller that has them is the one that hands them over
+    /// (`RUNTIME.md §2.1`).
     ///
     /// # Errors
     ///
     /// Fails if the snapshot's frames name bodies this module does not have.
-    pub fn resume(module: &Module, snapshot: &Snapshot) -> Result<Self, Fault> {
-        Self::resume_with(module, snapshot, DEFAULT_INTERVAL, DEFAULT_DEPTH)
+    pub fn resume(
+        module: &Module,
+        snapshot: &Snapshot,
+        preferences: Preferences,
+    ) -> Result<Self, Fault> {
+        Self::resume_with(
+            module,
+            snapshot,
+            preferences,
+            DEFAULT_INTERVAL,
+            DEFAULT_DEPTH,
+        )
     }
 
     /// Resumes a timeline with a chosen interval and ring depth.
@@ -104,10 +116,11 @@ impl Timeline {
     pub fn resume_with(
         module: &Module,
         snapshot: &Snapshot,
+        preferences: Preferences,
         every: u64,
         depth: usize,
     ) -> Result<Self, Fault> {
-        let session = Session::restore(module, snapshot)?;
+        let session = Session::restore(module, snapshot, preferences)?;
         let mut snapshots = VecDeque::with_capacity(depth.max(1));
         snapshots.push_back((0, session.snapshot()));
         Ok(Self {
@@ -217,9 +230,12 @@ impl Timeline {
             .map(|(_, snapshot)| snapshot.clone())
             .expect("the position was just found");
 
+        // The settings are the *live* ones, from the session being replaced: a rollback undoes the
+        // story, and what the player chose is not part of the story (`RUNTIME.md §2.1`).
+        let preferences = self.session.world().preferences.clone();
         // A snapshot of this module always restores: the frames name bodies that are in it.
-        let mut session =
-            Session::restore(&self.module, &snapshot).expect("a snapshot of this module");
+        let mut session = Session::restore(&self.module, &snapshot, preferences)
+            .expect("a snapshot of this module");
         if start == 0 && target >= 1 {
             // Position 0 is before the first command; every later position is `target - 1`
             // answers past it.
@@ -284,6 +300,14 @@ impl Timeline {
     #[must_use]
     pub fn world(&self) -> &World {
         self.session.world()
+    }
+
+    /// The player's settings, to write one.
+    ///
+    /// What a settings screen ends at (`RUNTIME.md §2.1`): the store is the session's, and the
+    /// timeline is what a player's input reaches.
+    pub fn preferences_mut(&mut self) -> &mut Preferences {
+        self.session.preferences_mut()
     }
 
     /// The positions the ring currently holds a snapshot at, oldest first.

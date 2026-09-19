@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::preferences::Preferences;
 use crate::rng::Rng;
 use crate::stage::{AudioState, SceneState};
 use crate::value::Value;
@@ -16,7 +17,8 @@ pub struct Tick(pub u64);
 ///
 /// Plain typed data with no host pointers, which is what makes it snapshottable and
 /// serializable — rollback, saves, and replay all fall out of that one property
-/// (`RUNTIME.md §2`).
+/// (`RUNTIME.md §2`). One field is not the story's: `preferences` belong to the *player*, and
+/// `RUNTIME.md §2.1` is the rule that keeps them out of everything a story reproduces.
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct World {
     /// The values declared by `default`, which are the save schema.
@@ -24,6 +26,13 @@ pub struct World {
     /// Ordered, not hashed: iteration order is observable through serialization, and a
     /// `HashMap` here would make two runs of the same story produce different bytes.
     defaults: BTreeMap<String, Value>,
+    /// The player's settings — the second lifetime (`RUNTIME.md §2.1`).
+    ///
+    /// Skipped by the serializer, so no save carries one, and left out of [`World::snapshot`], so no
+    /// rollback restores one. What a restore does instead is take them from its caller — `vela-vm`'s
+    /// `Session::restore` — because a setting is the player's and no saved state may speak for them.
+    #[serde(skip)]
+    pub preferences: Preferences,
     /// The single deterministic generator, advanced only by the `rand` effects.
     pub rng: Rng,
     /// Time, advanced only by an explicit tick.
@@ -75,9 +84,15 @@ impl World {
     }
 
     /// A copy, for comparing the state at two points or from two executions.
+    ///
+    /// The player's settings are not in it: they are not state a run reproduces, so two runs of one
+    /// story with different settings compare equal — and a snapshot, which is copied from this, is
+    /// not a place a rollback could undo a setting from (`RUNTIME.md §2.1`).
     #[must_use]
     pub fn snapshot(&self) -> Self {
-        self.clone()
+        let mut story = self.clone();
+        story.preferences = Preferences::default();
+        story
     }
 }
 

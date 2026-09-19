@@ -9,7 +9,7 @@ mod common;
 use common::compile;
 use vela_replay::Save;
 use vela_vm::{Session, Step};
-use vela_world::Input;
+use vela_world::{Input, Preferences};
 
 /// A story that suspends, branches, and then speaks again.
 const STORY: &str = "label start:\n    \"Before.\"\n    menu:\n        \"Left\":\n            jump left\n        \"Right\":\n            jump right\n\nlabel left:\n    \"Left.\"\n    return\n\nlabel right:\n    \"Right.\"\n    return\n";
@@ -29,9 +29,11 @@ fn a_saved_session_loads_and_continues() {
         .to_bytes()
         .expect("encode");
 
-    // Load the file into a fresh session.
+    // Load the file into a fresh session. A resume is told whose settings it is for; these are not
+    // what this test is about (`RUNTIME.md §2.1`).
     let loaded = Save::from_bytes(&bytes).expect("decode");
-    let mut restored = Session::restore(&module, &loaded.snapshot).expect("restore");
+    let mut restored =
+        Session::restore(&module, &loaded.snapshot, Preferences::new()).expect("restore");
     assert_eq!(
         restored.current(),
         session.current(),

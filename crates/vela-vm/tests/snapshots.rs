@@ -10,6 +10,12 @@ mod common;
 
 use common::compile;
 use vela_bytecode::Module;
+use vela_world::Preferences;
+
+/// A resume is told whose settings it is for; these tests are not about them.
+fn settings() -> Preferences {
+    Preferences::new()
+}
 
 /// A story with a branch, so a suspended session has somewhere to go next.
 const MENU_STORY: &str = "label start:\n    \"Before.\"\n    menu:\n        \"Left\":\n            jump left\n        \"Right\":\n            jump right\n\nlabel left:\n    \"Left.\"\n    return\n\nlabel right:\n    \"Right.\"\n    return\n";
@@ -30,7 +36,7 @@ fn a_snapshot_restores_and_resumes() {
         "a suspension leaves the command to re-present"
     );
 
-    let mut restored = vela_vm::Session::restore(&module, &snapshot).expect("restore");
+    let mut restored = vela_vm::Session::restore(&module, &snapshot, settings()).expect("restore");
     assert_eq!(restored.current(), session.current());
     assert!(
         restored.log().is_empty(),
@@ -68,7 +74,8 @@ fn a_snapshot_names_its_frames() {
     // an index into the function table, which is what lets the body be compiled differently.
     // Relocating the suspension *inside* the body is the neighbouring test's job.
     let recompiled = compile("nested", NESTED);
-    let mut restored = vela_vm::Session::restore(&recompiled, &snapshot).expect("restore");
+    let mut restored =
+        vela_vm::Session::restore(&recompiled, &snapshot, settings()).expect("restore");
     let step = restored.answer(vela_world::Input::Ack);
     assert!(
         matches!(step, vela_vm::Step::Yield(_)),
@@ -148,7 +155,7 @@ fn a_save_survives_the_body_moving_under_it() {
         "the recorded index must not be a suspension in the new build"
     );
 
-    let mut restored = vela_vm::Session::restore(&rebuilt, &snapshot).expect("restore");
+    let mut restored = vela_vm::Session::restore(&rebuilt, &snapshot, settings()).expect("restore");
     assert_eq!(
         restored.current(),
         session.current(),
@@ -191,7 +198,7 @@ fn a_save_for_a_changed_story_is_refused() {
         "the suspension is anchored"
     );
 
-    let error = match vela_vm::Session::restore(&after, &snapshot) {
+    let error = match vela_vm::Session::restore(&after, &snapshot, settings()) {
         Ok(_) => panic!("a save for a changed story restored"),
         Err(error) => error,
     };
@@ -215,7 +222,7 @@ fn a_save_without_an_anchor_restores_from_its_index() {
         frame.resume = None;
     }
 
-    let restored = vela_vm::Session::restore(&module, &snapshot).expect("restore");
+    let restored = vela_vm::Session::restore(&module, &snapshot, settings()).expect("restore");
     assert_eq!(restored.current(), session.current());
 }
 
@@ -231,7 +238,7 @@ fn a_save_that_outruns_its_body_is_refused() {
     }
     snapshot.vm.frames[0].ip = 10_000;
 
-    let error = match vela_vm::Session::restore(&module, &snapshot) {
+    let error = match vela_vm::Session::restore(&module, &snapshot, settings()) {
         Ok(_) => panic!("a save past the end of its body restored"),
         Err(error) => error,
     };
@@ -250,7 +257,7 @@ fn a_frame_that_names_nothing_is_refused() {
     let mut snapshot = session.snapshot();
     snapshot.vm.frames[0].body = "label:vanished".to_string();
 
-    let error = match vela_vm::Session::restore(&module, &snapshot) {
+    let error = match vela_vm::Session::restore(&module, &snapshot, settings()) {
         Ok(_) => panic!("a snapshot with a missing body restored"),
         Err(error) => error,
     };

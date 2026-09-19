@@ -17,6 +17,7 @@
 
 mod command;
 mod input;
+mod preferences;
 mod rng;
 mod stage;
 mod value;
@@ -27,6 +28,7 @@ mod tests;
 
 pub use command::{Audio, Choice, Command, CommandKind, Stage};
 pub use input::Input;
+pub use preferences::Preferences;
 pub use rng::Rng;
 pub use stage::{AudioState, Playing, SceneState, StagedImage};
 pub use value::{Key, Value, format_float};

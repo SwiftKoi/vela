@@ -46,7 +46,11 @@ impl Player {
                 return;
             }
         };
-        match Timeline::resume(&self.module, &save.snapshot) {
+        // The player's settings are not in the save (`RUNTIME.md §2.1`): a load restores the story and
+        // keeps the settings this session already had, which is why they are handed over here rather
+        // than read out of the file.
+        let preferences = self.timeline.world().preferences.clone();
+        match Timeline::resume(&self.module, &save.snapshot, preferences) {
             Ok(timeline) => {
                 self.timeline = timeline;
                 self.finished = false;

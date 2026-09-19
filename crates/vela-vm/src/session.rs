@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 use vela_bytecode::Module;
-use vela_world::{Command, Input, Value, World};
+use vela_world::{Command, Input, Preferences, Value, World};
 
 use crate::debug::{DebugLocal, FrameInfo, Site};
 use crate::fault::Fault;
@@ -92,21 +92,33 @@ impl Session {
         Self::start(&module, &label).map_err(crate::LoadError::Fault)
     }
 
-    /// Resumes a story from a snapshot.
+    /// Resumes a story from a snapshot, with the settings of the player it is resumed for.
     ///
     /// The input log starts empty: `RUNTIME.md §7.3` — *"rollback history is not persisted"* —
     /// so a load is independent of how long the previous session ran. The command the snapshot
     /// was waiting on is restored, and is answered by the caller, not by `advance`.
     ///
+    /// `preferences` are *taken* rather than read out of the snapshot, which carries none: a setting
+    /// belongs to the player and not to the playthrough, so a resume that wants the player's own has
+    /// to be told whose they are (`RUNTIME.md §2.1`).
+    ///
     /// # Errors
     ///
     /// Fails if a frame names a body this module does not have.
-    pub fn restore(module: &Module, snapshot: &Snapshot) -> Result<Self, Fault> {
+    pub fn restore(
+        module: &Module,
+        snapshot: &Snapshot,
+        preferences: Preferences,
+    ) -> Result<Self, Fault> {
         let mut vm = Vm::new(module.clone());
         vm.restore_state(&snapshot.vm)?;
         Ok(Self {
             vm,
-            world: snapshot.world.clone(),
+            world: {
+                let mut world = snapshot.world.clone();
+                world.preferences = preferences;
+                world
+            },
             log: Vec::new(),
             current: snapshot.current.clone(),
             finished: snapshot.vm.finished,
@@ -201,10 +213,13 @@ impl Session {
     }
 
     /// A snapshot of the world and the machine, for a save or a rollback point.
+    ///
+    /// The world in it is the *story* state (`World::snapshot`): the player's settings are not carried,
+    /// because a snapshot is restored into a session that already has a player's own (`§2.1`).
     #[must_use]
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
-            world: self.world.clone(),
+            world: self.world.snapshot(),
             vm: self.vm.state(),
             current: self.current.clone(),
         }
@@ -220,6 +235,15 @@ impl Session {
     #[must_use]
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// The player's settings, to write one.
+    ///
+    /// The write path a settings screen ends at, and a method rather than a public way to the whole
+    /// world, because a setting is the only thing a *host* writes directly: everything else the story
+    /// writes to is written by the story (`RUNTIME.md §2.1`).
+    pub fn preferences_mut(&mut self) -> &mut Preferences {
+        &mut self.world.preferences
     }
 
     /// Calls a function and returns what it produced, in the world as it is right now.

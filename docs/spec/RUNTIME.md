@@ -116,6 +116,45 @@ pub struct World {
 > had not been told about, which made the first `trust + 1` an `add.i` given `none`. The rule it
 > restores is the one stated above — the world's defaults *are* the declarations.
 
+### 2.1 The player's settings
+
+`World` carries a second store beside the save schema: the **settings** a player chooses. Text speed,
+auto-forward, skip behaviour, volumes, display mode — the vocabulary is the interface's
+(`SCREENS.md §7`'s `preference` action and the screens over it), and what this section fixes is the
+store's *lifetime*.
+
+```rust
+pub struct World {
+    pub defaults: DefaultStore,   // the playthrough: in every save, undone by every rollback
+    pub preferences: Preferences, // the player: in no save, undone by no rollback
+    // …
+}
+```
+
+**A setting is the player's, not the playthrough's**, and three consequences follow:
+
+1. **A save never carries one.** The field is skipped by the serializer, so a save written by one
+   player is the story and nothing else — a second player loading it keeps their own settings.
+2. **A snapshot never carries one.** `World::snapshot` — what `Session::snapshot` copies, and what a
+   rollback restores from — leaves the store empty, so a rollback undoes the story and not the
+   player's choices.
+3. **A resume is told whose settings it is for.** `Session::restore(module, snapshot, preferences)`
+   takes them from the caller, because a resume that read them out of the snapshot would be reading
+   them from the state the two rules above keep empty. A load passes the live player's; a rollback
+   passes the ones of the session it is replacing.
+
+> **Implemented (M12.2).** `vela_world::Preferences` is an ordered name→value store — ordered because
+> the settings file is written from a walk over it (`CONVENTIONS.md §2.2`) — `World::preferences`
+> carries it, and `World::snapshot` is the story-only copy. The write path is
+> `Session::preferences_mut`, which is where a settings screen ends, and
+> `crates/vela-replay/tests/preferences.rs` asserts the three rules through the real types: a save
+> carries none (in the decoded world *and* in the bytes), a snapshot carries none, a rollback keeps
+> them, and a resume takes the caller's.
+>
+> **Not yet.** Persistence, and the vocabulary that names a setting: the store holds any name of any
+> type, and the `preference` action is still `dispatched: false`. Both land with the settings screens
+> (`docs/roadmap/M12.2-game-interface.md`, items 2 and 4).
+
 ## 3. Capabilities / host interface
 
 Scripts reach the outside world only through declared effects. Each declares the capability
@@ -366,9 +405,10 @@ up to it, discard the tail, and continue with the new input. The discarded tail 
 
 ### 7.3 Interaction with saves
 
-Rollback history is **not** persisted. A save records `log_len` and the current `World` only.
-On load, the rollback buffer starts empty and refills as the player continues. This keeps
-saves small and makes them independent of session length.
+Rollback history is **not** persisted. A save records `log_len` and the current `World` only —
+and not the player's settings, which no save and no snapshot carries at all (§2.1). On load, the
+rollback buffer starts empty and refills as the player continues. This keeps saves small and makes
+them independent of session length.
 
 > **Implemented (M8).** `vela-replay::Timeline` wraps a session with a snapshot ring —
 > interval 64 commands, depth 32 snapshots by default — and replays from the nearest snapshot
