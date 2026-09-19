@@ -213,8 +213,42 @@ pub fn is_chosen(preferences: &Preferences, action: &Action) -> bool {
         return false;
     };
     match stored {
-        Some(stored) => *stored == want,
-        None => Value::Str(setting.default.to_string()) == want,
+        Some(stored) => matches(setting, stored, &want),
+        // The declaration, in the type it declares rather than as the text it is written as: comparing a
+        // button's `0` against the string `"0"` would leave the default option of every numeric setting
+        // unmarked, which is the one option the engine knows the answer to.
+        None => matches(setting, &declared(setting), &want),
+    }
+}
+
+/// Whether a stored value is the one a control writes, for a setting of this type.
+///
+/// Numbers compare as numbers, because a setting declared `Number` is one type while the store can hold a
+/// number two ways: a press writes a float (`preference("text_speed", 30)`) and a value the world put
+/// there may be an int, and the player reading a settings screen cannot tell those apart — so neither can
+/// the mark.
+fn matches(setting: &SettingDecl, stored: &Value, want: &Value) -> bool {
+    match (setting.ty, number(stored), number(want)) {
+        (SettingTy::Number, Some(stored), Some(want)) => stored == want,
+        _ => stored == want,
+    }
+}
+
+/// A value as a number, when it is one of the two the store can hold.
+fn number(value: &Value) -> Option<f64> {
+    match value {
+        Value::Int(number) => Some(*number as f64),
+        Value::Float(number) => Some(*number),
+        _ => None,
+    }
+}
+
+/// A declaration's default, as the store would hold it: the text it is written as, in its own type.
+fn declared(setting: &SettingDecl) -> Value {
+    match setting.ty {
+        SettingTy::Bool => Value::Bool(setting.default == "true"),
+        SettingTy::Number => Value::Float(setting.default.parse().unwrap_or(0.0)),
+        SettingTy::Choice(_) => Value::Str(setting.default.to_string()),
     }
 }
 

@@ -148,6 +148,28 @@ fn a_bare_target_is_left_to_the_name_check() {
     assert!(diagnose(&[menu]).is_empty(), "{:?}", diagnose(&[menu]));
 }
 
+/// A screen the interface declares is a target like any other (`SCREENS.md §2.7`).
+///
+/// This is the case that found the bug: `open_screen("preferences")` was reported as a name nothing
+/// declares, because the check looked at the project's files and not at the interface — the failure this
+/// check exists to catch, reported on a project that was right.
+#[test]
+fn an_interface_screen_is_a_target() {
+    let menu = "screen pause:\n    button:\n        text \"Preferences\"\n        action open_screen(\"preferences\")\n";
+    assert!(diagnose(&[menu]).is_empty(), "{:?}", diagnose(&[menu]));
+
+    // And a mistyped one gets the interface's name rather than nothing: one candidate list, which is the
+    // project's declarations and the interface's together.
+    let typo = "screen pause:\n    button:\n        text \"Preferences\"\n        action open_screen(\"preferances\")\n";
+    let found = diagnostics(&[typo]);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].code.as_str(), "E5009");
+    assert_eq!(
+        found[0].help.as_deref(),
+        Some("did you mean `preferences`?")
+    );
+}
+
 /// A typo in the string spelling gets the nearest screen's name, like every other name in the language.
 #[test]
 fn an_unrecognisable_target_gets_a_suggestion() {

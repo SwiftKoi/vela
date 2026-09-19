@@ -396,8 +396,9 @@ overrides any part of it*. It is the reason a new project gets a working menu wi
 parsed once per process (`§13`). The engine's source rather than the bundle's, because the interface
 belongs to the engine that is running rather than to the artifact that was built — so a bundle carries
 the project's screens and finds the interface in the binary. What is there today is what
-`vela_ui::interface::decls()` returns: `game_menu(title)`, the frame the app screens are built on, with
-a main menu, settings, save/load, history, help and notify arriving as `M12.2`'s items land.
+`vela_ui::interface::decls()` returns: `game_menu(title)`, the frame the app screens are built on, and
+`preferences`, the settings screen over the store (§7.1) — with a main menu, save/load, history, help and
+notify arriving as `M12.2`'s items land.
 
 **A name resolves to the project first** (`§2.1`), at every site — a `use`, an `open_screen`, a hover, a
 dependency — so a project can build a screen out of the frame *and* can replace it, without a second
@@ -848,12 +849,16 @@ is why it is not an action and has no entry in the registry. A setting nobody ha
 the answer through the scope a screen is laid out in, the way the variants do: a setting has to reach an
 arm, a loop body and a `use` argument exactly the way a name does.
 
-> **Implemented (M12.2, in part).** The registry, the checker, the migration and the *write* are in; the
-> *read* is not. `vela_ui::settings::write` is the one place the two actions are carried out, and both
-> callers use it: the windowed player, where a settings screen's button is how a player changes one (and
-> the settings file is rewritten at once), and the test runner, where a click is — so a settings button is
-> one a test can press rather than one that reports a headless run cannot. Nothing *draws* a setting yet,
-> so every entry in the list carries `read: false` and the reference says so (`RUNTIME.md §2.1`).
+> **Implemented (M12.2, in part).** The registry, the checker, the migration, the *write*, the *read*, and
+> a screen that uses all three. `vela_ui::settings::write` is the one place the two actions are carried
+> out, and both callers use it: the windowed player, where a settings screen's button is how a player
+> changes one (and the settings file is rewritten at once), and the test runner, where a click is. Reading
+> one is a question the host answers — `setting("text_speed")` (`§2.6`) — and what it answers, before
+> anybody chooses, is the *declaration*: the engine's own `preferences` screen (`§2.7`) draws a radio whose
+> current option is marked by the same answer (`§5.1`), so a settings screen needs no companion test and
+> `vela-ui/tests/interface.rs` pins that the mark moves with the store. What is **not** here is the engine
+> *obeying* one — nothing types dialogue at a text speed yet, and every entry in the list still carries
+> `read: false`, which is what says so (`RUNTIME.md §2.1`).
 
 ## 8. Reactivity
 

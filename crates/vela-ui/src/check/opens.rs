@@ -29,7 +29,12 @@ use super::screen::diag;
 /// in any of them.
 #[must_use]
 pub fn check_open_screens(files: &[&[&ScreenDecl]]) -> Vec<Diagnostic> {
-    let game: Vec<&ScreenDecl> = files.iter().copied().flatten().copied().collect();
+    let mut game: Vec<&ScreenDecl> = files.iter().copied().flatten().copied().collect();
+    // The interface is a target too (`SCREENS.md §2.7`): `open_screen("preferences")` names a screen a
+    // project that declares none of its own still has, and leaving the interface out of this list reported
+    // exactly that call — the failure this check exists to catch, reported on a project that was right.
+    game.extend(crate::interface::decls().iter().copied());
+
     let mut out = Vec::new();
     for file in files {
         for screen in *file {

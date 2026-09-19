@@ -158,6 +158,64 @@ screen preferences:
     );
 }
 
+/// The settings screen draws the store: the option the player already has is the one marked.
+///
+/// Asserted by *where* the accent lands rather than by counting glyphs, because that is what a player
+/// reads: the two display options are laid out left to right, so the marked one's x moves when the store
+/// changes and the screen does not — which is the whole of `SCREENS.md §5.1`'s second source of `selected`
+/// doing its job on the first screen that needs it.
+#[test]
+fn the_settings_screen_marks_what_the_player_chose() {
+    const ACCENT: vela_render::Color = vela_render::Color {
+        r: 0.352_941_2,
+        g: 0.662_745_1,
+        b: 0.901_960_8,
+        a: 1.0,
+    };
+
+    let set = vela_ui::interface::set();
+    let mut text = engine();
+
+    /// The x of the first accent-coloured glyph, with this store.
+    fn marked(set: &ScreenSet, text: &mut TextEngine, display: &str) -> f32 {
+        let mut preferences = vela_world::Preferences::new();
+        preferences.set("display_mode", vela_world::Value::Str(display.to_string()));
+        let args = Args::new().with_preferences(preferences);
+        let laid = vela_ui::ScreenSource::lay(
+            set,
+            "preferences",
+            &args,
+            &Default::default(),
+            (1280, 720),
+            text,
+            "sans",
+        )
+        .expect("the interface declares `preferences`");
+
+        let mut draw = vela_render::DrawList::new();
+        vela_ui::paint(
+            &laid.node,
+            &laid.frame,
+            text,
+            "sans",
+            &mut draw,
+            None,
+            &vela_ui::ImageTable::new(),
+        );
+        draw.glyphs()
+            .find(|glyph| glyph.color == ACCENT)
+            .map(|glyph| glyph.x)
+            .expect("exactly one display option is marked")
+    }
+
+    let window = marked(&set, &mut text, "window");
+    let fullscreen = marked(&set, &mut text, "fullscreen");
+    assert!(
+        window < fullscreen,
+        "the mark is on the option the store holds: window at {window}, fullscreen at {fullscreen}"
+    );
+}
+
 /// A mistyped interface name is a suggestion rather than silence.
 #[test]
 fn a_mistyped_interface_name_is_suggested() {

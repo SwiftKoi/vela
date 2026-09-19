@@ -19,6 +19,10 @@ theme interface:
     color fg = 0xe8e8ee
     color accent = 0x5aa9e6
 
+style interface_choice:
+    color = theme.fg
+    selected_color = theme.accent
+
 screen game_menu(title):
     box at = center, background = theme.bg:
         pad 32
@@ -28,3 +32,58 @@ screen game_menu(title):
             button:
                 action close_screen()
                 text "Return"
+
+# The settings, one section per group of `vela-ui::settings`' list. Every control is a *button*: the
+# engine marks the one whose action writes what the store holds (`SCREENS.md §5.1`), so a choice needs no
+# companion test and a toggle needs no state of its own. Numeric settings are a row of values rather than
+# a slider, because a slider is a drag and the host delivers semantic actions rather than coordinates
+# (`§11`) — which also makes this screen answer to a keyboard, the way a game's settings must.
+screen preferences:
+    use game_menu("Preferences"):
+        column gap = 16:
+            text "Display"
+            row gap = 12:
+                button:
+                    action preference("display_mode", "window")
+                    text "Window", style = interface_choice
+                button:
+                    action preference("display_mode", "fullscreen")
+                    text "Fullscreen", style = interface_choice
+            text "Text speed"
+            row gap = 12:
+                button:
+                    action preference("text_speed", 0)
+                    text "Instant", style = interface_choice
+                button:
+                    action preference("text_speed", 30)
+                    text "Slow", style = interface_choice
+                button:
+                    action preference("text_speed", 60)
+                    text "Normal", style = interface_choice
+            text "Auto-forward"
+            row gap = 12:
+                button:
+                    action toggle_preference("auto_forward")
+                    text "Auto-forward", style = interface_choice
+            text "Auto-forward delay"
+            row gap = 12:
+                button:
+                    action preference("auto_forward_time", 5)
+                    text "5s", style = interface_choice
+                button:
+                    action preference("auto_forward_time", 15)
+                    text "15s", style = interface_choice
+                button:
+                    action preference("auto_forward_time", 30)
+                    text "30s", style = interface_choice
+            text "Skipping"
+            row gap = 12:
+                button:
+                    action toggle_preference("skip_unseen")
+                    text "Unseen text", style = interface_choice
+                button:
+                    action toggle_preference("skip_after_choices")
+                    text "After choices", style = interface_choice
+                button:
+                    action toggle_preference("transitions")
+                    text "Transitions", style = interface_choice
