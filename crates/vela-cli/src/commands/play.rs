@@ -23,8 +23,8 @@ use crate::command::Error;
 use crate::commands::play::waiting::waits_for_the_player;
 use crate::commands::run::{Picture, stage};
 use crate::commands::ui::{Screens, Watcher};
+use vela_ui::Done;
 use vela_ui::Stack;
-use vela_ui::Value;
 use vela_ui::actions::Action as ScreenAction;
 
 pub(crate) mod images;
@@ -255,32 +255,32 @@ impl Player {
 
     /// Runs an action a screen asked for, however it asked.
     ///
-    /// One place, because a screen asks two ways — the focused control, and a `key` binding — and a
-    /// binding that dispatched through a second copy of this match would be a second place for the two
-    /// to disagree about what `hide` means.
+    /// What the screen *stack* does with an action is `vela-ui`'s (`Stack::dispatch`), because a test
+    /// that clicks drives a stack too and "what does `hide` mean" should have one answer. What is left
+    /// here is what only a player has: the window, the saves, and the rollback history.
     fn run(&mut self, action: ScreenAction) {
+        let done = self.overlays.dispatch(
+            &action,
+            self.screens.sets(),
+            self.size,
+            self.presenter.text_mut(),
+            FACE_NAME,
+        );
+        match done {
+            Done::Opened(name) => println!("screen open {name}"),
+            Done::Missing(name) => println!("screen missing {name}"),
+            Done::Closed(name) => println!("screen close {name}"),
+            Done::Hidden(name) => println!("screen hide {name}"),
+            Done::Set(name) => println!("screen set {name}"),
+            Done::Stale(name) => println!("screen stale {name}"),
+            Done::Nothing => {}
+            Done::NotOurs => self.host_action(action),
+        }
+    }
+
+    /// The actions a player has and a headless run does not: the VM's, the save system's, the window's.
+    fn host_action(&mut self, action: ScreenAction) {
         match action.name.as_str() {
-            "open_screen" => {
-                let Some(name) = action.first() else {
-                    return;
-                };
-                if self.overlays.open(
-                    self.screens.sets(),
-                    name,
-                    self.size,
-                    self.presenter.text_mut(),
-                    FACE_NAME,
-                ) {
-                    println!("screen open {name}");
-                } else {
-                    println!("screen missing {name}");
-                }
-            }
-            "close_screen" => {
-                if let Some(name) = self.overlays.close() {
-                    println!("screen close {name}");
-                }
-            }
             "quit" => {
                 self.quit = true;
                 println!("screen quit");
@@ -288,36 +288,6 @@ impl Player {
             "quick_save" => self.save("quick"),
             "quick_load" => self.load("quick"),
             "rollback" => self.rollback(),
-            "hide" => {
-                let Some(name) = action.first() else {
-                    return;
-                };
-                if self.overlays.close_named(name) {
-                    println!("screen hide {name}");
-                }
-            }
-            // The one action whose argument is a *value* rather than a name (`SCREENS.md §2.5`): the
-            // screen resolved it, so what arrives is what the variable becomes — the string, or the
-            // number, rather than the words it was written with.
-            "set_screen_variable" => {
-                let (Some(Value::Str(name)), Some(value)) =
-                    (action.args.first(), action.args.get(1))
-                else {
-                    return;
-                };
-                if self.overlays.set_variable(
-                    self.screens.sets(),
-                    name,
-                    value.clone(),
-                    self.size,
-                    self.presenter.text_mut(),
-                    FACE_NAME,
-                ) {
-                    println!("screen set {name}");
-                } else {
-                    println!("screen stale {name}");
-                }
-            }
             // The rest need the VM or `World` and are not wired yet — `SCREENS.md §7` says which, and
             // the registry carries the same answer. Saying so beats a button that quietly does
             // nothing, which is the failure that looks like the project's mistake.

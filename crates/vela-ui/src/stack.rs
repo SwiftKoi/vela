@@ -9,6 +9,13 @@
 //!
 //! [`ScreenSource`] is the seam: this crate holds a laid screen, and the layer that can compile a
 //! project's `.vela` files produces one.
+//!
+//! What an action a screen asks for *does* is `dispatch`'s, beside this rather than in either
+//! caller, because both callers need the same answer (`SCREENS.md §7`).
+
+mod dispatch;
+
+pub use dispatch::Done;
 
 use vela_render::{Color, DrawList, RectQuad};
 use vela_text::TextEngine;

@@ -65,7 +65,7 @@ pub use paint::paint;
 pub use props::{Anchor, Props, SizeSpec};
 pub use reload::{Diff, Key, diff};
 pub use screens::{KeyBinding, Laid, ScreenSet, Timer};
-pub use stack::{Overlay, ScreenSource, Stack};
+pub use stack::{Done, Overlay, ScreenSource, Stack};
 pub use styles::{check_inheritance, check_screen_styles, resolve};
 pub use theme::{Fonts, Palette, Rgb, check_contrast, fonts, palette};
 pub use tokens::check_magic_colours;
