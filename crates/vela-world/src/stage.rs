@@ -51,14 +51,21 @@ impl SceneState {
     pub fn show(&mut self, image: impl Into<String>) {
         let image = image.into();
         let tag = tag_of(&image);
+        // A bare tag means "the same sprite, as it is": Ren'Py keeps the attributes an earlier `show`
+        // set, so `show sylvie green normal` followed by `show sylvie` is the same Sylvie — and the
+        // *name* is what has to stay, because in Vela the attributes are part of it. Replacing the
+        // name with the tag would stage a picture nothing declares.
+        let keeps_its_face = image == tag;
         match self
             .images
             .iter_mut()
             .find(|staged| tag_of(&staged.image) == tag)
         {
             Some(staged) => {
-                staged.image = image;
-                staged.attributes.clear();
+                if !keeps_its_face {
+                    staged.image = image;
+                    staged.attributes.clear();
+                }
             }
             None => self.images.push(StagedImage {
                 image,

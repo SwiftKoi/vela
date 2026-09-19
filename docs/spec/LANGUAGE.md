@@ -573,7 +573,7 @@ diagnostic has an obvious home.
 | `E2xxx` | Names | `E2001` undefined name, `E2002` missing `use`, `E2003` duplicate definition, `E2005` a value in another module |
 | `E3xxx` | Types | `E3001` empty enum, `E3002` unwrap of `T?`, `E3006` int/float mixing |
 | `E4xxx` | Control flow | `E4001` non-exhaustive match, `E4002` missing return, `E4005` all menu choices unreachable |
-| `E5xxx` | Story graph | `E5001` undefined character, `E5003` undefined label |
+| `E5xxx` | Story graph | `E5001` undefined character, `E5003` undefined label, `E5019` undefined image |
 | `E6xxx` | Internal (bytecode verify) | `E6001` stack underflow — always a compiler bug, reported with a repro |
 | `E7xxx` | Build/assets | `E7001` missing asset, `E7002` manifest digest mismatch |
 | `W1xxx` | Style lints | `W1001` naming convention, `W1002` unused import |
