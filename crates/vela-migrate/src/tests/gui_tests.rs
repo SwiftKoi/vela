@@ -192,3 +192,38 @@ fn the_design_size_comes_from_gui_init() {
     let skin = crate::gui::skin("gui.rpy", &nodes, "", &mut report).expect("a theme");
     assert_eq!(skin.design, Some((1280, 720)));
 }
+
+/// A block of Python in `gui.rpy` is reported rather than skipped, and one kind of block is named.
+///
+/// The sample's second `init python:` is `@gui.variant def touch():` — about forty GUI values
+/// re-set for a device Ren'Py picks between at *load* time. Vela has no per-variant theme: a
+/// `variant()` decides at draw time (`SCREENS.md §2.6`), so a second set of values has nowhere to
+/// go, and saying so is what keeps a migrated theme honest about what it carries.
+#[test]
+fn a_variant_block_in_gui_rpy_is_reported() {
+    let (_, report) = skin(
+        "define gui.name_text_color = '#cc6600'\n\ninit python:\n    @gui.variant\n    def touch():\n        gui.name_text_color = '#ffffff'\n",
+        "",
+    );
+    let entry = report
+        .entries()
+        .iter()
+        .find(|entry| entry.original.contains("init python"))
+        .expect("the block is reported");
+    assert_eq!(entry.line, 3, "the block's own line");
+    assert!(
+        entry.reason.contains("per-variant theme"),
+        "{}",
+        entry.reason
+    );
+}
+
+/// `gui.init(width, height)` is translated — it is the design frame — so its block says nothing.
+#[test]
+fn the_design_frame_block_is_not_reported() {
+    let (_, report) = skin(
+        "init python:\n    gui.init(1280, 720)\n\ndefine gui.name_text_color = '#cc6600'\n",
+        "    style name:\n        properties gui.text_properties(\"name\")\n",
+    );
+    assert!(report.is_empty(), "{:?}", entries(&report));
+}

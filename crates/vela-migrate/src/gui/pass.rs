@@ -52,6 +52,58 @@ impl Names {
     }
 }
 
+/// Reports the `init python:` blocks a theme does not read.
+///
+/// One of them is *read*: `gui.init(width, height)` is the design frame, and it lands in
+/// `vela.toml`'s `[project] size` (`SCREENS.md §2.6`). The rest are Python, and the sample's second
+/// block is the case worth naming — `@gui.variant def touch():` re-sets about forty GUI values for
+/// a device Ren'Py detects at load time. Vela has no per-variant *theme*: a `variant()` decides at
+/// **draw** time (`§2.6`), so a second set of values is a screen's `if variant("...")` arms rather
+/// than a second theme, and the migration says which block was left rather than dropping it.
+fn python(project: &str, nodes: &[Node], report: &mut Report) {
+    for node in nodes {
+        let head = node.text.split_whitespace().next().unwrap_or_default();
+        if head != "init" && head != "python" {
+            continue;
+        }
+        // The header line is skipped: what decides whether the block is read is what is *in* it.
+        let body = block_text(node);
+        let statements = body.lines().skip(1);
+        if statements.clone().all(|line| {
+            let line = line.trim();
+            line.is_empty() || line.starts_with('#') || line.starts_with("gui.init(")
+        }) {
+            continue;
+        }
+        let what = match statements.clone().any(|line| line.contains("@gui.variant")) {
+            true => {
+                "a `@gui.variant` block, which re-sets this file's GUI values for a device Ren'Py \
+                     picks between at load time"
+            }
+            false => "a block of Python",
+        };
+        report.push(
+            project,
+            node.line,
+            &format!("{project}: {}", node.text.trim().trim_end_matches(':')),
+            format!(
+                "{what}. Vela has no per-variant theme: `variant()` decides at draw time \
+                 (`SCREENS.md §2.6`), so a second set of values is a screen's own `if variant(...)` \
+                 arms. The theme and its styles are the values declared outside this block"
+            ),
+        );
+    }
+}
+
+/// A block's own text and everything under it, as lines.
+fn block_text(node: &Node) -> String {
+    let mut out = format!("{}\n", node.text);
+    for child in &node.children {
+        out.push_str(&block_text(child));
+    }
+    out
+}
+
 /// Translates a `gui.rpy` into a theme, or `None` when the file declares no `gui.` variables.
 ///
 /// `screens` is the project's screen-language source, and it is what decides whether a variable is
@@ -62,6 +114,7 @@ pub fn skin(project: &str, nodes: &[Node], screens: &str, report: &mut Report) -
     if variables.is_empty() {
         return None;
     }
+    python(project, nodes, report);
     let groups = names::splat_groups(screens);
     let live = names::live_names(screens, &groups, &variables);
     let built = theme::Theme::build(&variables, &groups, &live);
