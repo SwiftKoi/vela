@@ -153,12 +153,20 @@ fn block(lines: &[Line], index: &mut usize, parent: Option<usize>) -> Vec<Node> 
             continue;
         }
 
-        if parent.is_some_and(|parent| line.indent <= parent) {
+        let indent = line.indent;
+        let kind = classify(&line.text);
+        let comment = matches!(kind, Kind::Comment(_));
+
+        // A comment ends nothing either, whatever column it starts in. Ren'Py drops comment-only
+        // lines before it looks at indentation, so `#begin language_picker` at column zero — which
+        // the sample's own `screens.rpy` writes inside its `preferences` screen — is trivia inside
+        // that screen rather than the end of it. Read as structure, it sent everything after it out
+        // of the declaration, and a line outside every declaration is nobody's to report: that screen
+        // lost its language picker and five sliders, and the report said nothing at all.
+        if !comment && parent.is_some_and(|parent| line.indent <= parent) {
             break;
         }
 
-        let indent = line.indent;
-        let kind = classify(&line.text);
         let node = Node {
             line: line.number,
             text: line.text.clone(),
@@ -173,15 +181,17 @@ fn block(lines: &[Line], index: &mut usize, parent: Option<usize>) -> Vec<Node> 
         //
         // A comment is the exception, because an indented comment after a comment belongs to
         // whatever block the comments sit in rather than to the comment above it.
-        let opens = !matches!(node.kind, Kind::Comment(_));
+        let opens = !comment;
 
-        // The next line that is *not blank* decides whether this one opens a block. A blank line
-        // inside a body is ordinary — Ren'Py's own screens put one after `if` — and treating it as
-        // the end of the block sent the rest of the body to the enclosing file, which is how one
-        // 1,500-line `screens.rpy` reported a line per statement instead of one entry for the file.
+        // The next line that is neither blank nor a comment decides whether this one opens a block.
+        // Both are trivia for structure: a blank line inside a body is ordinary — Ren'Py's own
+        // screens put one after `if` — and treating it as the end of the block sent the rest of the
+        // body to the enclosing file, which is how one 1,500-line `screens.rpy` reported a line per
+        // statement instead of one entry for the file. A comment is the same shape of mistake one
+        // level down: a body whose first line is a comment still has the body under it.
         let deeper = lines[*index..]
             .iter()
-            .find(|line| !line.text.is_empty())
+            .find(|line| !line.text.is_empty() && !line.text.starts_with('#'))
             .is_some_and(|line| line.indent > indent);
 
         let children = if opens && deeper {

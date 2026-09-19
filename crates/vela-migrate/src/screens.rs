@@ -29,6 +29,7 @@
 //! error and one of those hides every entry below it in the report.
 
 mod body;
+mod globals;
 mod props;
 mod report;
 mod tables;
@@ -40,9 +41,10 @@ use crate::gui::{PAINTED, strip_state};
 use crate::report::Report;
 use crate::rpy::Node;
 
-// One `use` per file of the pass, so a reader of any of them can see what it is standing on: the
+// One file per subject of the pass, so a reader of any of them can see what it is standing on: the
 // walk (`body`), the props and actions (`props`), the words a line is made of (`words`), the tables
-// that say what Ren'Py's names become (`tables`), and the report (`report`).
+// that say what Ren'Py's names become (`tables`), the engine's own globals as a migrated screen reads
+// them (`globals`, which the walk asks directly), and the report (`report`).
 use body::*;
 use props::*;
 use report::*;

@@ -83,6 +83,18 @@ accident.
 - **The ported sample is not under `tests/`** as work item 7 asks. It cannot be: the sample is
   Ren'Py's own project, with Ren'Py's art. What is committed instead is the migration *test*, and
   `examples/the_question_migrated` is regenerated on demand.
+- **A line inside no declaration is nobody's line to report, and that is how a migration bug hid.**
+  The reader let a comment at column zero end a `screen` or a `label` — `the_question`'s own
+  `screens.rpy` writes Ren'Py's `#begin language_picker` that way, *inside* its `preferences` screen —
+  and the lines that fell out of the declaration were dropped in silence: measured, that screen lost
+  its language picker, a spacer and all five sliders, with no entry anywhere, and a twelve-line probe
+  reproduces it. The reader is fixed (`crates/vela-migrate/src/rpy.rs`: a comment is trivia for
+  indentation, which is what Ren'Py's lexer does), and the lines it restored are dispositioned like any
+  others. What is *not* fixed is the hole the silence came through: the passes report what they *see*,
+  and a construct that lands outside every declaration is seen by nobody — the file-level walk
+  dispositioned a whole file by what it declares and said nothing about the rest. A check that every
+  line of a dispositioned file is either translated or reported is the shape of the fix, and it is
+  recorded here rather than built, because this milestone has landed.
 - **Two things decided early, still decided, still not built** — both *additive*, which is why they
   did not have to be settled before the syntax freeze. **Local labels**, `label .quiet_morning:`
   scoped to the enclosing label, which Ren'Py scripts use constantly for a chapter's sibling scenes;

@@ -287,3 +287,20 @@ fn an_image_reference_that_names_nothing_is_reported() {
         report.render()
     );
 }
+
+/// A comment at column zero does not end a label either, because the reader is one: Ren'Py drops
+/// comment-only lines before it looks at indentation, and a story labelled with a note between two
+/// lines of dialogue used to lose everything under it — with no entry, since the lines were no longer
+/// inside the label (`rpy.rs`).
+#[test]
+fn a_comment_at_column_zero_does_not_end_a_label() {
+    let (text, _) = migrate(
+        "label start:\n    \"One.\"\n\n# a note at column zero\n\n    \"Two.\"\n    return\n",
+    );
+
+    assert!(text.contains("\"One.\""), "{text}");
+    assert!(
+        text.contains("\"Two.\""),
+        "the line after the comment: {text}"
+    );
+}

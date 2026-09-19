@@ -378,13 +378,58 @@ fn a_condition_reads_the_theme_and_reports_what_it_cannot() {
 #[test]
 fn renpys_own_globals_are_answered_and_reported() {
     let (text, entries) = lower(
-        "screen s():\n    if main_menu:\n        text \"menu\"\n    if not _history_list:\n        text \"empty\"\n",
+        "screen s():\n    if main_menu:\n        text \"menu\"\n    if not _history_list:\n        text \"empty\"\n    if config.has_music:\n        text \"music\"\n",
         &[],
     );
     assert!(text.contains("if false:"), "{text}");
     assert!(text.contains("if not none:"), "{text}");
     assert!(reported(&entries, "main_menu"), "{entries:?}");
     assert!(reported(&entries, "_history_list"), "{entries:?}");
+    assert!(reported(&entries, "config.has_music"), "{entries:?}");
+}
+
+/// A comment at column zero does not end a screen.
+///
+/// Ren'Py writes its own region markers that way — `the_question`'s `screens.rpy` has
+/// `#begin language_picker` at column zero *inside* its `preferences` screen — and Ren'Py's lexer
+/// drops comment-only lines before it looks at indentation, so the marker is trivia there and the
+/// screen carries on. Read as structure it ended the screen: everything after it fell out of the
+/// declaration, and a line outside every declaration is nobody's to report, so that screen lost its
+/// language picker and five sliders with no entry saying so.
+#[test]
+fn a_comment_at_column_zero_does_not_end_a_screen() {
+    let (text, _) = lower(
+        "screen probe():\n    vbox:\n        label _(\"Before\")\n\n#begin region\n\n        label _(\"After\")\n\n#end region\n\n        label _(\"Last\")\n",
+        &[],
+    );
+
+    assert!(text.contains("text \"Before\""), "{text}");
+    assert!(text.contains("text \"After\""), "after the marker: {text}");
+    assert!(
+        text.contains("text \"Last\""),
+        "and after the region: {text}"
+    );
+}
+
+/// A bar a *setting* fills and writes is reported rather than written.
+///
+/// `value Preference("text speed")` is Ren'Py's **Value** object, not its action of the same name,
+/// and lowering it as one wrote `preference("text speed")` — one argument to an action the registry
+/// says takes two, which a migrated project failed `vela check` on. The bar goes with the prop: a
+/// bar with no value says nothing, and the entry names the system that owns the line.
+#[test]
+fn a_bar_bound_to_a_setting_is_reported_rather_than_written() {
+    let (text, entries) = lower(
+        "screen s():\n    bar value Preference(\"text speed\")\n    bar value 5\n",
+        &[],
+    );
+
+    assert!(!text.contains("Preference"), "{text}");
+    assert!(
+        text.contains("bar:"),
+        "the bar that does say something: {text}"
+    );
+    assert!(reported(&entries, "value Preference(…)"), "{entries:?}");
 }
 
 /// A keyword inside a value is a keyword, not a name: `who is not None` kept the capital and named

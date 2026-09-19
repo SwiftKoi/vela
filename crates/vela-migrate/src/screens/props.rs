@@ -55,11 +55,20 @@ pub(super) fn prop_line(name: &str, written: &str, ctx: &mut Ctx) -> Option<Stri
     if PAINTED.contains(&strip_state(name)) {
         return ctx.resolved(written).map(|value| format!("{name} {value}"));
     }
-    // A prop Vela takes, whose value is a call: `value Preference("text speed")` is a value a bar
-    // holds, and the call inside it is an action under Vela's name.
+    // A prop Vela takes, whose value is a *value*. A call in one is either a question the host
+    // answers — `text variant("small")` (`SCREENS.md §2.6`) — or something Vela has no value for:
+    // `value Preference("text speed")` is Ren'Py's **Value** object, a reader and a writer bound to a
+    // setting, and it is *not* the action of the same name. Lowering it as one wrote
+    // `preference("text speed")`, which the checker refuses (`E5013`) — and a bar a setting fills and
+    // writes is M12.2's settings screens, so the line goes and the entry says why.
     if WIDGET_PROPS.contains(&name) {
-        if let Some(call) = called_value(written, &mut ctx.gaps) {
-            return Some(format!("{name} {call}"));
+        if let Some(call) = ungrounded(written) {
+            ctx.gaps.unknown.push(format!(
+                "`{name} {call}(…)`: a call in a prop Vela holds as a value, where the only call it \
+                 has is the host's `variant(…)` — a widget bound to a setting is M12.2's settings \
+                 screens"
+            ));
+            return None;
         }
         return ctx.resolved(written).map(|value| format!("{name} {value}"));
     }
@@ -360,16 +369,6 @@ pub(super) fn reads_engine(argument: &str) -> bool {
     ["config.", "renpy.", "persistent.", "store."]
         .iter()
         .any(|namespace| argument.contains(namespace))
-}
-
-/// A value that is a call, lowered under Vela's name for it — `Preference("sound volume")` is
-/// `preference("sound volume")`, whether it is an `action` or a `value` a bar holds.
-pub(super) fn called_value(written: &str, gaps: &mut Gaps) -> Option<String> {
-    let (name, rest) = call_head(written.trim());
-    if !is_name(&name) || !rest.starts_with('(') {
-        return None;
-    }
-    action(written, gaps)
 }
 
 /// `ShowMenu` → `show_menu`: Vela's registry spells an action in lower snake case.
