@@ -10,6 +10,8 @@ use vela_diag::Diagnostic;
 use vela_syntax::{Expr, Item, Program, Stmt, StrPart, WaitEvent};
 
 use crate::collect::Module;
+
+mod screen;
 use crate::def::DefKind;
 use crate::error;
 
@@ -24,6 +26,7 @@ const BUILTINS: &[&str] = &["str", "int", "float", "bool", "rand", "now"];
 pub fn resolve_names(module: &Module, tree: &Program) -> Vec<Diagnostic> {
     let mut resolver = Resolver {
         module,
+        in_screen: false,
         scope: BTreeSet::new(),
         diagnostics: Vec::new(),
     };
@@ -31,6 +34,7 @@ pub fn resolve_names(module: &Module, tree: &Program) -> Vec<Diagnostic> {
     for item in &tree.items {
         match item {
             Item::Label(decl) => resolver.body(&decl.body),
+            Item::Screen(decl) => resolver.screen(decl),
             Item::Function(decl) => {
                 resolver.scope = decl.params.iter().map(|param| param.name.clone()).collect();
                 resolver.body(&decl.body);
@@ -55,8 +59,12 @@ pub fn resolve_names(module: &Module, tree: &Program) -> Vec<Diagnostic> {
 /// to the end of the body. That is laxer than the language, so it can only *miss* an
 /// error, never invent one — and inventing one is what would teach people to turn the
 /// diagnostic off.
-struct Resolver<'a> {
+pub(super) struct Resolver<'a> {
     module: &'a Module,
+    /// Whether the walk is inside a *screen*, where a call's own name is another vocabulary's: an
+    /// action the registry holds, a question the host answers, a builtin (`SCREENS.md §7`, §2.6).
+    /// A screen is the one body where a call is not a value the module must define.
+    in_screen: bool,
     scope: BTreeSet<String>,
     diagnostics: Vec<Diagnostic>,
 }
@@ -192,7 +200,7 @@ impl Resolver<'_> {
     }
 
     /// Walks an expression.
-    fn expr(&mut self, expr: &Expr) {
+    pub(super) fn expr(&mut self, expr: &Expr) {
         self.qualified(expr);
         match expr {
             Expr::Name { span, name } => {
@@ -203,7 +211,12 @@ impl Resolver<'_> {
             // Only the base of a field is a name; the field itself is not in scope.
             Expr::Field { base, .. } => self.expr(base),
             Expr::Call { callee, args, .. } => {
-                self.expr(callee);
+                // A call's own name is another vocabulary's while inside a screen — an action the
+                // registry holds, a question the host answers, a builtin (`SCREENS.md §7`, §2.6) —
+                // and a value the module must declare everywhere else.
+                if !self.in_screen {
+                    self.expr(callee);
+                }
                 for argument in args {
                     self.expr(argument);
                 }
@@ -304,7 +317,7 @@ impl Resolver<'_> {
     }
 
     /// Whether a name means something here.
-    fn known(&self, name: &str) -> bool {
+    pub(super) fn known(&self, name: &str) -> bool {
         BUILTINS.contains(&name)
             || self.scope.contains(name)
             || self.module.definitions.contains_key(name)
@@ -316,7 +329,7 @@ impl Resolver<'_> {
 ///
 /// `a.b.c` is a path; `f().b` is not, because it does not start at a name. Only the first form can
 /// be a reference to a module, which is the only question this answers.
-fn dotted(expr: &Expr) -> Option<Vec<String>> {
+pub(super) fn dotted(expr: &Expr) -> Option<Vec<String>> {
     match expr {
         Expr::Name { name, .. } => Some(vec![name.clone()]),
         Expr::Field { base, name, .. } => {

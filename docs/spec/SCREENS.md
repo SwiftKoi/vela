@@ -65,6 +65,13 @@ Compile-time checks:
 - Every prop must exist on that widget and typecheck (`E5006`).
 - Styles referenced must exist (`E5007`).
 - A `bind` expression's type must be displayable (`E3005`).
+- **Every name a screen reads must resolve** (`E2001`) — its parameters, its variables, what a loop
+  bound, and a value this module declares. `LANGUAGE.md §1` is *every name resolves statically*, and a
+  screen was the one construct that had never been held to it: `if nosuchname:` drew the arm nothing
+  took, and said so nowhere, which is the same silence a `scene` naming an undeclared image had.
+  Three positions are another vocabulary's and resolve elsewhere: a call's own name (an action the
+  registry holds, a question the host answers — §7, §2.6), a `style = …` (a style, `E5007`), and
+  `image`'s content when its head is not in scope (a *picture*, §3.1).
 
 ### 2.1 Composition
 
@@ -133,7 +140,7 @@ screen status(ready: bool, waiting: bool):
   content in one of several places.
 
 A condition is a **comparison over what the screen has** — its parameters, its variables (§2.5), what a
-loop bound, and the literals it writes:
+loop bound, the project's own values, and the literals it writes:
 
 ```vela
 if device == "keyboard" and shown < 2:

@@ -23,6 +23,7 @@ fn condition(head: &str, rest: &str, node: &Node, depth: usize, out: &mut String
     let Some(condition) = ctx.resolved(&value(rest)) else {
         return;
     };
+    let condition = host_values(&condition, ctx);
     match ungrounded(&condition) {
         Some(call) if head != "for" => {
             ctx.gaps.unknown.push(format!(
@@ -46,6 +47,59 @@ fn condition(head: &str, rest: &str, node: &Node, depth: usize, out: &mut String
         condition => format!("{head} {condition}"),
     };
     block(&header, "", &node.children, depth, out, ctx);
+}
+
+/// Ren'Py's own globals as a migrated project reads them (`SCREENS.md §7`).
+///
+/// A condition in a Ren'Py screen reads the *engine*: whether the main menu is up, whether a replay
+/// is running, the dialogue log, whether the build has autosave. None of those is a thing a Vela
+/// project can ask — they are the host systems §7 assigns to M12.2 and M12.3 — and a migrated screen
+/// that kept the name would read nothing, silently, because a screen is where the checker does not
+/// resolve names. So each name is answered *here*, once, with the value the engine would have given
+/// it today (the main menu does not exist, there is no replay mode, there is no log), and the entry
+/// says which system owns the answer. A name outside the table is answered `none` and reported the
+/// same way: the line is kept, so the arm that does draw keeps drawing.
+const GLOBALS: &[(&str, &str, &str)] = &[
+    (
+        "main_menu",
+        "false",
+        "whether the engine's main menu is up: Vela's is M12.2's, and no Vela game is in one",
+    ),
+    (
+        "_in_replay",
+        "false",
+        "whether a replay is running, which is replay mode — the M12.3 side of M8's rollback",
+    ),
+    (
+        "_history_list",
+        "none",
+        "the dialogue log: nothing records what was said yet (`SCREENS.md §7`, M12.2)",
+    ),
+    (
+        "config.has_autosave",
+        "false",
+        "an autosave system Vela has not got",
+    ),
+    (
+        "config.has_quicksave",
+        "false",
+        "the screens over save slots are M12.2's; the actions exist and the slots have no page",
+    ),
+];
+
+/// The condition with Ren'Py's globals answered, and an entry for each one answered.
+fn host_values(condition: &str, ctx: &mut Ctx) -> String {
+    let mut out = condition.to_string();
+    for (name, value, why) in GLOBALS {
+        if !out.contains(name) {
+            continue;
+        }
+        out = out.replace(name, value);
+        ctx.gaps.unknown.push(format!(
+            "`{name}`, which the migration answered `{value}`: {why}"
+        ));
+    }
+    out
 }
 
 /// A `use`: a call with no arguments and no block, or one that hands over a block.

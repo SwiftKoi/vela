@@ -16,23 +16,61 @@ use super::*;
 /// as written.
 pub(super) fn value(written: &str) -> String {
     let trimmed = written.trim().trim_end_matches(':').trim();
-    let trimmed = match trimmed {
-        "True" => "true",
-        "False" => "false",
-        "None" => "none",
-        other => other,
-    };
+    // A word at a time, not the whole value: `who is not None` is a value with a keyword in the
+    // middle, and the whole-value match this replaces left the capital `None` in a condition, where
+    // it named nothing and read as false — which *happened* to draw the right arm.
+    let trimmed = literals(trimmed);
     if trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() > 1 {
         // Ren'Py accepts `'notify'`; Vela's strings are double-quoted.
         return format!("\"{}\"", &trimmed[1..trimmed.len() - 1]);
     }
-    match face(trimmed) {
+    match face(&trimmed) {
         Some(face) => format!("\"{face}\""),
         // `renpy.variant("pc")` is the *question* the host answers (`SCREENS.md §2.6`), and Vela
         // spells it without the namespace: `variant("pc")`. Left as written it is a call nothing
         // answers, so the arm it guards draws the wrong way in silence.
         None => trimmed.replace("renpy.variant(", "variant("),
     }
+}
+
+/// Ren'Py's `True`/`False`/`None` as Vela writes them, wherever they appear.
+fn literals(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(at) = rest.find(['T', 'F', 'N']) {
+        let (before, from) = rest.split_at(at);
+        out.push_str(before);
+        let word = ["True", "False", "None"]
+            .iter()
+            .find(|word| from.starts_with(*word))
+            .filter(|word| {
+                // A word, not the head of a longer name: `Nothing` is a name.
+                !from[word.len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|ch| ch.is_alphanumeric() || ch == '_')
+            });
+        match word.copied() {
+            Some("True") => {
+                out.push_str("true");
+                rest = &from[4..];
+            }
+            Some("False") => {
+                out.push_str("false");
+                rest = &from[5..];
+            }
+            Some(_) => {
+                out.push_str("none");
+                rest = &from[4..];
+            }
+            None => {
+                out.push(from.chars().next().unwrap_or_default());
+                rest = &from[from.chars().next().map_or(1, char::len_utf8)..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// A font file as the face name a project registers it under: `"DejaVuSans.ttf"` is `"DejaVuSans"`.

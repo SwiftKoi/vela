@@ -363,6 +363,39 @@ fn a_speaker_that_is_not_a_character_is_reported_e5001() {
     );
 }
 
+/// A screen reads its parameters, its own variables, what a loop bound, and the project's values —
+/// and a name that is none of those is reported, because a screen is the one construct that had
+/// never been held to `LANGUAGE.md §1`.
+#[test]
+fn what_a_screen_reads_is_resolved_e2001() {
+    assert_eq!(
+        name_codes("screen s():\n    if nosuchname:\n        text \"x\"\n"),
+        vec!["E2001"]
+    );
+    // A parameter, a `default`, a loop binding and a project value are all in scope.
+    assert!(
+        name_codes(
+            "default trust: int = 0\n\nscreen s(who, items):\n    default device = \"k\"\n    if who is not none and device == \"k\" and trust > 0:\n        text \"x\"\n    for item in items:\n        text item.caption\n",
+        )
+        .is_empty()
+    );
+}
+
+/// What a screen names in another vocabulary is that vocabulary's, not a value.
+///
+/// `action quit()` is the action registry's (`SCREENS.md §7`), `variant("pc")` is a question the host
+/// answers (§2.6), `style = body` is a style (checked as `E5007`), and `image bg.room` is a *picture*
+/// whose name the platform's table holds (§3.1) — none of them is a name this module must declare.
+#[test]
+fn a_screen_names_its_other_vocabularies_without_complaint() {
+    assert!(
+        name_codes(
+            "screen s():\n    image bg.room\n    image item.icon\n    button style = body:\n        action quit()\n        text str(1)\n    if variant(\"pc\"):\n        text \"x\"\n",
+        )
+        .is_empty()
+    );
+}
+
 #[test]
 fn a_declared_character_can_speak() {
     assert!(

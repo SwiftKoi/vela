@@ -372,3 +372,28 @@ fn a_condition_reads_the_theme_and_reports_what_it_cannot() {
     assert!(!text.contains("\"name\""), "{text}");
     assert!(reported(&entries, "gui.show_name"), "{entries:?}");
 }
+
+/// Ren'Py's own globals are *answered*, not kept: a name a migrated screen reads that Vela has not
+/// got would read nothing, silently, and nothing would say so.
+#[test]
+fn renpys_own_globals_are_answered_and_reported() {
+    let (text, entries) = lower(
+        "screen s():\n    if main_menu:\n        text \"menu\"\n    if not _history_list:\n        text \"empty\"\n",
+        &[],
+    );
+    assert!(text.contains("if false:"), "{text}");
+    assert!(text.contains("if not none:"), "{text}");
+    assert!(reported(&entries, "main_menu"), "{entries:?}");
+    assert!(reported(&entries, "_history_list"), "{entries:?}");
+}
+
+/// A keyword inside a value is a keyword, not a name: `who is not None` kept the capital and named
+/// nothing — which happened to read as false, and drew the right arm by accident.
+#[test]
+fn renpys_keywords_are_rewritten_inside_a_value() {
+    let (text, _) = lower(
+        "screen s(who):\n    if who is not None:\n        text \"x\"\n",
+        &[],
+    );
+    assert!(text.contains("who is not none"), "{text}");
+}
