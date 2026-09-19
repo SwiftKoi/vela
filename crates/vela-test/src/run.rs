@@ -6,12 +6,15 @@
 //! `current` — so the loop below is the same twenty lines the driver is built from, with the script
 //! answering instead of a host.
 
+mod shown;
+
 use vela_bytecode::Module;
 use vela_vm::{Session, Step};
-use vela_world::{Command, Input, Value};
+use vela_world::{Command, Input};
 
 use crate::plan::{Plan, StepKind};
 use crate::report::{Failure, Outcome, Report};
+use shown::{assert, shown_assert, shown_text, shows, text};
 
 /// Runs each plan against a compiled program.
 ///
@@ -330,123 +333,6 @@ fn answer_plain(
         return false;
     }
     true
-}
-
-/// Calls an assertion and reports it if it is not `true`.
-fn assert(
-    session: &mut Session,
-    name: &str,
-    source: &str,
-    span: vela_span::Span,
-    outcome: &mut Outcome,
-) {
-    match session.call(name) {
-        Ok(Value::Bool(true)) => {}
-        Ok(Value::Bool(false)) => outcome.failures.push(Failure::Assertion {
-            span,
-            source: source.to_string(),
-        }),
-        Ok(other) => outcome.failures.push(Failure::Unreadable {
-            span,
-            message: format!("it produced {}", other.type_name()),
-        }),
-        Err(fault) => outcome.failures.push(Failure::Unreadable {
-            span,
-            message: fault.to_string(),
-        }),
-    }
-}
-
-/// Asserts what is on screen, and says what is there when it is not what was asked for.
-fn shown_assert(
-    session: &mut Session,
-    name: &str,
-    source: &str,
-    negated: bool,
-    span: vela_span::Span,
-    outcome: &mut Outcome,
-) {
-    let Some(wanted) = text(session, name, source, span, outcome) else {
-        return;
-    };
-    if shows(session, &wanted) == negated {
-        outcome.failures.push(Failure::Shown {
-            span,
-            wanted,
-            negated,
-            shown: shown_text(session),
-        });
-    }
-}
-
-/// Whether what is on screen contains this text.
-///
-/// Containment, case-insensitively — which is Ren'Py's rule, read out of `testfocus.find_focus` (`a
-/// pattern in text`, both folded), and the reason a test may write `advance until "ask her right away"`
-/// for the option a screen spells `Ask her right away.`. A test that had to reproduce the punctuation
-/// of what it waits for would be a test about spelling.
-fn shows(session: &Session, wanted: &str) -> bool {
-    let wanted = wanted.to_lowercase();
-    screen_text(session)
-        .iter()
-        .any(|text| text.to_lowercase().contains(&wanted))
-}
-
-/// What is on screen, as one line a failure can print: `"We get married shortly after that."`.
-fn shown_text(session: &Session) -> String {
-    let lines = screen_text(session);
-    match lines.is_empty() {
-        true => "nothing".to_string(),
-        false => lines
-            .iter()
-            .map(|line| format!("`{line}`"))
-            .collect::<Vec<_>>()
-            .join(", "),
-    }
-}
-
-/// Everything the command on screen puts in front of a player.
-///
-/// The command the story is *waiting on*, which is what a player is looking at: a line's text, and a
-/// menu's prompt and options. A screen drawn over it is not here — nothing in a headless run opens
-/// one (`SCREENS.md §2.3`), so a claim about a screen is a claim this runner cannot check yet.
-fn screen_text(session: &Session) -> Vec<String> {
-    match session.current() {
-        Some(Command::Say { text, .. }) => vec![text.clone()],
-        Some(Command::Menu { prompt, choices }) => prompt
-            .iter()
-            .cloned()
-            .chain(choices.iter().map(|choice| choice.text.clone()))
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-/// Calls a `choose`'s expression and returns the text it produced.
-fn text(
-    session: &mut Session,
-    name: &str,
-    source: &str,
-    span: vela_span::Span,
-    outcome: &mut Outcome,
-) -> Option<String> {
-    match session.call(name) {
-        Ok(Value::Str(wanted)) => Some(wanted),
-        Ok(other) => {
-            outcome.failures.push(Failure::Unreadable {
-                span,
-                message: format!("`{source}` produced {}", other.type_name()),
-            });
-            None
-        }
-        Err(fault) => {
-            outcome.failures.push(Failure::Unreadable {
-                span,
-                message: fault.to_string(),
-            });
-            None
-        }
-    }
 }
 
 /// Answers a `cover labels`: every label in the program was entered by this run.
