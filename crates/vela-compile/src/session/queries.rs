@@ -270,6 +270,8 @@ impl Session {
         let entries = self.entries.clone();
         let mut out = vela_hir::unreachable_labels(&Lookup(&program), &entries);
 
+        out.extend(crate::images::undeclared(&files, self));
+
         // `@"path"` literals, against the manifest the driver supplied. Skipped entirely when
         // there is none — a file compiled on its own has no assets to be wrong about.
         if let Some(known) = self.assets.clone() {

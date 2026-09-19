@@ -56,6 +56,7 @@ E5015|error|a screen variable is declared where it cannot be
 E5016|error|a screen variable is declared twice
 E5017|error|a screen writes a variable it does not declare
 E5018|error|a `variant` call does not name a variant
+E5019|error|a staged image that nothing declares
 E6001|error|the stack depth differs across paths into a block
 E6002|error|an instruction's operands do not match its declared stack effect
 E6003|error|a jump target is not an instruction boundary

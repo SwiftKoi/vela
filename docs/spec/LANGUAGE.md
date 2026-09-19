@@ -461,6 +461,14 @@ transform fade_in:
 ```
 Transforms are declarative and composable; see `SCREENS.md §6` for the animation model.
 
+**Image names are project-wide, not per module.** `scene bg.room` names a picture, and the picture
+table is one table for a project: `vela build` bakes the name into a texture, and a bundle ships no
+modules at all (§6.1). So an image another file declares is the same image here, no `use` is needed,
+and `E5019` reports a name nothing declares — checked against every module at once, which is why it
+lives in the whole-program analysis rather than in the per-module name resolver beside `E5001` and
+`E5003`. A bare *tag* resolves too (`hide sylvie` names a sprite group rather than a variant), which
+is Ren'Py's own rule for a tag.
+
 ### 7.5 Assets are checked, not stringly-typed
 `@"path"` is a path literal. The compiler resolves it against the project's asset manifest
 at build time; a missing asset is `E7001` and an unused asset is `W7001`. The common
@@ -573,7 +581,7 @@ diagnostic has an obvious home.
 | `E2xxx` | Names | `E2001` undefined name, `E2002` missing `use`, `E2003` duplicate definition, `E2005` a value in another module |
 | `E3xxx` | Types | `E3001` empty enum, `E3002` unwrap of `T?`, `E3006` int/float mixing |
 | `E4xxx` | Control flow | `E4001` non-exhaustive match, `E4002` missing return, `E4005` all menu choices unreachable |
-| `E5xxx` | Story graph | `E5001` undefined character, `E5003` undefined label |
+| `E5xxx` | Story graph | `E5001` undefined character, `E5003` undefined label, `E5019` undefined image |
 | `E6xxx` | Internal (bytecode verify) | `E6001` stack underflow — always a compiler bug, reported with a repro |
 | `E7xxx` | Build/assets | `E7001` missing asset, `E7002` manifest digest mismatch |
 | `W1xxx` | Style lints | `W1001` naming convention, `W1002` unused import |

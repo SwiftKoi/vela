@@ -15,6 +15,7 @@
 //! query added here has to uphold it — see `session.rs`.
 
 mod assets;
+mod images;
 mod memo;
 mod session;
 

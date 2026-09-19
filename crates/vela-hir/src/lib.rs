@@ -25,6 +25,7 @@
 mod collect;
 mod def;
 mod error;
+mod images;
 mod module;
 mod names;
 mod pragmas;
@@ -37,6 +38,8 @@ mod tests;
 
 pub use collect::{Collected, Import, Module, collect};
 pub use def::{DefKind, Definition};
+pub use error::undefined_image;
+pub use images::{Staged, declared, staged};
 pub use module::ModuleName;
 pub use names::resolve_names;
 pub use pragmas::format_pragmas;

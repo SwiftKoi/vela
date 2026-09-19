@@ -110,6 +110,29 @@ pub fn undefined_character(name: &str, span: Span) -> Diagnostic {
     .with_help(format!("declare it, as in `character {name}:`"))
 }
 
+/// `E5019` — a staged image that no `image` declaration defines.
+///
+/// An image reference is a name like any other (`LANGUAGE.md §1`: *every name resolves statically;
+/// typos are compile errors*), and its siblings in this family are `E5001` for a character and
+/// `E5003` for a label. Without it the runtime draws its *placeholder* — a tinted box with the name
+/// on it — which is honest rendering and a silent failure: a migrated project whose ending faded to a
+/// box labelled `black` is what found it.
+///
+/// The name resolves against the **project**, because the picture table is one table (`§6.1`: there
+/// is no module left at run time), so a bare *tag* resolves too: `hide sylvie` names a sprite group
+/// rather than a variant, which is Ren'Py's own rule for a tag and the reason the check is project-wide
+/// rather than an arm in the per-module resolver.
+#[must_use]
+pub fn undefined_image(name: &str, span: Span) -> Diagnostic {
+    diag(
+        "E5019",
+        format!("no image called `{name}`"),
+        span,
+        "nothing in this project declares an image by that name",
+    )
+    .with_help("declare it, as in `image bg.room = @\"art/room.png\"`")
+}
+
 /// `W4002` — a label no path from an entry point can reach.
 #[must_use]
 pub fn unreachable_label(name: &str, span: Span, module: &str) -> Diagnostic {

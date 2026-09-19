@@ -10,6 +10,15 @@ use std::path::{Path, PathBuf};
 
 use super::support::cli;
 
+/// A one-pixel PNG, which is all an image has to be to be an image.
+const PNG: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0xda, 0x63, 0xfc, 0xcf, 0xc0, 0x50,
+    0x0f, 0x00, 0x04, 0x85, 0x01, 0x80, 0x84, 0xa9, 0x8c, 0x21, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
+    0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+];
+
 /// The story, which is indentation-significant — so it is written as it will be read, in a raw
 /// string, rather than with `\` continuations that would eat the indentation.
 const STORY: &str = r##"# The story.
@@ -69,6 +78,14 @@ fn renpy_project(name: &str) -> PathBuf {
     )
     .expect("write the configuration");
 
+    // The pictures the story stages, because a `scene` naming an image nothing declares is `E5019` and
+    // the migrated project has to check — a project with a story and no images is not one.
+    let images = base.join("game").join("images");
+    std::fs::create_dir_all(&images).expect("create the image directory");
+    for name in ["bg lecturehall.png", "sylvie green normal.png"] {
+        std::fs::write(images.join(name), PNG).expect("write an image");
+    }
+
     base
 }
 
@@ -87,9 +104,9 @@ fn a_renpy_project_migrates_into_one_that_checks() {
     let (code, out) = cli(&["migrate", &source.to_string_lossy(), "--report"]);
     assert_eq!(code, 0, "the migration failed:\n{out}");
 
-    // One story file translated, and the engine configuration dispositioned declaration by
-    // declaration: the name becomes `vela.toml`'s, and a knob with no counterpart is reported.
-    assert!(out.contains("migrated 1 source file(s)"), "{out}");
+    // The story and its images translated, and the engine configuration dispositioned declaration
+    // by declaration: the name becomes `vela.toml`'s, and a knob with no counterpart is reported.
+    assert!(out.contains("migrated 2 source file(s)"), "{out}");
 
     let out_dir = migrated(&source);
     let manifest = std::fs::read_to_string(out_dir.join("vela.toml")).expect("the manifest");
