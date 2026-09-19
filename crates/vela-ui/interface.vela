@@ -5,10 +5,8 @@
 # declaration of a name takes it over, and the rest keep working.
 #
 # What is here grows as M12.2's items land: `game_menu` is the frame the app screens are built on,
-# `pause` is where a game is interrupted, `about` is the screen every game has, and `preferences` is the
-# settings screen over the store. Save/load, history, help and notify follow — and a title screen waits on
-# a parser defect the milestone records: a prop line whose word is also a reserved word that names an action
-# (`action jump(start)`) parses as a child node, so its button would silently do nothing. What an interface screen may rely on
+# `main_menu` and `pause` are where a game is entered and interrupted, `about` is the screen every game has,
+# and `preferences` is the settings screen over the store. Save/load, history, help and notify follow. What an interface screen may rely on
 # is deliberate and narrow, because a style resolves in the declaring module (SCREENS.md §5) and a
 # project module using one of these would resolve the name against *its* table: the frame below — the one
 # screen a project is expected to `use` — names no style at all and draws from widget defaults plus the
@@ -35,6 +33,27 @@ screen game_menu(title):
             button:
                 action close_screen()
                 text "Return"
+
+# The title screen. It has no title of its own: the interface cannot know what a game is called, and a
+# placeholder name would be worse than none — a project that wants one takes this screen over, which is the
+# rule everywhere else here. `Start` is `jump(start)`, and a bare label resolves in the module the game's
+# entry point is in (`vela run` says which), so the conventional name is all this screen needs to know.
+screen main_menu:
+    box at = center, background = theme.bg:
+        pad 48
+        column gap = 16:
+            button:
+                action jump(start)
+                text "Start", style = interface_choice
+            button:
+                action open_screen("preferences")
+                text "Settings", style = interface_choice
+            button:
+                action open_screen("about")
+                text "About", style = interface_choice
+            button:
+                action quit()
+                text "Quit", style = interface_choice
 
 # Escape during play, which is the runtime's own binding: it closes the top screen, or opens a screen
 # called `pause` when nothing is open (`SCREENS.md §2`). So this screen is what makes Escape work in a

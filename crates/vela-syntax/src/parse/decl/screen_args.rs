@@ -101,7 +101,15 @@ impl Parser<'_> {
         // *name* leaves `> 3` with nowhere to go. This is the same one-token lookahead as
         // `next_is_another_name`, pointing the other way: a name is followed by `=`, a value
         // is followed by an operator.
-        if !matches!(self.peek(), TokenKind::Ident) {
+        //
+        // A *reserved word* is the same case, and that is `LANGUAGE.md §7.0`: a keyword is special at
+        // the start of a line and an ordinary name in expression position, which is what
+        // `parse_primary`'s last arm implements. Without this arm the word `jump` in `action
+        // jump(start)` was read as the *next argument's name* — `jump` and a parenthesised `start` —
+        // because it is not an identifier. Both halves of that are syntactically fine, so nothing
+        // complained: the widget ended up holding an action *named by the screen*, which is the shape
+        // a caller hands in, and the button did nothing.
+        if !matches!(self.peek(), TokenKind::Ident | TokenKind::Keyword(_)) {
             return false;
         }
         let saved = self.pos;
