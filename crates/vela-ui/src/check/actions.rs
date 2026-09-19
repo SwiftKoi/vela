@@ -7,8 +7,7 @@ use crate::eval::is_question_call;
 
 use super::diag;
 use super::screen::Scope;
-use super::settings::check_setting_call;
-use super::variants::check_variant;
+use super::settings::{check_question, check_setting_call};
 
 /// Checks every action a body calls against the registry.
 ///
@@ -132,8 +131,8 @@ fn check_action_expr(
                 if is_question_call(callee) {
                     // A question the host answers is not an action (`SCREENS.md §2.6`): `variant("pc")`
                     // is a value, and the registry has nothing to say about it. What has something to
-                    // say is the *vocabulary of names*, which `check/variants.rs` asks about.
-                    check_variant(args, *span, out);
+                    // say is the *vocabulary of names*, which `check/settings.rs` dispatches.
+                    check_question(callee, args, *span, scope, out);
                 } else {
                     check_action(name, args, *span, actions, scope, out);
                     // The two calls that *name a setting* are held to that vocabulary too, and here

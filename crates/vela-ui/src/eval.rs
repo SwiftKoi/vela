@@ -18,6 +18,9 @@ use crate::theme::{Fonts, Palette};
 use crate::variants::{self, Variant};
 use crate::widgets::WidgetRegistry;
 
+mod setting;
+pub(crate) use setting::is_question as is_setting_question;
+
 // Re-exported because this is the module that *reads* them: every caller of the evaluator already
 // imports `Args` and `Value` from here, and moving the types without moving the path would be churn in
 // a dozen files for no reader's benefit.
@@ -108,19 +111,28 @@ pub(crate) fn action_of(expr: &Expr, values: &Args) -> Option<Action> {
 }
 
 /// Whether a callee is one of the questions a screen may ask the host (`SCREENS.md §2.6`).
+///
+/// Two of them, and they are one shape: `variant("pc")` asks *where this is running* and answers a truth
+/// value, and `setting("text_speed")` asks *what the player chose* and answers that setting
+/// (`RUNTIME.md §2.1`). Neither is an action: an action is a call a screen stores and a widget performs,
+/// and a question is a value it draws or decides from.
 pub(crate) fn is_question_call(callee: &Expr) -> bool {
-    matches!(callee, Expr::Name { name, .. } if variants::is_question(name))
+    matches!(callee, Expr::Name { name, .. } if variants::is_question(name) || setting::is_question(name))
 }
 
-/// The answer a call gives, if the call is a question (`SCREENS.md §2.6`).
+/// The answer a call gives, when the call is a question.
 ///
-/// `None` for every other call, which is how the one `Call` arm in [`value_of`] tells the two apart
-/// without a second pattern for it.
-fn question_of(expr: &Expr, values: &Args) -> Option<Value> {
-    let Expr::Call { callee, args, .. } = expr else {
+/// One place, because a question can be written in three positions — a value, a condition, and a text —
+/// and all three must agree about what it answers. `None` for every other call, which is how the one
+/// `Call` arm in [`value_of`] tells the two apart without a second pattern for it.
+fn question_of(callee: &Expr, args: &[Expr], values: &Args) -> Option<Value> {
+    let Expr::Name { name, .. } = callee else {
         return None;
     };
-    is_question_call(callee).then(|| Value::Bool(variant_answer(args, values)))
+    if variants::is_question(name) {
+        return Some(Value::Bool(variant_answer(args, values)));
+    }
+    setting::is_question(name).then(|| setting::answer(args, values))
 }
 
 /// The answer to a `variant("name")` call.
@@ -226,12 +238,12 @@ pub(crate) fn text_of(expr: &Expr, values: &Args) -> String {
         Expr::Field { .. } => value_of(expr, values).as_text(),
         Expr::None { .. } => String::new(),
         // A question the host answers reads as its answer (`SCREENS.md §2.6`), because a question is a
-        // value: `text variant("pc")` says `true` or `false`. Any *other* call in a text position is an
-        // action in the wrong place, and stays empty rather than drawing the name of something that is
-        // not a string.
-        Expr::Call { callee, args, .. } if is_question_call(callee) => {
-            Value::Bool(variant_answer(args, values)).as_text()
-        }
+        // value: `text variant("pc")` says `true` or `false`, and `text setting("text_speed")` says the
+        // number the player chose. Any *other* call in a text position is an action in the wrong place,
+        // and stays empty rather than drawing the name of something that is not a string.
+        Expr::Call { callee, args, .. } => question_of(callee, args, values)
+            .unwrap_or(Value::None)
+            .as_text(),
         _ => String::new(),
     }
 }
@@ -265,9 +277,12 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
             ..
         } => !eval(operand, values),
         Expr::Binary { op, lhs, rhs, .. } => compare(*op, lhs, rhs, values),
-        // A question the host answers, in a condition: `if variant("pc")` is decided by the answer rather
-        // than by `value_of` having found an action, which is the other half of `§2.6`.
-        Expr::Call { callee, args, .. } if is_question_call(callee) => variant_answer(args, values),
+        // A question the host answers, in a condition: `if variant("pc")` and `if setting("skip_unseen")`
+        // are decided by the answer rather than by `value_of` having found an action, which is the other
+        // half of `§2.6`.
+        Expr::Call { callee, args, .. } => question_of(callee, args, values)
+            .unwrap_or(Value::None)
+            .truthy(),
         _ => false,
     }
 }
@@ -341,12 +356,12 @@ pub(crate) fn value_of(expr: &Expr, values: &Args) -> Value {
         Expr::Bool { value, .. } => Value::Bool(*value),
         Expr::Int { value, .. } => Value::Num(*value as f64),
         Expr::Str { parts, .. } => Value::Str(parts_text(parts, values)),
-        // A call is one of two things, and which one is [`variants::is_question`]'s answer rather than a
-        // second arm: a *question* the host answers (`SCREENS.md §2.6`), which is a value like any other
-        // — `variant("pc")` can be a condition, a text, or the argument of a `set` — or an *action*
-        // (`§7`), whose vocabulary is words like `quit` and `open_screen`, and which a screen passes on
-        // as the argument of a `use` or into a parameter a widget then holds.
-        Expr::Call { .. } => question_of(expr, values)
+        // A call is one of two things, and which one is [`is_question_call`]'s answer rather than a second
+        // arm: a *question* the host answers (`SCREENS.md §2.6`), which is a value like any other —
+        // `variant("pc")` can be a condition, a text, or the argument of a `set` — or an *action* (§7),
+        // whose vocabulary is words like `quit` and `open_screen`, and which a screen passes on as the
+        // argument of a `use` or into a parameter a widget then holds.
+        Expr::Call { callee, args, .. } => question_of(callee, args, values)
             .or_else(|| action_of(expr, values).map(Value::Action))
             .unwrap_or(Value::None),
         // A list literal, and a record literal. These are how a screen makes its own data: nothing

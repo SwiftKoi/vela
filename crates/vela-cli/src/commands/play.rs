@@ -115,6 +115,10 @@ impl Player {
         if let Some(settings) = settings::read_settings(&saves) {
             timeline.preferences_mut().clone_from(&settings.preferences);
         }
+        // And the screens are told before the first frame, so `setting("…")` is answerable from the start:
+        // a dialogue box that reads a text speed and a settings screen that draws one both ask on the way in.
+        let mut screens = screens;
+        screens.set_preferences(timeline.world().preferences.clone());
 
         Ok(Self {
             timeline,
@@ -300,6 +304,18 @@ impl Player {
                 Some(name) => {
                     println!("screen setting {name}");
                     self.save_settings();
+                    // And every screen is laid out again, so what the player just changed is what the screens
+                    // read: a checkbox draws its own new state, and a text speed a dialogue box reads is the
+                    // one they chose (`SCREENS.md §7.1`).
+                    let preferences = self.timeline.world().preferences.clone();
+                    self.screens.set_preferences(preferences.clone());
+                    self.overlays.set_preferences(preferences);
+                    self.overlays.relaid(
+                        self.screens.sets(),
+                        self.size,
+                        self.presenter.text_mut(),
+                        FACE_NAME,
+                    );
                 }
                 // A bundle whose vocabulary moved on, or a value the world cannot hold. Saying so beats
                 // a press that quietly did nothing.

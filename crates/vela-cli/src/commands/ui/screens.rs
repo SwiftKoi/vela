@@ -12,6 +12,12 @@ use crate::commands::check::Project;
 pub struct Screens {
     sets: Vec<ScreenSet>,
     paths: Vec<PathBuf>,
+    /// What the player has chosen, so a screen drawn straight to a frame can read it (`RUNTIME.md §2.1`).
+    ///
+    /// A copy rather than the world itself: this layer compiles a project's screens and knows nothing about
+    /// a story, and the caller that owns the session is what says what the player has chosen — the same
+    /// shape the pictures and the variants arrive in.
+    preferences: vela_world::Preferences,
 }
 
 impl Screens {
@@ -24,6 +30,7 @@ impl Screens {
         Self {
             sets: compile(&project.files).0,
             paths: project.files.clone(),
+            preferences: vela_world::Preferences::new(),
         }
     }
 
@@ -38,6 +45,7 @@ impl Screens {
         Self {
             sets: Vec::new(),
             paths: Vec::new(),
+            preferences: vela_world::Preferences::new(),
         }
     }
 
@@ -71,7 +79,11 @@ impl Screens {
         for path in &paths {
             sets.push(vela_ui::ScreenPack::read(path)?.into_set());
         }
-        Ok(Self { sets, paths })
+        Ok(Self {
+            sets,
+            paths,
+            preferences: vela_world::Preferences::new(),
+        })
     }
 
     /// The files this set was built from.
@@ -178,12 +190,20 @@ impl Screens {
         font: &str,
         draw: &mut DrawList,
     ) -> bool {
+        // The player's settings travel with the call, the way the variants do (`RUNTIME.md §2.1`): a screen
+        // drawn straight to a frame reads `setting("…")` and has to be answered.
+        let args = args.clone().with_preferences(self.preferences.clone());
         for set in &self.sets {
             if set.has(name) {
-                return set.draw(name, args, size, text, font, draw);
+                return set.draw(name, &args, size, text, font, draw);
             }
         }
         false
+    }
+
+    /// Tells every set what the player has chosen, so a screen can read a setting (`RUNTIME.md §2.1`).
+    pub fn set_preferences(&mut self, preferences: vela_world::Preferences) {
+        self.preferences = preferences;
     }
 }
 

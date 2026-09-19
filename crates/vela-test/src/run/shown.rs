@@ -195,8 +195,11 @@ pub(super) fn click(
     // A setting is the *player's* state, and a run has a player (`RUNTIME.md §2.1`): the two setting
     // actions are carried out against the session's world, exactly as the windowed player carries them
     // out. So a test can press a settings button and the store changes, rather than the press being
-    // refused as something a headless run cannot do.
+    // refused as something a headless run cannot do — and the screens are laid out again, so what the next
+    // click offers is what the screen says now.
     if vela_ui::settings::write(session.preferences_mut(), &action).is_some() {
+        stage.set_preferences(session.world().preferences.clone());
+        stage.relaid();
         return;
     }
 

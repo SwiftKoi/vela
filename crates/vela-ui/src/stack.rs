@@ -19,6 +19,7 @@ pub use dispatch::Done;
 
 use vela_render::{Color, DrawList, RectQuad};
 use vela_text::TextEngine;
+use vela_world::Preferences;
 
 use crate::actions::Action as ScreenAction;
 use crate::screens::Laid;
@@ -92,9 +93,28 @@ pub struct Overlay {
 #[derive(Default)]
 pub struct Stack {
     overlays: Vec<Overlay>,
+    /// What the player has chosen, so a screen over the story can read it (`RUNTIME.md §2.1`).
+    ///
+    /// Held here rather than reached for, because a screen's scope is built by the layer that lays it out:
+    /// `setting("text_speed")` has to answer the same value in an arm, a loop body and a `use` argument,
+    /// which is what makes the store part of the scope rather than a lookup (`SCREENS.md §2.6`).
+    preferences: Preferences,
 }
 
 impl Stack {
+    /// Sets the player's settings every screen this stack lays out is answered with.
+    ///
+    /// A caller that changes one re-lays the stack (`relaid`), which is how a settings screen draws what
+    /// it just set.
+    pub fn set_preferences(&mut self, preferences: Preferences) {
+        self.preferences = preferences;
+    }
+
+    /// The scope a screen of this stack is laid out in: no arguments, and what the host says.
+    fn args(&self) -> Args {
+        Args::new().with_preferences(self.preferences.clone())
+    }
+
     /// Whether nothing is open.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -114,7 +134,7 @@ impl Stack {
         text: &mut TextEngine,
         font: &str,
     ) -> bool {
-        let Some(laid) = screens.lay(name, &Args::new(), &ScreenState::new(), size, text, font)
+        let Some(laid) = screens.lay(name, &self.args(), &ScreenState::new(), size, text, font)
         else {
             return false;
         };
@@ -165,6 +185,8 @@ impl Stack {
         text: &mut TextEngine,
         font: &str,
     ) -> bool {
+        // The scope first: it borrows `self`, and the overlay below is borrowed mutably.
+        let args = self.args();
         let Some(top) = self.overlays.last_mut() else {
             return false;
         };
@@ -172,7 +194,7 @@ impl Stack {
         state.set(name, value);
         // Through the same call that opened it, so a write goes through exactly the path an argument
         // does and a screen cannot draw differently depending on why it was laid out.
-        let Some(laid) = screens.lay(&top.name, &Args::new(), &state, size, text, font) else {
+        let Some(laid) = screens.lay(&top.name, &args, &state, size, text, font) else {
             return false;
         };
         // The hotspot list is what focus indexes into, and a write can change how long it is — a tab
@@ -308,17 +330,15 @@ impl Stack {
         text: &mut TextEngine,
         font: &str,
     ) {
+        // Built before the loop: the scope borrows `self` while an overlay is laid out mutably, and a scope
+        // per overlay would be the same one built four times.
+        let args = self.args();
         for overlay in &mut self.overlays {
             // The screen's own variables come across: a reload is an edit to the *source*, and a
             // variable the player has already changed is state rather than source (`SCREENS.md §2.5`).
-            if let Some(laid) = screens.lay(
-                &overlay.name,
-                &Args::new(),
-                &overlay.laid.state,
-                size,
-                text,
-                font,
-            ) {
+            if let Some(laid) =
+                screens.lay(&overlay.name, &args, &overlay.laid.state, size, text, font)
+            {
                 overlay.focus = overlay.focus.min(laid.hotspots.len().saturating_sub(1));
                 overlay.laid = laid;
             }

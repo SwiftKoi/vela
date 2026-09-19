@@ -6,7 +6,8 @@ use vela_syntax::{Expr, ScreenLine, StrPart};
 use crate::eval::is_question_call;
 
 use super::diag;
-use super::variants::check_variant;
+use super::screen::Scope;
+use super::settings::check_question;
 use super::walk::nested;
 
 /// Reports every call written in a condition, at every nesting.
@@ -17,19 +18,19 @@ use super::walk::nested;
 /// false, and the screen draws the wrong arm without saying anything. `renpy.variant("small")` was the
 /// same shape until it became a question, so this warning is also what says a screen *needs* §7's host
 /// systems rather than that the screen is broken.
-pub(super) fn check_conditions(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) {
+pub(super) fn check_conditions(lines: &[ScreenLine], scope: Scope<'_>, out: &mut Vec<Diagnostic>) {
     for line in lines {
         if let ScreenLine::If {
             condition, elifs, ..
         } = line
         {
-            check_calls(condition, out);
+            check_calls(condition, scope, out);
             for clause in elifs {
-                check_calls(&clause.condition, out);
+                check_calls(&clause.condition, scope, out);
             }
         }
         for body in nested(line) {
-            check_conditions(body, out);
+            check_conditions(body, scope, out);
         }
     }
 }
@@ -41,11 +42,11 @@ pub(super) fn check_conditions(lines: &[ScreenLine], out: &mut Vec<Diagnostic>) 
 /// A *question* is the other case: it can be decided, so the only thing to report is its name
 /// (`E5018`) — which the action walk cannot do for a condition, because a condition is not an action
 /// position and that walk no longer reaches one.
-fn check_calls(expr: &Expr, out: &mut Vec<Diagnostic>) {
+fn check_calls(expr: &Expr, scope: Scope<'_>, out: &mut Vec<Diagnostic>) {
     match expr {
         Expr::Call { callee, args, span } => {
             if is_question_call(callee) {
-                check_variant(args, *span, out);
+                check_question(callee, args, *span, scope, out);
             } else {
                 // `foo.bar()` is a call on a value rather than a name a registry knows; it cannot be
                 // decided either, and naming it after the field is what a reader can act on.
@@ -63,41 +64,41 @@ fn check_calls(expr: &Expr, out: &mut Vec<Diagnostic>) {
                     )
                     .with_help(
                         "a screen reads a parameter, a variable, a loop element, a literal, or a \
-                         question the host answers (`variant`)",
+                         question the host answers (`variant`, `setting`)",
                     ),
                 );
             }
-            check_calls(callee, out);
+            check_calls(callee, scope, out);
             for arg in args {
-                check_calls(arg, out);
+                check_calls(arg, scope, out);
             }
         }
-        Expr::Paren { inner, .. } => check_calls(inner, out),
-        Expr::Unary { operand, .. } => check_calls(operand, out),
+        Expr::Paren { inner, .. } => check_calls(inner, scope, out),
+        Expr::Unary { operand, .. } => check_calls(operand, scope, out),
         Expr::Binary { lhs, rhs, .. } => {
-            check_calls(lhs, out);
-            check_calls(rhs, out);
+            check_calls(lhs, scope, out);
+            check_calls(rhs, scope, out);
         }
-        Expr::Field { base, .. } => check_calls(base, out),
+        Expr::Field { base, .. } => check_calls(base, scope, out),
         Expr::Index { base, index, .. } => {
-            check_calls(base, out);
-            check_calls(index, out);
+            check_calls(base, scope, out);
+            check_calls(index, scope, out);
         }
         Expr::List { items, .. } => {
             for item in items {
-                check_calls(item, out);
+                check_calls(item, scope, out);
             }
         }
         Expr::Map { entries, .. } => {
             for (key, value) in entries {
-                check_calls(key, out);
-                check_calls(value, out);
+                check_calls(key, scope, out);
+                check_calls(value, scope, out);
             }
         }
         Expr::Str { parts, .. } => {
             for part in parts {
                 if let StrPart::Interpolation { expr, .. } = part {
-                    check_calls(expr, out);
+                    check_calls(expr, scope, out);
                 }
             }
         }

@@ -9,6 +9,7 @@ use crate::settings::{SettingDecl, SettingTy};
 
 use super::diag;
 use super::screen::Scope;
+use super::variants::check_variant;
 
 /// Checks the setting a `preference(...)` or `toggle_preference(...)` call names (`SCREENS.md §7`).
 ///
@@ -88,6 +89,58 @@ fn check_setting(
             SettingDecl::names().join(", ")
         )),
     );
+}
+
+/// Checks a question a screen asks the host: `variant("pc")` (`SCREENS.md §2.6`) or `setting("…")`
+/// (`RUNTIME.md §2.1`).
+///
+/// One dispatcher, because both walks that visit expressions meet questions, and each question has exactly
+/// one vocabulary: asking `variant`'s check about a setting would report a right call as `E5018`.
+pub(super) fn check_question(
+    callee: &Expr,
+    args: &[Expr],
+    span: Span,
+    scope: Scope<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let Expr::Name { name, .. } = callee else {
+        return;
+    };
+    if crate::variants::is_question(name) {
+        check_variant(args, span, out);
+    } else if crate::eval::is_setting_question(name) {
+        check_setting_question(args, span, scope, out);
+    }
+}
+
+/// Checks the setting a `setting(...)` *question* names (`SCREENS.md §7.1`).
+///
+/// The same vocabulary as the two actions, because it is the same thing asked the other way round:
+/// `preference("text_speed", 30)` writes one and `setting("text_speed")` reads one, so a typo in either is
+/// `E5020`. A question is not an action (`eval.rs` says which calls are which), which is why this is a
+/// check of its own rather than an entry in the registry.
+pub(super) fn check_setting_question(
+    args: &[Expr],
+    span: Span,
+    scope: Scope<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
+    if named(args.first(), span, scope, out).is_none() {
+        return;
+    };
+    if args.len() > 1 {
+        out.push(
+            diag(
+                "E5020",
+                "`setting` takes one name".to_string(),
+                span,
+                "a question names one setting",
+            )
+            .with_help(
+                "a question answers one setting, and a widget that writes one is `preference`",
+            ),
+        );
+    }
 }
 
 /// The setting a call names, or `None` — with the entry — when it does not name one.

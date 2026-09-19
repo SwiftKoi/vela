@@ -333,7 +333,8 @@ screen main_menu:
 - **The vocabulary is closed**: `pc`, `web`, `mobile`, `small`. A name outside it is **`E5018`** at the
   call, not Ren'Py's silent `False` — a migration that writes `tablet` or `touch` hears about it now
   rather than drawing the `else` arm forever. The name has to be written out, because a name the engine
-  cannot see whole cannot be checked.
+  cannot see whole cannot be checked. `setting("…")` is the second question (`§7.1`) and the same shape:
+  a value rather than an action, checked at the call — except that it answers a setting.
 - **Two sources, one set.** `pc`, `web` and `mobile` come from the bundle's descriptor
   (`target.json`'s `variants`, written per target by `commands/target.rs`; a *source* run declares `pc`,
   because the platform the process is on is the answer). `small` comes from the **frame** the screen is
@@ -754,6 +755,16 @@ a word would report a correct screen. A choice is therefore a string too —
 **A toggle is an action rather than a value word.** Ren'Py spells a flip as the value `"toggle"`; here
 it is `toggle_preference(name)`, because a value word would be a second vocabulary inside an argument
 that only the runtime could check — and a checkbox needs to flip a setting that no screen can read yet.
+
+**Reading one is a question the host answers: `setting("text_speed")`.** It is `variant`'s shape and
+`variant`'s reason (`§2.6`): a screen decides from what it has and from what the host says, and what the
+player has chosen is the host's to report. Being a question makes it a **value**, which is what a
+settings screen needs — `bar value = setting("text_speed")`, `if setting("skip_unseen")`, and
+`text setting("text_speed")` all read one — and its name is held to the same vocabulary (`E5020`), which
+is why it is not an action and has no entry in the registry. A setting nobody has chosen answers its
+**declaration**, so a screen draws what the engine would do rather than drawing nothing. The store reaches
+the answer through the scope a screen is laid out in, the way the variants do: a setting has to reach an
+arm, a loop body and a `use` argument exactly the way a name does.
 
 > **Implemented (M12.2, in part).** The registry, the checker, the migration and the *write* are in; the
 > *read* is not. `vela_ui::settings::write` is the one place the two actions are carried out, and both

@@ -12,6 +12,7 @@
 use vela_text::TextEngine;
 use vela_ui::actions::Action;
 use vela_ui::{Done, ScreenSet, Stack};
+use vela_world::Preferences;
 
 /// The frame a headless run lays screens out in.
 ///
@@ -99,5 +100,19 @@ impl<'a> Stage<'a> {
     pub fn carry_out(&mut self, action: &Action) -> Done {
         self.overlays
             .dispatch(action, self.screens, FRAME, self.text, self.font)
+    }
+
+    /// Tells the stack what the player has chosen, so a screen can read a setting (`RUNTIME.md §2.1`).
+    pub fn set_preferences(&mut self, preferences: Preferences) {
+        self.overlays.set_preferences(preferences);
+    }
+
+    /// Lays every open screen out again, at the store the stack now holds.
+    ///
+    /// What a step that changed a setting calls: a checkbox draws its own new state, so the *next* click
+    /// offers what the screen says now rather than what it said before the press (`SCREENS.md §7.1`).
+    pub fn relaid(&mut self) {
+        self.overlays
+            .relaid(self.screens, FRAME, self.text, self.font);
     }
 }

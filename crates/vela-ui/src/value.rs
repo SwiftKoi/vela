@@ -5,6 +5,8 @@
 //! and an `Args` is the scope those values live in; the evaluator beside this file is what produces
 //! one from an expression.
 
+use vela_world::Preferences;
+
 use crate::actions::Action;
 use crate::variants::Variants;
 
@@ -107,14 +109,16 @@ impl Value {
 
 /// The arguments a screen was called with, by parameter name, in call order.
 ///
-/// Also carries what the host says about *where* the screen is running ([`Variants`]), because that is
-/// the one other thing a condition may decide from (`SCREENS.md §2.6`): it has to reach an arm, a loop
-/// body and a `use` argument exactly the way a name does, and those all travel in a scope. A scope that
-/// carried values and not variants would make `variant(...)` depend on which walk was asking.
+/// Also carries what the host says about *where* the screen is running ([`Variants`]) and what the player
+/// has chosen ([`Preferences`]), because those are the two things a screen may read besides its own names
+/// (`SCREENS.md §2.6`, `RUNTIME.md §2.1`): both have to reach an arm, a loop body and a `use` argument
+/// exactly the way a name does, and a scope that carried one and not the other would make `variant(...)`
+/// or `setting(...)` depend on which walk was asking.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Args {
     values: Vec<(String, Value)>,
     variants: Variants,
+    preferences: Preferences,
 }
 
 impl Args {
@@ -139,6 +143,24 @@ impl Args {
     #[must_use]
     pub fn with_variants(mut self, variants: Variants) -> Self {
         self.set_variants(variants);
+        self
+    }
+
+    /// What the player has chosen (`RUNTIME.md §2.1`).
+    #[must_use]
+    pub fn preferences(&self) -> &Preferences {
+        &self.preferences
+    }
+
+    /// Sets the player's settings this scope answers with.
+    pub fn set_preferences(&mut self, preferences: Preferences) {
+        self.preferences = preferences;
+    }
+
+    /// This scope, with the player's settings.
+    #[must_use]
+    pub fn with_preferences(mut self, preferences: Preferences) -> Self {
+        self.set_preferences(preferences);
         self
     }
 
@@ -178,6 +200,9 @@ impl Args {
         Self {
             values,
             variants: self.variants,
+            // A loop's shadow is about the *element*, and what the host says does not change with it
+            // (`SCREENS.md §2.4`): the variants and the player's settings travel unchanged.
+            preferences: self.preferences.clone(),
         }
     }
 }

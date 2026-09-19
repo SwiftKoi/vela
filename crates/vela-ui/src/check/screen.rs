@@ -102,6 +102,6 @@ pub fn check_screen(
     // Every `key` names a semantic action (`§11`), and the vocabulary is what says so.
     check_keys(lines, inputs, &mut diagnostics);
     // And a condition has to be decidable: a screen decides from what it has, not from a call (`§2.2`).
-    check_conditions(lines, &mut diagnostics);
+    check_conditions(lines, scope, &mut diagnostics);
     diagnostics
 }

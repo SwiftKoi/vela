@@ -309,3 +309,106 @@ fn a_setting_that_cannot_be_written_is_refused() {
 fn name(text: &str) -> vela_ui::value::Value {
     vela_ui::value::Value::Str(text.to_string())
 }
+
+/// `setting("…")` is a *value*, and it answers the store the host injected — or the declaration, before
+/// anybody has chosen (`RUNTIME.md §2.1`).
+///
+/// The arm that draws is the assertion: a question nothing answers draws the `else`, so naming the text
+/// proves the value was read rather than answered `none` — which is the failure this file exists to catch.
+#[test]
+fn a_setting_answers_its_declaration_until_the_player_changes_it() {
+    use vela_text::{Font, TextEngine};
+    use vela_ui::{Args, Kind, Node, ScreenSet, ScreenState};
+
+    let source = "screen s():\n    column:\n        if setting(\"skip_unseen\"):\n            text \"on\"\n        else:\n            text \"off\"\n        text setting(\"text_speed\")\n";
+    let parsed = vela_syntax::parse(vela_span::FileId::from_raw(0), source);
+    assert!(parsed.diagnostics.is_empty(), "the fixture must parse");
+    let set = ScreenSet::from_items(&parsed.program.items);
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/fonts/LiberationSans-Regular.ttf");
+    let font = Font::from_bytes(std::fs::read(path).expect("read font"), 0).expect("load font");
+    let mut text = TextEngine::new();
+    text.add_font("sans", font);
+
+    /// Every text a laid screen draws, in tree order.
+    fn texts(node: &Node, out: &mut Vec<String>) {
+        if let Kind::Text { text, .. } = &node.kind {
+            out.push(text.clone());
+        }
+        for child in &node.children {
+            texts(child, out);
+        }
+    }
+
+    let mut drawn = Vec::new();
+    let laid = set
+        .lay(
+            "s",
+            &Args::new(),
+            &ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
+        .expect("the screen is declared");
+    texts(&laid.node, &mut drawn);
+
+    // Nobody has chosen anything: `skip_unseen` is declared `false`, and `text_speed` is `0`.
+    assert_eq!(
+        drawn,
+        ["off", "0"],
+        "a declaration is what the engine would do"
+    );
+
+    // A player who has: the same screen draws the same settings, from the store.
+    let mut chosen = vela_world::Preferences::new();
+    chosen.set("skip_unseen", vela_world::Value::Bool(true));
+    chosen.set("text_speed", vela_world::Value::Int(45));
+    let mut drawn = Vec::new();
+    let laid = set
+        .lay(
+            "s",
+            &Args::new().with_preferences(chosen),
+            &ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
+        .expect("the screen is declared");
+    texts(&laid.node, &mut drawn);
+
+    assert_eq!(
+        drawn,
+        ["on", "45"],
+        "and the store is what the player chose"
+    );
+}
+
+/// `E5020` — a `setting(...)` that names nothing, in either position a question can be written.
+#[test]
+fn a_question_that_names_no_setting_is_reported() {
+    // In a value, where a screen reads one: `bar value = setting("…")`, `text setting("…")`.
+    assert_eq!(
+        codes("screen s():\n    column:\n        text setting(\"teleport\")\n"),
+        vec!["E5020"]
+    );
+    // And in a condition, where a screen decides from one.
+    assert_eq!(
+        codes("screen s():\n    if setting(\"skip_unsean\"):\n        text \"on\"\n"),
+        vec!["E5020"]
+    );
+    // A well-written question reports nothing, which is what says the two above are about the name.
+    assert!(
+        codes(
+            "screen s():\n    column:\n        if setting(\"skip_unseen\"):\n            text \"on\"\n        bar value = setting(\"text_speed\")\n"
+        )
+        .is_empty()
+    );
+    // A question with a *computed* name cannot be checked either: the name is in scope, so nothing else
+    // would report it (`SCREENS.md §7.1`).
+    assert_eq!(
+        codes("screen s(which):\n    if setting(which):\n        text \"on\"\n"),
+        vec!["E5020"]
+    );
+}

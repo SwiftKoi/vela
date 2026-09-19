@@ -178,6 +178,52 @@ fn a_click_that_changes_a_setting_is_carried_out() {
     assert!(failures.is_empty(), "{failures:?}");
 }
 
+/// A screen draws what a setting says, and a press that changes one is what the *next* press reads.
+///
+/// The whole read path in one test: `setting("…")` answers the store the run injected, the words a control
+/// draws come from it, and a press that flips the setting is followed by a re-lay — so what is on offer
+/// changes with the store rather than staying what it was before the press (`SCREENS.md §7.1`). The
+/// sequence *is* the assertion: the first click can only find `Skip: off` if the screen drew the
+/// declaration, and the second can only find `Skip: on` if the press reached the store *and* the screen was
+/// laid out again.
+#[test]
+fn a_screen_draws_a_setting_and_a_press_changes_what_it_draws() {
+    const FLAGS: &str = "\
+screen flags:
+    if setting(\"skip_unseen\"):
+        button:
+            text \"Skip: on\"
+            action toggle_preference(\"skip_unseen\")
+    else:
+        button:
+            text \"Skip: off\"
+            action toggle_preference(\"skip_unseen\")
+";
+    let (module, plans) = suite(&with_test(
+        "    run from start\n    click \"Skip: off\"\n    click \"Skip: on\"\n",
+    ));
+    let parsed = vela_syntax::parse(FileId::from_raw(0), FLAGS);
+    assert!(
+        parsed.diagnostics.is_empty(),
+        "the fixture must parse: {:?}",
+        parsed
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.message.clone())
+            .collect::<Vec<_>>()
+    );
+    let screens = [ScreenSet::from_items(&parsed.program.items)];
+    let mut text = engine();
+    let mut stage = Stage::new(&screens, &mut text, "sans");
+    assert!(stage.open("flags"), "the fixture declares `flags`");
+
+    let report = run(&module, "start", &plans, Some(&mut stage));
+    let outcome = report.outcomes.into_iter().next().expect("one outcome");
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    // Two presses, and the label is back where it started: the second press flipped the setting back.
+    assert_eq!(stage.controls(), ["Skip: off"]);
+}
+
 /// A click with no screens at all is a failure rather than a step that quietly does nothing — the
 /// caller that wants a click has to bring a stage.
 #[test]
