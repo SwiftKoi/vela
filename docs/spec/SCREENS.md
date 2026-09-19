@@ -108,8 +108,14 @@ Three rules, and all three follow from §2's "a screen is a pure function of its
 - **`use name` is a call with no arguments.** There is deliberately no Ren'Py-style sharing of the
   caller's scope: a used screen sees what it was passed and nothing else, which is what keeps a
   dependency set static (§8.2) and a screen's meaning independent of where it is used.
-- **The name resolves within this file**, like a style (§5). There is no project-wide screen table, so
-  a screen cannot name another module's screen.
+- **The name resolves within this file — and then in the interface.** There is no project-wide screen
+  table: a screen cannot name another *project* module's screen, and the one exception is the interface
+  Vela ships (§2.7), which every module can name and any project can take over by declaring the name
+  itself. The rule is one line in `vela-ui::compose::find`, where the checker, the instantiator, the
+  dependency walk, and the accessibility walk all arrive, so none of them can disagree about what a name
+  refers to. An override replaces a **name**, not a binding: a screen the interface uses internally keeps
+  using its own, because a screen that drew differently depending on what the project declared is what
+  §2's "a screen is a pure function of its arguments" rules out.
 - **A block is placed, not dropped.** A block handed to a screen that never writes `transclude` is
   `W4012` — a warning, because the author wrote content that would otherwise vanish silently. A
   `transclude` with nothing passed draws nothing: nothing was written, so nothing is lost.
@@ -379,6 +385,42 @@ screen main_menu:
 > `tests/variants.rs` pins both sources, the sample's merged condition, and that the threshold follows
 > the *declared* frame rather than a constant; `tests/check.rs` that a question is clean, an unknown
 > name is `E5018` and `W4013` still fires beside one.
+
+### 2.7 The interface Vela ships
+
+Vela provides the screens every game has, and a project that wants one of them takes it over by
+declaring a screen of the same name — `M12.2`'s second decision, *a default interface, and a project
+overrides any part of it*. It is the reason a new project gets a working menu without writing one.
+
+**Where they live is `vela_ui::interface`**: one module of Vela's own source, compiled by the engine and
+parsed once per process (`§13`). The engine's source rather than the bundle's, because the interface
+belongs to the engine that is running rather than to the artifact that was built — so a bundle carries
+the project's screens and finds the interface in the binary. What is there today is what
+`vela_ui::interface::decls()` returns: `game_menu(title)`, the frame the app screens are built on, with
+a main menu, settings, save/load, history, help and notify arriving as `M12.2`'s items land.
+
+**A name resolves to the project first** (`§2.1`), at every site — a `use`, an `open_screen`, a hover, a
+dependency — so a project can build a screen out of the frame *and* can replace it, without a second
+table anywhere: the rule is one line in `vela-ui::compose::find`, which is the one place all four arrive.
+
+**What an interface screen may rely on is narrow on purpose.** The widget defaults and the `theme.*`
+tokens of its own theme, and no `style` names: a style resolves in the declaring module (`§5`), so an
+interface screen naming one would draw with whatever the *project* happens to declare under that name —
+a screen whose look depends on who used it, which is what §2.1's purity rule rules out. A project that
+wants the frame to look different overrides it, which is the same rule as everything else.
+
+**Colours are the project's.** An interface screen names `theme.*` rather than fixed colours, because
+the set is laid out with the project's palette over the interface's own — a palette is the project's
+*data* (`M12.2`'s item 10), and Vela's own theme is the fallback for tokens the project does not name,
+not the look. The original decision is Vela's; the skin, as `§2`'s cut says, is the project's.
+
+> **Implemented (M12.2, in part).** The module, the resolution rule, and the frame: `game_menu` is
+> checked by the engine's own suite (nobody else's checker sees the interface — it is not a project file),
+> `crates/vela-ui/tests/interface.rs` pins that a project can `use` it and that a project's own
+> declaration of the name is the one found, and `vela run`/`vela test` search the interface's set after
+> the project's (`commands/ui/screens.rs`). **Not yet:** the palette injection the paragraph above
+> describes (the interface's set carries its own theme today), the rest of the screens, and
+> `vela doc screens`.
 
 ## 3. Widget tree
 
@@ -989,7 +1031,12 @@ actually arrives broken — a truncated transfer and a half-written file. It is 
 - **Not a second IR.** A screen is evaluated against its arguments and the active theme at layout
   time (§2), so a live expression tree exists at run time however it is encoded. The pack carries
   that tree rather than a widget IR that would need a second evaluator kept in step with this one.
-- **Not the story.** Only the interface is packed; the prose lives in `.velac` and nowhere else.
+- **Not the story.** Only the widget layer is packed; the prose lives in `.velac` and nowhere else.
+- **The interface Vela ships is the engine's, not the bundle's.** `vela_ui::interface` is Vela's own
+  source (§2.1), parsed once per process: a bundle carries the *project's* screens and none of the
+  interface, because the interface belongs to the engine that is running rather than to the artifact that
+  was built. So the no-parse property above is about the *game's* screens, which is what it was always
+  about — a run reads no `.vela` file the project wrote.
 
 > **Implemented (M9).** `vela_ui::ScreenPack` is the artifact: `vela build` compiles the
 > declarations into it and writes one `screens/<module>.velspk` per module that declares UI, and

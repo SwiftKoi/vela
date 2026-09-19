@@ -53,7 +53,7 @@ fn check_open(game: &[&ScreenDecl], args: &[Expr], span: Span, out: &mut Vec<Dia
             "E5009",
             format!("no screen called `{name}`"),
             written,
-            "no screen by this name is declared in this project",
+            "no screen by this name is declared in this project, or in the interface",
         );
         if let Some(nearest) =
             vela_diag::closest(name, game.iter().map(|screen| screen.name.as_str()))

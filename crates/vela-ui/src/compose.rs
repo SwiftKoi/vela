@@ -43,10 +43,20 @@ fn diag(
     Diagnostic::new(code, message, span, label)
 }
 
-/// The screen a `use` names, among this file's declarations.
+/// The screen a `use` names, among this file's declarations — or the interface's (`SCREENS.md §2.1`).
+///
+/// **The one place "which screen does this name mean" is answered**, which is why the interface is
+/// reached from here rather than from a second table in each caller: the checker, the instantiator, the
+/// dependency walk, and the accessibility walk all arrive through this function, so they cannot disagree
+/// about what a name refers to. A file's own declaration wins, and the interface is the fallback — the
+/// rule the milestone states as *a default interface, and a project overrides any part of it*.
 #[must_use]
 pub(crate) fn find<'a>(screens: &[&'a ScreenDecl], name: &str) -> Option<&'a ScreenDecl> {
-    screens.iter().find(|screen| screen.name == name).copied()
+    screens
+        .iter()
+        .find(|screen| screen.name == name)
+        .copied()
+        .or_else(|| crate::interface::decl(name))
 }
 
 /// Every screen name a body uses, directly.
@@ -158,7 +168,7 @@ fn check_use(
             "E5009",
             format!("no screen called `{name}`"),
             span,
-            "no screen by this name is declared in this file",
+            "no screen by this name is declared in this file, or in the interface",
         );
         if let Some(nearest) = nearest(name, screens) {
             diagnostic = diagnostic.with_help(format!("did you mean `{nearest}`?"));
@@ -316,9 +326,14 @@ pub(crate) fn with_defaults(callee: &ScreenDecl, mut bound: Args) -> Args {
 }
 
 /// The nearest declared screen name, if one is close enough to be worth offering.
+///
+/// The interface's names are candidates too, because they are names a `use` can resolve to: a project
+/// that mistypes `game_menu` should be told about the frame it meant rather than about nothing.
 fn nearest(name: &str, screens: &[&ScreenDecl]) -> Option<String> {
     screens
         .iter()
+        .copied()
+        .chain(crate::interface::decls().iter().copied())
         .map(|screen| {
             (
                 vela_diag::edit_distance(name, &screen.name),

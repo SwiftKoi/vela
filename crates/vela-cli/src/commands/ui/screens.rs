@@ -11,6 +11,11 @@ use crate::commands::check::Project;
 
 pub struct Screens {
     sets: Vec<ScreenSet>,
+    /// How many of those sets are the *project's*.
+    ///
+    /// Kept rather than inferred, because `sets` ends with the interface (`SCREENS.md §2.7`) and a count
+    /// that included it would make "reload: 2 screen(s)" the answer for a one-screen project.
+    project: usize,
     paths: Vec<PathBuf>,
     /// What the player has chosen, so a screen drawn straight to a frame can read it (`RUNTIME.md §2.1`).
     ///
@@ -27,23 +32,28 @@ impl Screens {
     /// before it gets here, so this is a guard rather than a path a user can reach.
     #[must_use]
     pub fn load(project: &Project) -> Self {
+        let mut sets = compile(&project.files).0;
+        let project_screens: usize = sets.iter().map(|set| set.names().len()).sum();
+        sets.push(interface());
         Self {
-            sets: compile(&project.files).0,
+            sets,
+            project: project_screens,
             paths: project.files.clone(),
             preferences: vela_world::Preferences::new(),
         }
     }
 
-    /// No screens at all.
+    /// The interface and nothing else.
     ///
-    /// What a built bundle gets: screens are compiled from source, and a distribution bundle
-    /// ships none. The presenter's built-in dialogue box and menu are what draw instead, which
-    /// is a real game rather than a placeholder — a project that declared screens simply gets
-    /// the engine's own until screens are packed too.
+    /// What a built bundle with no screens gets: `vela build` packs the *project's* screens
+    /// (`SCREENS.md §13`) and a distribution bundle carries those, so a project that declared none draws
+    /// from Vela's own interface — which belongs to the engine that is running rather than to the
+    /// artifact, and is parsed once here (`vela_ui::interface`).
     #[must_use]
     pub fn empty() -> Self {
         Self {
-            sets: Vec::new(),
+            sets: vec![interface()],
+            project: 0,
             paths: Vec::new(),
             preferences: vela_world::Preferences::new(),
         }
@@ -79,8 +89,12 @@ impl Screens {
         for path in &paths {
             sets.push(vela_ui::ScreenPack::read(path)?.into_set());
         }
+        // The interface last, so a project's screen of the same name is found first: the resolution order
+        // is the whole of the override rule (`SCREENS.md §2.1`).
+        sets.push(interface());
         Ok(Self {
             sets,
+            project: 0,
             paths,
             preferences: vela_world::Preferences::new(),
         })
@@ -125,10 +139,14 @@ impl Screens {
         }
     }
 
-    /// How many screens are compiled.
+    /// How many screens the project compiled.
+    ///
+    /// The interface's screens are not counted: they are Vela's (`SCREENS.md §2.7`), they do not change
+    /// under a reload, and a player reading "reload: 2 screen(s)" after editing one file would be reading
+    /// a number about the engine.
     #[must_use]
     pub fn count(&self) -> usize {
-        self.sets.iter().map(|set| set.names().len()).sum()
+        self.project
     }
 
     /// Re-reads the files and rebuilds the sets — hot reload's one step.
@@ -136,13 +154,15 @@ impl Screens {
     /// A file that no longer parses does **not** replace the working set: an author whose edit
     /// is half-written should see a message and the last good screen, not a blank window.
     pub fn reload(&mut self) -> Reloaded {
-        let (sets, errors) = compile(&self.paths);
+        let (mut sets, errors) = compile(&self.paths);
         if errors > 0 {
             return Reloaded {
                 screens: self.count(),
                 errors,
             };
         }
+        self.project = sets.iter().map(|set| set.names().len()).sum();
+        sets.push(interface());
         self.sets = sets;
         Reloaded {
             screens: self.count(),
@@ -230,6 +250,16 @@ pub struct Reloaded {
     pub screens: usize,
     /// How many files failed to parse, and so were not compiled.
     pub errors: usize,
+}
+
+/// The interface's set, every time a project is loaded or reloaded.
+///
+/// A fresh set per load rather than one shared, because a set is mutated as a runner tells it things —
+/// where the pictures are, where it is running, which frame it was designed for
+/// (`set_images`/`set_variants`/`set_design`) — and two callers sharing one would be two callers sharing
+/// those answers.
+fn interface() -> vela_ui::ScreenSet {
+    vela_ui::interface::set()
 }
 
 /// Compiles every file's screens, and counts the files that would not parse.

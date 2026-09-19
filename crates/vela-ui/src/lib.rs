@@ -34,6 +34,7 @@ pub mod focus;
 pub mod images;
 pub mod input;
 pub mod instantiate;
+pub mod interface;
 pub mod layout;
 pub mod pack;
 pub mod paint;

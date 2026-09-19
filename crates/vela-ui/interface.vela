@@ -1,0 +1,28 @@
+# The interface Vela ships (SCREENS.md §2.1).
+#
+# One module, so its screens can `use` each other — a `use` resolves in the declaring file (SCREENS.md
+# §2.1) and this is the interface's file. Every project module can name these screens: a project's own
+# declaration of a name takes it over, and the rest keep working.
+#
+# What is here grows as M12.2's items land: `game_menu` is the frame the app screens are built on, and
+# the settings, save/load, history, help and notify screens follow. What an interface screen may rely on
+# is deliberate and narrow: widget defaults and `theme.*` tokens of its own theme, and no `style` names,
+# because a style resolves in the declaring module (SCREENS.md §5) and a project module using one of
+# these would resolve the name against its own table. The palette is meant to be the
+# project's — SCREENS.md §2.7 states it, and the injection that makes it true is not in yet, so this set
+# draws in its own theme's colours today.
+
+theme interface:
+    color ink = 0xe8e8ee
+    color panel = 0x14161d
+    color accent = 0x5aa9e6
+
+screen game_menu(title):
+    box at = center, background = theme.panel:
+        pad 32
+        column gap = 16:
+            text title
+            transclude
+            button:
+                action close_screen()
+                text "Return"
