@@ -59,7 +59,7 @@ impl Stack {
         font: &str,
     ) -> Done {
         match action.name.as_str() {
-            "open_screen" => {
+            crate::actions::OPEN_SCREEN => {
                 let Some(name) = action.first() else {
                     return Done::Nothing;
                 };

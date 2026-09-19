@@ -26,6 +26,7 @@
 mod actions;
 mod conditions;
 mod keys;
+mod opens;
 mod screen;
 mod settings;
 mod variables;
@@ -33,5 +34,6 @@ mod variants;
 mod walk;
 mod widgets;
 
+pub use opens::check_open_screens;
 pub use screen::check_screen;
 pub(crate) use screen::diag;

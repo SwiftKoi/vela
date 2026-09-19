@@ -15,5 +15,5 @@
 mod builtin;
 mod decl;
 
-pub use builtin::{PREFERENCE, SET_SCREEN_VARIABLE, TOGGLE_PREFERENCE};
+pub use builtin::{OPEN_SCREEN, PREFERENCE, SET_SCREEN_VARIABLE, TOGGLE_PREFERENCE};
 pub use decl::{Action, ActionDecl, ActionRegistry};

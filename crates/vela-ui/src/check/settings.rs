@@ -97,15 +97,12 @@ fn check_setting(
 /// One dispatcher, because both walks that visit expressions meet questions, and each question has exactly
 /// one vocabulary: asking `variant`'s check about a setting would report a right call as `E5018`.
 pub(super) fn check_question(
-    callee: &Expr,
+    name: &str,
     args: &[Expr],
     span: Span,
     scope: Scope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let Expr::Name { name, .. } = callee else {
-        return;
-    };
     if crate::variants::is_question(name) {
         check_variant(args, span, out);
     } else if crate::eval::is_setting_question(name) {

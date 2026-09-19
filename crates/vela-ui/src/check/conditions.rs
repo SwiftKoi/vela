@@ -45,8 +45,10 @@ pub(super) fn check_conditions(lines: &[ScreenLine], scope: Scope<'_>, out: &mut
 fn check_calls(expr: &Expr, scope: Scope<'_>, out: &mut Vec<Diagnostic>) {
     match expr {
         Expr::Call { callee, args, span } => {
-            if is_question_call(callee) {
-                check_question(callee, args, *span, scope, out);
+            if let Expr::Name { name, .. } = callee.as_ref()
+                && is_question_call(callee)
+            {
+                check_question(name, args, *span, scope, out);
             } else {
                 // `foo.bar()` is a call on a value rather than a name a registry knows; it cannot be
                 // decided either, and naming it after the field is what a reader can act on.

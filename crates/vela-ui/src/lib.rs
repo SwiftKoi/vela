@@ -53,7 +53,7 @@ pub mod widgets;
 pub use a11y::{A11yNode, Role, check_labels, tree};
 pub use actions::{Action, ActionDecl, ActionRegistry};
 pub use cache::{Cached, ScreenCache};
-pub use check::check_screen;
+pub use check::{check_open_screens, check_screen};
 pub use deps::{DepSet, deps_of};
 pub use error::PackError;
 pub use eval::{Args, ScreenState, Value};

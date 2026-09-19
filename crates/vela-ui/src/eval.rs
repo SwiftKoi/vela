@@ -110,6 +110,16 @@ pub(crate) fn action_of(expr: &Expr, values: &Args) -> Option<Action> {
     ))
 }
 
+/// Whether a call's *name* is one of the questions a screen may ask the host (`SCREENS.md §2.6`).
+///
+/// The names are the whole of it, which is why this is a predicate over a string: the checker walks a
+/// body by name (`check/actions.rs`'s visitor) and the evaluator has the callee expression, and both
+/// must agree about which two calls are questions rather than actions.
+#[must_use]
+pub(crate) fn is_question(name: &str) -> bool {
+    variants::is_question(name) || setting::is_question(name)
+}
+
 /// Whether a callee is one of the questions a screen may ask the host (`SCREENS.md §2.6`).
 ///
 /// Two of them, and they are one shape: `variant("pc")` asks *where this is running* and answers a truth
@@ -117,7 +127,7 @@ pub(crate) fn action_of(expr: &Expr, values: &Args) -> Option<Action> {
 /// (`RUNTIME.md §2.1`). Neither is an action: an action is a call a screen stores and a widget performs,
 /// and a question is a value it draws or decides from.
 pub(crate) fn is_question_call(callee: &Expr) -> bool {
-    matches!(callee, Expr::Name { name, .. } if variants::is_question(name) || setting::is_question(name))
+    matches!(callee, Expr::Name { name, .. } if is_question(name))
 }
 
 /// The answer a call gives, when the call is a question.

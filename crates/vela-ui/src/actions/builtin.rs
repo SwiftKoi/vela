@@ -12,6 +12,13 @@ use crate::widgets::PropType;
 
 use super::decl::ActionDecl;
 
+/// The action that opens a screen, and the one whose extra arguments are another declaration's
+/// (`SCREENS.md §2.1`).
+///
+/// A constant because two layers beyond the registry name it: the checker holds its target to the
+/// screens the game declares (`check/opens.rs`), and the stack is what opens one.
+pub const OPEN_SCREEN: &str = "open_screen";
+
 /// The action that writes a setting (`RUNTIME.md §2.1`).
 ///
 /// A constant for the reason [`SET_SCREEN_VARIABLE`] is one: the checker holds the first argument to
@@ -105,7 +112,7 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
         rest: None,
     },
     ActionDecl {
-        name: "open_screen",
+        name: OPEN_SCREEN,
         args: &[arg("screen", PropType::Target, "Which screen.")],
         doc: "Show a screen above this one.",
         dispatched: true,

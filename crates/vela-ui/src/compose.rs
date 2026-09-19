@@ -205,11 +205,8 @@ fn misfit(callee: &ScreenDecl, args: &[ScreenArg]) -> Option<String> {
         .iter()
         .filter(|arg| matches!(arg, ScreenArg::Value(_)))
         .count();
-    if positional > callee.params.len() {
-        return Some(format!(
-            "it takes {} parameter(s), but {positional} were given",
-            callee.params.len()
-        ));
+    if let Some(problem) = too_many(callee, positional) {
+        return Some(problem);
     }
     let unknown = args.iter().find_map(|arg| match arg {
         ScreenArg::Named { name, .. } if !callee.params.iter().any(|param| param.name == *name) => {
@@ -218,6 +215,20 @@ fn misfit(callee: &ScreenDecl, args: &[ScreenArg]) -> Option<String> {
         _ => None,
     });
     unknown.map(|name| format!("it has no parameter called `{name}`"))
+}
+
+/// Too many arguments for a screen, in the words both callers use.
+///
+/// Shared with the `open_screen` check (`check/opens.rs`), because a runtime's call is positional and
+/// can only make this one of the two mistakes a `use` can — and a reader who meets the sentence twice
+/// should meet the same sentence.
+pub(crate) fn too_many(callee: &ScreenDecl, given: usize) -> Option<String> {
+    (given > callee.params.len()).then(|| {
+        format!(
+            "it takes {} parameter(s), but {given} were given",
+            callee.params.len()
+        )
+    })
 }
 
 /// `E5011` — screens that use each other in a loop.

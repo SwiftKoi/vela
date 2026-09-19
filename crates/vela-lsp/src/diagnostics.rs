@@ -24,6 +24,8 @@
 //! The whole-program findings — a label nothing reaches — are answered for the project, since no
 //! subset of modules can answer them.
 
+use std::rc::Rc;
+
 use vela_compile::Session;
 use vela_diag::Diagnostic;
 use vela_syntax::{Item, ParseResult, ScreenDecl, StyleDecl};
@@ -36,12 +38,24 @@ use vela_syntax::{Item, ParseResult, ScreenDecl, StyleDecl};
 pub fn project(session: &mut Session) -> Vec<Diagnostic> {
     let mut diagnostics = session.diagnostics();
 
+    // The parses are kept for the whole answer: the per-file screen checks read them one at a time, and
+    // the cross-file one below needs every file's declarations at once — and a session's parse is
+    // memoized, so holding one costs nothing the loop was not already paying.
+    let parsed: Vec<Rc<ParseResult>> = session
+        .file_ids()
+        .into_iter()
+        .map(|file| session.parse(file))
+        .collect();
+
     // Screens are checked per file against the styles *in that file* (`SCREENS.md §5`), which is what
     // makes this a per-file question rather than one more whole-program pass.
-    for file in session.file_ids() {
-        let parsed = session.parse(file);
-        diagnostics.extend(screens(&parsed));
+    for one in &parsed {
+        diagnostics.extend(screens(one));
     }
+
+    // One screen question is *not* per file: an `open_screen` names a screen the project declares, and
+    // any of its files may declare it, so it is asked once with all of them (`SCREENS.md §2.1`).
+    diagnostics.extend(open_screens(&parsed));
     diagnostics
 }
 
@@ -65,9 +79,43 @@ pub fn file(session: &mut Session, file: vela_span::FileId) -> Vec<Diagnostic> {
             .cloned(),
     );
 
-    let parsed = session.parse(file);
-    diagnostics.extend(screens(&parsed));
+    let parsed: Vec<Rc<ParseResult>> = session
+        .file_ids()
+        .into_iter()
+        .map(|id| session.parse(id))
+        .collect();
+    diagnostics.extend(screens(&session.parse(file)));
+    // The cross-file half: a diagnostic about *this* file's `open_screen`, which needed every file's
+    // declarations to be checkable at all.
+    diagnostics.extend(
+        open_screens(&parsed)
+            .into_iter()
+            .filter(|diagnostic| diagnostic.primary.span.file() == file),
+    );
     diagnostics
+}
+
+/// Every file's `open_screen` diagnostics (`vela-ui`'s `check_open_screens`).
+///
+/// One call for the whole project, because the check needs every file's declarations — a helper rather
+/// than two lines in each caller so the two answers cannot disagree about what they asked.
+fn open_screens(parsed: &[Rc<ParseResult>]) -> Vec<Diagnostic> {
+    let declared: Vec<Vec<&ScreenDecl>> = parsed.iter().map(|parsed| declares(parsed)).collect();
+    let files: Vec<&[&ScreenDecl]> = declared.iter().map(Vec::as_slice).collect();
+    vela_ui::check_open_screens(&files)
+}
+
+/// Every screen a parsed file declares, in declaration order.
+fn declares(parsed: &ParseResult) -> Vec<&ScreenDecl> {
+    parsed
+        .program
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Screen(screen) => Some(screen),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The screen diagnostics of one parsed file.
@@ -91,15 +139,7 @@ fn screens(parsed: &ParseResult) -> Vec<Diagnostic> {
 
     // A `use` names a screen in *this* file (`SCREENS.md §5`), so the file's declarations are what
     // the checker is given — collected once, rather than rebuilt per screen.
-    let screens: Vec<&ScreenDecl> = parsed
-        .program
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            Item::Screen(screen) => Some(screen),
-            _ => None,
-        })
-        .collect();
+    let screens = declares(parsed);
 
     let mut diagnostics = vela_ui::check_inheritance(&styles);
     // Screens using each other is a fact about the file's graph, not about one screen — asked once,

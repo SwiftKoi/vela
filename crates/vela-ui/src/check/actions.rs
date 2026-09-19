@@ -3,7 +3,6 @@ use vela_span::Span;
 use vela_syntax::{Expr, ScreenArg, ScreenLine, StrPart};
 
 use crate::actions::{ActionRegistry, SET_SCREEN_VARIABLE};
-use crate::eval::is_question_call;
 
 use super::diag;
 use super::screen::Scope;
@@ -21,6 +20,38 @@ pub(super) fn check_actions(
     scope: Scope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
+    each_call(lines, &mut |name, args, span| {
+        if crate::eval::is_question(name) {
+            // A question the host answers is not an action (`SCREENS.md §2.6`): `variant("pc")` is a
+            // value, and the registry has nothing to say about it. What has something to say is the
+            // *vocabulary of names*, which `check/settings.rs` dispatches.
+            check_question(name, args, span, scope, out);
+            return;
+        }
+        check_action(name, args, span, actions, scope, out);
+        // The two calls that *name a setting* are held to that vocabulary too, and here rather than in
+        // `check_action`: the registry knows the action's name and its arity, and `check/settings.rs`
+        // knows which settings exist.
+        check_setting_call(name, args, span, scope, out);
+    });
+}
+
+/// Every action call a body writes, and where it is written.
+///
+/// One traversal, because "where an action can be written" is one list with several entries
+/// (`SCREENS.md §7`) — an `action` prop, a `key` binding, a `timer`'s action, a `default`'s
+/// initializer, an argument of a widget or of a `use` — and a second walk for a second check would be a
+/// second place for that list to fall out of date.
+///
+/// The *call's name* is what is handed over, and its arguments as written: a check that wants the
+/// registry looks the name up, and one that wants a vocabulary of its own (`check/settings.rs`,
+/// `check/opens.rs`) reads the arguments. Conditions are not walked — a call in one is a condition that
+/// cannot be decided rather than an action, and `conditions.rs` reports it (`W4013`) — and neither is a
+/// loop's iterable, which produces values rather than performing anything.
+pub(super) fn each_call<'a>(
+    lines: &'a [ScreenLine],
+    visit: &mut impl FnMut(&'a str, &'a [Expr], Span),
+) {
     for line in lines {
         match line {
             ScreenLine::Layer { .. }
@@ -32,7 +63,7 @@ pub(super) fn check_actions(
             // be two diagnostics for one mistake, and `E5012` would be the wrong one.
             ScreenLine::If { .. } => {
                 for arm in line.bodies() {
-                    check_actions(arm, actions, scope, out);
+                    each_call(arm, visit);
                 }
             }
             // A loop's body is drawn, so its actions are checked like any other. Its *iterable* is a
@@ -42,39 +73,122 @@ pub(super) fn check_actions(
             // producer as a misspelled action — `E5012: no action called `range`` — which is the same
             // misreading the condition walk had, one line further down (`SCREENS.md §2.4`).
             ScreenLine::For { iterable, body, .. } => {
-                sequence(iterable, actions, scope, out);
-                check_actions(body, actions, scope, out);
+                each_in(iterable, visit);
+                each_call(body, visit);
             }
             // A binding's action is an action like any other, so a misspelled one is the same
             // mistake here as in an `action` prop — and the delay is an expression that may hold
             // one too.
-            ScreenLine::Key { action, .. } => check_action_expr(action, actions, scope, out),
+            ScreenLine::Key { action, .. } => each_expr(action, visit),
             ScreenLine::Timer {
                 seconds, action, ..
             } => {
-                check_action_expr(seconds, actions, scope, out);
-                check_action_expr(action, actions, scope, out);
+                each_expr(seconds, visit);
+                each_expr(action, visit);
             }
             // A variable's initializer is an expression like any other, and one may name an action —
             // `default choice = close_screen()` is a screen whose first state is an action.
-            ScreenLine::Default { value, .. } => check_action_expr(value, actions, scope, out),
+            ScreenLine::Default { value, .. } => each_expr(value, visit),
             ScreenLine::Use { args, body, .. } => {
                 for arg in args {
                     if let Some(value) = arg_value(arg) {
-                        check_action_expr(value, actions, scope, out);
+                        each_expr(value, visit);
                     }
                 }
-                check_actions(body, actions, scope, out);
+                each_call(body, visit);
             }
             ScreenLine::Node(node) => {
                 for arg in &node.args {
                     if let Some(value) = arg_value(arg) {
-                        check_action_expr(value, actions, scope, out);
+                        each_expr(value, visit);
                     }
                 }
-                check_actions(&node.children, actions, scope, out);
+                each_call(&node.children, visit);
             }
         }
+    }
+}
+
+/// The actions an iterable holds: the ones written *inside* it, not the call that produces it.
+fn each_in<'a>(expr: &'a Expr, visit: &mut impl FnMut(&'a str, &'a [Expr], Span)) {
+    match expr {
+        Expr::List { items, .. } => {
+            for item in items {
+                each_expr(item, visit);
+            }
+        }
+        Expr::Paren { inner, .. } => each_in(inner, visit),
+        Expr::Binary { lhs, rhs, .. } => {
+            each_in(lhs, visit);
+            each_in(rhs, visit);
+        }
+        Expr::If { then_, else_, .. } => {
+            each_in(then_, visit);
+            each_in(else_, visit);
+        }
+        _ => {}
+    }
+}
+
+/// Every action call inside one expression.
+fn each_expr<'a>(expr: &'a Expr, visit: &mut impl FnMut(&'a str, &'a [Expr], Span)) {
+    match expr {
+        Expr::Call { callee, args, span } => {
+            // `foo.bar()` is a call on a value the screen holds, not a registry name: the language
+            // has no such action, so there is nothing here to check.
+            if let Expr::Name { name, .. } = callee.as_ref() {
+                visit(name, args, *span);
+            }
+            each_expr(callee, visit);
+            for arg in args {
+                each_expr(arg, visit);
+            }
+        }
+        Expr::Str { parts, .. } => {
+            for part in parts {
+                if let vela_syntax::StrPart::Interpolation { expr, .. } = part {
+                    each_expr(expr, visit);
+                }
+            }
+        }
+        Expr::Paren { inner, .. } | Expr::Field { base: inner, .. } => each_expr(inner, visit),
+        Expr::Unary { operand, .. } => each_expr(operand, visit),
+        Expr::Binary { lhs, rhs, .. } => {
+            each_expr(lhs, visit);
+            each_expr(rhs, visit);
+        }
+        Expr::Index { base, index, .. } => {
+            each_expr(base, visit);
+            each_expr(index, visit);
+        }
+        Expr::List { items, .. } => {
+            for item in items {
+                each_expr(item, visit);
+            }
+        }
+        Expr::Map { entries, .. } => {
+            for (key, value) in entries {
+                each_expr(key, visit);
+                each_expr(value, visit);
+            }
+        }
+        Expr::If {
+            cond, then_, else_, ..
+        } => {
+            each_expr(cond, visit);
+            each_expr(then_, visit);
+            each_expr(else_, visit);
+        }
+        Expr::Int { .. }
+        | Expr::Float { .. }
+        | Expr::Bool { .. }
+        | Expr::None { .. }
+        | Expr::Path { .. }
+        | Expr::Name { .. }
+        // A lambda's body runs when something calls it, which no screen does; an action cannot be
+        // written in one.
+        | Expr::Lambda { .. }
+        | Expr::Error { .. } => {}
     }
 }
 
@@ -88,111 +202,6 @@ fn arg_value(arg: &ScreenArg) -> Option<&Expr> {
         // A bare name is a flag (`stretch_x`) or a leaf's content (`text line`) — not a value, and
         // so not an action.
         ScreenArg::Named { value: None, .. } => None,
-    }
-}
-
-/// The actions an iterable holds: the ones written *inside* it, not the call that produces it.
-///
-/// The head of an iterable is a producer — a name, a call, a literal — and a call there is a value
-/// the screen draws from rather than an action it performs. What its *elements* are is a different
-/// question, and a list literal is the one shape where an element can be an action.
-fn sequence(expr: &Expr, actions: &ActionRegistry, scope: Scope<'_>, out: &mut Vec<Diagnostic>) {
-    match expr {
-        Expr::List { items, .. } => {
-            for item in items {
-                check_action_expr(item, actions, scope, out);
-            }
-        }
-        Expr::Paren { inner, .. } => sequence(inner, actions, scope, out),
-        Expr::Binary { lhs, rhs, .. } => {
-            sequence(lhs, actions, scope, out);
-            sequence(rhs, actions, scope, out);
-        }
-        Expr::If { then_, else_, .. } => {
-            sequence(then_, actions, scope, out);
-            sequence(else_, actions, scope, out);
-        }
-        _ => {}
-    }
-}
-
-/// Checks one expression, and every expression inside it.
-fn check_action_expr(
-    expr: &Expr,
-    actions: &ActionRegistry,
-    scope: Scope<'_>,
-    out: &mut Vec<Diagnostic>,
-) {
-    match expr {
-        Expr::Call { callee, args, span } => {
-            // `foo.bar()` is a call on a value the screen holds, not a registry name: the language
-            // has no such action, so there is nothing here to check.
-            if let Expr::Name { name, .. } = callee.as_ref() {
-                if is_question_call(callee) {
-                    // A question the host answers is not an action (`SCREENS.md §2.6`): `variant("pc")`
-                    // is a value, and the registry has nothing to say about it. What has something to
-                    // say is the *vocabulary of names*, which `check/settings.rs` dispatches.
-                    check_question(callee, args, *span, scope, out);
-                } else {
-                    check_action(name, args, *span, actions, scope, out);
-                    // The two calls that *name a setting* are held to that vocabulary too, and here
-                    // rather than in `check_action`: the registry knows the action's name and its
-                    // arity, and `check/settings.rs` knows which settings exist.
-                    check_setting_call(name, args, *span, scope, out);
-                }
-            }
-            check_action_expr(callee, actions, scope, out);
-            for arg in args {
-                check_action_expr(arg, actions, scope, out);
-            }
-        }
-        Expr::Str { parts, .. } => {
-            for part in parts {
-                if let vela_syntax::StrPart::Interpolation { expr, .. } = part {
-                    check_action_expr(expr, actions, scope, out);
-                }
-            }
-        }
-        Expr::Paren { inner, .. } | Expr::Field { base: inner, .. } => {
-            check_action_expr(inner, actions, scope, out);
-        }
-        Expr::Unary { operand, .. } => check_action_expr(operand, actions, scope, out),
-        Expr::Binary { lhs, rhs, .. } => {
-            check_action_expr(lhs, actions, scope, out);
-            check_action_expr(rhs, actions, scope, out);
-        }
-        Expr::Index { base, index, .. } => {
-            check_action_expr(base, actions, scope, out);
-            check_action_expr(index, actions, scope, out);
-        }
-        Expr::List { items, .. } => {
-            for item in items {
-                check_action_expr(item, actions, scope, out);
-            }
-        }
-        Expr::Map { entries, .. } => {
-            for (key, value) in entries {
-                check_action_expr(key, actions, scope, out);
-                check_action_expr(value, actions, scope, out);
-            }
-        }
-        Expr::If {
-            cond, then_, else_, ..
-        } => {
-            check_action_expr(cond, actions, scope, out);
-            check_action_expr(then_, actions, scope, out);
-            check_action_expr(else_, actions, scope, out);
-        }
-        Expr::Int { .. }
-        | Expr::Float { .. }
-        | Expr::Bool { .. }
-        | Expr::None { .. }
-        | Expr::Path { .. }
-        | Expr::Name { .. }
-        // A lambda's body runs when something calls it, which no screen does; an action cannot be
-        // written in one.
-        | Expr::Lambda { .. }
-        | Expr::Error { .. } => {}
     }
 }
 

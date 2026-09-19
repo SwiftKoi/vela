@@ -64,6 +64,16 @@ keeps rendering one-directional and testable.
 
 Compile-time checks:
 - A `use`'s arguments must match the screen's declared parameters (`E5010`, §2.1).
+- An `open_screen`'s target is a screen the **game** declares, and the arguments after its name fit
+  that screen's parameters (`E5009`, `E5010`, §2.1). The one screen question that is not per file: a
+  project is many files and any of them may declare the target, so it is asked once with all of them —
+  by the same layer that answers the editor, so `vela check` and a hover cannot disagree.
+  **A target is written as a string** — `open_screen("settings")`, which is what the migration emits —
+  and a target the screen *computes* (`open_screen(which)`, with `which` a parameter) is nobody's to
+  check: a bare word is an expression, which is what keeps this check from reporting one mistake twice
+  (`§7.1` draws the same boundary for a setting's name). The string is also what works across files
+  today: name resolution does not know that an `open_screen` argument is another vocabulary's, so a
+  *bare* name for a screen in another file is `E2001` (`M12.2`'s **Still open**).
 - Every widget name must be in the `WidgetRegistry` (`E5005`).
 - Every prop must exist on that widget and typecheck (`E5006`).
 - Styles referenced must exist (`E5007`).
