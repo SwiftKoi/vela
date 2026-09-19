@@ -35,6 +35,45 @@ fn args(line: &str) -> Args {
 /// A dialogue box with a themed fill and a styled line.
 const DIALOGUE: &str = "theme dusk:\n    color bg = 0x10121a\n    color fg = 0xe6e6f0\n\nstyle body:\n    color = theme.fg\n\nscreen dialogue(name: str?, line: str):\n    layer ui\n    box at bottom, background = theme.bg:\n        pad 24\n        column gap 8:\n            if name is not none:\n                text name\n            text line style = body\n";
 
+/// A control whose action writes what the store holds draws as `selected`, and so does its subtree.
+///
+/// This is what makes a radio row show the current choice without the author writing a companion test
+/// (`SCREENS.md §5.1`): the two options below are identical but for the value they write, so a frame in
+/// which one of them is accent-coloured and the other is not is a frame in which the *store* decided.
+#[test]
+fn a_control_that_writes_the_stores_value_draws_as_selected() {
+    const RADIO: &str = "theme dusk:\n    color fg = 0xe6e6f0\n    color accent = 0x00ff00\n\nstyle radio:\n    color = theme.fg\n    selected_color = theme.accent\n\nscreen display:\n    column gap 4:\n        button:\n            action preference(\"display_mode\", \"window\")\n            text \"Window\" style = radio\n        button:\n            action preference(\"display_mode\", \"fullscreen\")\n            text \"Fullscreen\" style = radio\n";
+
+    /// The colour of the first glyph drawn at all, which is the first option's text.
+    fn first_color(source: &str, stored: Option<vela_world::Value>) -> Color {
+        let mut text = engine();
+        let mut draw = DrawList::new();
+        let mut args = Args::new();
+        if let Some(value) = stored {
+            let mut preferences = vela_world::Preferences::new();
+            preferences.set("display_mode", value);
+            args.set_preferences(preferences);
+        }
+        assert!(
+            set(source).draw("display", &args, (1280, 720), &mut text, "sans", &mut draw),
+            "the screen was not found"
+        );
+        // Glyphs come out in draw order, so the first is the first option's text.
+        draw.glyphs()
+            .next()
+            .expect("the option's text drew no glyphs")
+            .color
+    }
+
+    // Nobody has chosen: `display_mode` is declared `window`, so the *default's* option is the marked one.
+    assert_eq!(first_color(RADIO, None), Color::rgb(0x00, 0xff, 0x00));
+    // A player who chose the other: the mark moves with the store, without the screen changing a word.
+    assert_eq!(
+        first_color(RADIO, Some(vela_world::Value::Str("fullscreen".into()))),
+        Color::rgb(0xe6, 0xe6, 0xf0)
+    );
+}
+
 /// A background box paints a quad in the theme's colour, and the text paints glyphs.
 #[test]
 fn a_screen_paints_a_rect_and_its_text() {

@@ -269,6 +269,12 @@ pub struct Node {
     /// Stored on the node rather than the painter because it is not paint: a node with an
     /// action is a *hotspot*, and where it sits is a laid-out rectangle, not a colour.
     pub action: Option<Action>,
+    /// Whether the setting this control writes is the one the store holds (`SCREENS.md §5.1`).
+    ///
+    /// Resolved at instantiation, because that is the one place the action *and* the scope are both in
+    /// hand, and stored because it is a fact about this layout: the painter's focus cursor moves without a
+    /// re-lay, and a setting does not.
+    pub chosen: bool,
     /// What is inside it.
     pub children: Vec<Node>,
 }
@@ -282,6 +288,7 @@ impl Node {
             props: Props::default(),
             paint: Paint::default(),
             action: None,
+            chosen: false,
             children,
         }
     }
@@ -294,6 +301,7 @@ impl Node {
             props: Props::default(),
             paint: Paint::default(),
             action: None,
+            chosen: false,
             children: Vec::new(),
         }
     }

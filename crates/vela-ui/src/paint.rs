@@ -129,7 +129,10 @@ fn paint_node(node: &Node, frame: &Frame, parent_x: f32, parent_y: f32, painter:
     if node.action.is_some() {
         let index = painter.seen;
         painter.seen += 1;
-        if painter.focused == Some(index) {
+        // Focused, or writing what the store already holds (`SCREENS.md §5.1`): the second is what draws a
+        // radio as the current choice without the author writing the companion test, and it belongs to
+        // everything the control draws for the same reason focus does.
+        if painter.focused == Some(index) || node.chosen {
             painter.selected = true;
         }
     }

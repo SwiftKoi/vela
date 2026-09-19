@@ -187,6 +187,9 @@ fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx, valu
         }
         "action" => {
             if let Some(action) = action_value(value, values) {
+                // Whether this control *is* the current choice is a question about the store, and this is
+                // the one place both the action and the scope are in hand (`SCREENS.md §5.1`).
+                node.chosen = crate::settings::is_chosen(values.preferences(), &action);
                 node.action = Some(action);
             }
         }

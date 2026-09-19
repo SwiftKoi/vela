@@ -179,6 +179,45 @@ impl SettingDecl {
     }
 }
 
+/// Whether a control's action writes what the store already holds (`SCREENS.md §5.1`).
+///
+/// A `preference("display_mode", "window")` is the current choice when the setting *is* `window`, and a
+/// `toggle_preference("skip_unseen")` when it is on — read the way [`write`] flips one, and the way a
+/// screen's `setting("…")` answers, so an unchosen setting is its declaration: the option that is the
+/// default is the option that draws as on.
+///
+/// Asked here rather than in the painter because it is a question about the *store*, and the two actions
+/// are this module's vocabulary. What it answers is a fact about one layout, so the caller stores it on the
+/// node: a press that changes a setting re-lays, which is what makes the answer current.
+#[must_use]
+pub fn is_chosen(preferences: &Preferences, action: &Action) -> bool {
+    let Some(name) = action.first() else {
+        return false;
+    };
+    let Some(setting) = SettingDecl::named(name) else {
+        return false;
+    };
+    if action.name == TOGGLE_PREFERENCE {
+        return match preferences.get(name) {
+            Some(Value::Bool(stored)) => *stored,
+            _ => setting.default == "true",
+        };
+    }
+    if action.name != PREFERENCE {
+        return false;
+    }
+    let (Some(want), stored) = (action.args.get(1), preferences.get(name)) else {
+        return false;
+    };
+    let Some(want) = world_value(want) else {
+        return false;
+    };
+    match stored {
+        Some(stored) => *stored == want,
+        None => Value::Str(setting.default.to_string()) == want,
+    }
+}
+
 /// Writes what a `preference` or `toggle_preference` action asks for, and answers the name it wrote.
 ///
 /// One place, because both callers carry the same two actions out: the windowed player, where a

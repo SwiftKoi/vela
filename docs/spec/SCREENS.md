@@ -597,17 +597,24 @@ An override is a **diff**, not a replacement: a state that sets only `color` kee
 `background`. The override is resolved through the style's inheritance chain like any other setting, so
 a derived style changes the states it names and keeps the rest.
 
-**`selected` is the focused control, and it belongs to everything that control draws** — the words
-inside a focused button change with it, because they are part of that button (§10). The other two are
-stored and resolvable but nothing selects them yet: `hover` needs a pointer, which the host does not
+**`selected` is the focused control or the one whose setting is what the store holds, and it belongs to
+everything that control draws** — the words inside a focused button change with it, because they are part
+of that button (§10). The second half is what makes a settings screen look like one without the author
+writing a companion test: `preference("display_mode", "window")` draws as `selected` exactly when
+`setting("display_mode")` answers `window` (§7.1), so a radio marks the current choice and a checkbox
+marks an on setting — and an unchosen setting is its **declaration**, so the default option is the one
+that starts marked. A press re-lays the screen, which is what keeps the mark current. The other two states
+are stored and resolvable but nothing selects them yet: `hover` needs a pointer, which the host does not
 deliver (§11 resolves device events to semantic actions rather than coordinates), and `insensitive`
 needs `enable_if` evaluated, which no phase does. A state nothing can select is a state nothing draws.
 
-> **Implemented (M12.1).** A `style`'s settings carry a value per state, resolved through its chain and
-> chosen at paint time from the focus cursor. `crates/vela-ui/tests/instantiate.rs` pins the resolution
-> — including that `idle_color` and `color` are one setting and that an override is a diff — and
-> `tests/paint.rs` pins that the focused control's subtree is the one that changes, which is also what
-> holds the painter's focus numbering to the one `focus::hotspots` produces.
+> **Implemented (M12.1, extended in M12.2).** A `style`'s settings carry a value per state, resolved
+> through its chain and chosen at paint time from the focus cursor. `crates/vela-ui/tests/instantiate.rs`
+> pins the resolution — including that `idle_color` and `color` are one setting and that an override is a
+> diff — and `tests/paint.rs` pins that the focused control's subtree is the one that changes, which is
+> also what holds the painter's focus numbering to the one `focus::hotspots` produces. The *store's* half
+> is pinned there too: `a_control_that_writes_the_stores_value_draws_as_selected` is the same screen with
+> two stores, and the mark moves between the options without a word of the screen changing.
 
 ### 5.2 Style prefixes
 
