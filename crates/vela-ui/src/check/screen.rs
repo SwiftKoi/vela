@@ -36,6 +36,29 @@ pub(crate) fn diag(
     Diagnostic::new(code, message, span, label)
 }
 
+/// The names a screen has: what it declared, and what it was given.
+///
+/// Two lists rather than one, because two rules ask different questions of them. A *setting's* name
+/// must not be a name the screen has — `preference(which, 30)` is a computed name, and a computed name
+/// is not a setting anybody can look up — so that check asks whether the screen has the name at all.
+/// `set_screen_variable` must name a *variable* the screen declared: a parameter is not writable,
+/// because the write would land in the screen's own store while the parameter kept reading what it was
+/// given (`E5017`).
+#[derive(Clone, Copy)]
+pub(super) struct Scope<'a> {
+    /// The screen's own `default` variables.
+    pub(super) variables: &'a [&'a str],
+    /// What the screen was given.
+    pub(super) params: &'a [&'a str],
+}
+
+impl Scope<'_> {
+    /// Whether the screen has this name at all, as a variable or as a parameter.
+    pub(super) fn has(&self, name: &str) -> bool {
+        self.variables.contains(&name) || self.params.contains(&name)
+    }
+}
+
 /// Checks a screen body against the registry and the file's other screens.
 ///
 /// `screens` is the file's declarations rather than a lookup built here, because composition is
@@ -65,12 +88,17 @@ pub fn check_screen(
     // write one. Both are rules about the screen rather than about a line, so they are asked here
     // (`§2.5`).
     check_declares(lines, params, &mut diagnostics);
-    let declared: Vec<&str> = ScreenLine::declares(lines)
+    let variables: Vec<&str> = ScreenLine::declares(lines)
         .into_iter()
         .map(|(name, _)| name)
         .collect();
+    let given: Vec<&str> = params.iter().map(|param| param.name.as_str()).collect();
+    let scope = Scope {
+        variables: &variables,
+        params: &given,
+    };
     // Every call in a body is an action (`SCREENS.md §7`), and the registry is what says so.
-    check_actions(lines, actions, &declared, &mut diagnostics);
+    check_actions(lines, actions, scope, &mut diagnostics);
     // Every `key` names a semantic action (`§11`), and the vocabulary is what says so.
     check_keys(lines, inputs, &mut diagnostics);
     // And a condition has to be decidable: a screen decides from what it has, not from a call (`§2.2`).

@@ -6,6 +6,8 @@ use crate::actions::{ActionRegistry, SET_SCREEN_VARIABLE};
 use crate::eval::is_question_call;
 
 use super::diag;
+use super::screen::Scope;
+use super::settings::check_setting_call;
 use super::variants::check_variant;
 
 /// Checks every action a body calls against the registry.
@@ -17,7 +19,7 @@ use super::variants::check_variant;
 pub(super) fn check_actions(
     lines: &[ScreenLine],
     actions: &ActionRegistry,
-    declared: &[&str],
+    scope: Scope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     for line in lines {
@@ -31,7 +33,7 @@ pub(super) fn check_actions(
             // be two diagnostics for one mistake, and `E5012` would be the wrong one.
             ScreenLine::If { .. } => {
                 for arm in line.bodies() {
-                    check_actions(arm, actions, declared, out);
+                    check_actions(arm, actions, scope, out);
                 }
             }
             // A loop's body is drawn, so its actions are checked like any other. Its *iterable* is a
@@ -41,37 +43,37 @@ pub(super) fn check_actions(
             // producer as a misspelled action — `E5012: no action called `range`` — which is the same
             // misreading the condition walk had, one line further down (`SCREENS.md §2.4`).
             ScreenLine::For { iterable, body, .. } => {
-                sequence(iterable, actions, declared, out);
-                check_actions(body, actions, declared, out);
+                sequence(iterable, actions, scope, out);
+                check_actions(body, actions, scope, out);
             }
             // A binding's action is an action like any other, so a misspelled one is the same
             // mistake here as in an `action` prop — and the delay is an expression that may hold
             // one too.
-            ScreenLine::Key { action, .. } => check_action_expr(action, actions, declared, out),
+            ScreenLine::Key { action, .. } => check_action_expr(action, actions, scope, out),
             ScreenLine::Timer {
                 seconds, action, ..
             } => {
-                check_action_expr(seconds, actions, declared, out);
-                check_action_expr(action, actions, declared, out);
+                check_action_expr(seconds, actions, scope, out);
+                check_action_expr(action, actions, scope, out);
             }
             // A variable's initializer is an expression like any other, and one may name an action —
             // `default choice = close_screen()` is a screen whose first state is an action.
-            ScreenLine::Default { value, .. } => check_action_expr(value, actions, declared, out),
+            ScreenLine::Default { value, .. } => check_action_expr(value, actions, scope, out),
             ScreenLine::Use { args, body, .. } => {
                 for arg in args {
                     if let Some(value) = arg_value(arg) {
-                        check_action_expr(value, actions, declared, out);
+                        check_action_expr(value, actions, scope, out);
                     }
                 }
-                check_actions(body, actions, declared, out);
+                check_actions(body, actions, scope, out);
             }
             ScreenLine::Node(node) => {
                 for arg in &node.args {
                     if let Some(value) = arg_value(arg) {
-                        check_action_expr(value, actions, declared, out);
+                        check_action_expr(value, actions, scope, out);
                     }
                 }
-                check_actions(&node.children, actions, declared, out);
+                check_actions(&node.children, actions, scope, out);
             }
         }
     }
@@ -95,21 +97,21 @@ fn arg_value(arg: &ScreenArg) -> Option<&Expr> {
 /// The head of an iterable is a producer — a name, a call, a literal — and a call there is a value
 /// the screen draws from rather than an action it performs. What its *elements* are is a different
 /// question, and a list literal is the one shape where an element can be an action.
-fn sequence(expr: &Expr, actions: &ActionRegistry, declared: &[&str], out: &mut Vec<Diagnostic>) {
+fn sequence(expr: &Expr, actions: &ActionRegistry, scope: Scope<'_>, out: &mut Vec<Diagnostic>) {
     match expr {
         Expr::List { items, .. } => {
             for item in items {
-                check_action_expr(item, actions, declared, out);
+                check_action_expr(item, actions, scope, out);
             }
         }
-        Expr::Paren { inner, .. } => sequence(inner, actions, declared, out),
+        Expr::Paren { inner, .. } => sequence(inner, actions, scope, out),
         Expr::Binary { lhs, rhs, .. } => {
-            sequence(lhs, actions, declared, out);
-            sequence(rhs, actions, declared, out);
+            sequence(lhs, actions, scope, out);
+            sequence(rhs, actions, scope, out);
         }
         Expr::If { then_, else_, .. } => {
-            sequence(then_, actions, declared, out);
-            sequence(else_, actions, declared, out);
+            sequence(then_, actions, scope, out);
+            sequence(else_, actions, scope, out);
         }
         _ => {}
     }
@@ -119,7 +121,7 @@ fn sequence(expr: &Expr, actions: &ActionRegistry, declared: &[&str], out: &mut 
 fn check_action_expr(
     expr: &Expr,
     actions: &ActionRegistry,
-    declared: &[&str],
+    scope: Scope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     match expr {
@@ -133,50 +135,54 @@ fn check_action_expr(
                     // say is the *vocabulary of names*, which `check/variants.rs` asks about.
                     check_variant(args, *span, out);
                 } else {
-                    check_action(name, args, *span, actions, declared, out);
+                    check_action(name, args, *span, actions, scope, out);
+                    // The two calls that *name a setting* are held to that vocabulary too, and here
+                    // rather than in `check_action`: the registry knows the action's name and its
+                    // arity, and `check/settings.rs` knows which settings exist.
+                    check_setting_call(name, args, *span, scope, out);
                 }
             }
-            check_action_expr(callee, actions, declared, out);
+            check_action_expr(callee, actions, scope, out);
             for arg in args {
-                check_action_expr(arg, actions, declared, out);
+                check_action_expr(arg, actions, scope, out);
             }
         }
         Expr::Str { parts, .. } => {
             for part in parts {
                 if let vela_syntax::StrPart::Interpolation { expr, .. } = part {
-                    check_action_expr(expr, actions, declared, out);
+                    check_action_expr(expr, actions, scope, out);
                 }
             }
         }
         Expr::Paren { inner, .. } | Expr::Field { base: inner, .. } => {
-            check_action_expr(inner, actions, declared, out);
+            check_action_expr(inner, actions, scope, out);
         }
-        Expr::Unary { operand, .. } => check_action_expr(operand, actions, declared, out),
+        Expr::Unary { operand, .. } => check_action_expr(operand, actions, scope, out),
         Expr::Binary { lhs, rhs, .. } => {
-            check_action_expr(lhs, actions, declared, out);
-            check_action_expr(rhs, actions, declared, out);
+            check_action_expr(lhs, actions, scope, out);
+            check_action_expr(rhs, actions, scope, out);
         }
         Expr::Index { base, index, .. } => {
-            check_action_expr(base, actions, declared, out);
-            check_action_expr(index, actions, declared, out);
+            check_action_expr(base, actions, scope, out);
+            check_action_expr(index, actions, scope, out);
         }
         Expr::List { items, .. } => {
             for item in items {
-                check_action_expr(item, actions, declared, out);
+                check_action_expr(item, actions, scope, out);
             }
         }
         Expr::Map { entries, .. } => {
             for (key, value) in entries {
-                check_action_expr(key, actions, declared, out);
-                check_action_expr(value, actions, declared, out);
+                check_action_expr(key, actions, scope, out);
+                check_action_expr(value, actions, scope, out);
             }
         }
         Expr::If {
             cond, then_, else_, ..
         } => {
-            check_action_expr(cond, actions, declared, out);
-            check_action_expr(then_, actions, declared, out);
-            check_action_expr(else_, actions, declared, out);
+            check_action_expr(cond, actions, scope, out);
+            check_action_expr(then_, actions, scope, out);
+            check_action_expr(else_, actions, scope, out);
         }
         Expr::Int { .. }
         | Expr::Float { .. }
@@ -197,7 +203,7 @@ fn check_action(
     args: &[Expr],
     span: Span,
     actions: &ActionRegistry,
-    declared: &[&str],
+    scope: Scope<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(action) = actions.get(name) else {
@@ -232,7 +238,7 @@ fn check_action(
     }
 
     if name == SET_SCREEN_VARIABLE {
-        check_write(args.first(), declared, out);
+        check_write(args.first(), scope.variables, out);
     }
 }
 

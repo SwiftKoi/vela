@@ -388,6 +388,46 @@ fn renpys_own_globals_are_answered_and_reported() {
     assert!(reported(&entries, "config.has_music"), "{entries:?}");
 }
 
+/// A setting Ren'Py names by a label is translated into this language's word for it.
+///
+/// `Preference("skip", "toggle")` looks the label up at run time; Vela's name is checked where it is
+/// written (`vela-ui::settings`), so the two are not the same string and this pass is what bridges
+/// them: the label becomes the name, and `"toggle"` — a value word only the runtime could check —
+/// becomes the action that flips a boolean.
+#[test]
+fn renpys_settings_are_translated_into_this_languages_names() {
+    let (text, entries) = lower(
+        "screen s():\n    button:\n        action Preference(\"display\", \"fullscreen\")\n    button:\n        action Preference(\"after choices\", \"toggle\")\n",
+        &[],
+    );
+
+    assert!(
+        text.contains("action preference(\"display_mode\", \"fullscreen\")"),
+        "{text}"
+    );
+    assert!(
+        text.contains("action toggle_preference(\"skip_after_choices\")"),
+        "{text}"
+    );
+    assert!(entries.is_empty(), "{entries:?}");
+}
+
+/// A setting whose system is not built is reported, never written.
+///
+/// A volume control that moves a number nothing reads is the thing this pass exists not to produce,
+/// and the entry names the milestone the audio lands in rather than leaving a dead control.
+#[test]
+fn a_setting_without_a_system_is_reported() {
+    let (text, entries) = lower(
+        "screen s():\n    button:\n        action Preference(\"all mute\", \"toggle\")\n",
+        &[],
+    );
+
+    assert!(!text.contains("mute"), "{text}");
+    assert!(reported(&entries, "all mute"), "{entries:?}");
+    assert!(reported(&entries, "M12.3"), "{entries:?}");
+}
+
 /// A comment at column zero does not end a screen.
 ///
 /// Ren'Py writes its own region markers that way — `the_question`'s `screens.rpy` has

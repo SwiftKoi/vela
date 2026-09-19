@@ -108,12 +108,20 @@ Fast-forward until something needs an answer. Declared, not dispatched yet: the 
 
 ## `preference(name, value)`
 
-Change a player setting. Declared, not dispatched yet: the runtime does not act on it.
+Change one of the player's settings. Declared, not dispatched yet: the runtime does not act on it.
 
 | argument | takes | meaning |
 | --- | --- | --- |
 | `name` | a word | Which setting. |
-| `value` | a word | What to set it to. |
+| `value` | a value | What to set it to. |
+
+## `toggle_preference(name)`
+
+Flip a boolean setting, for a control that cannot read it. Declared, not dispatched yet: the runtime does not act on it.
+
+| argument | takes | meaning |
+| --- | --- | --- |
+| `name` | a word | Which setting to flip. |
 
 ## `file_page(name)`
 

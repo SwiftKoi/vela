@@ -300,6 +300,12 @@ pub(super) fn action(written: &str, gaps: &mut Gaps) -> Option<String> {
     if !rest.starts_with('(') {
         return Some(name);
     }
+    // A setting is the one action whose arguments are a *vocabulary* rather than values: Ren'Py names
+    // a setting by a label it looks up at run time, and this language names one by a word the checker
+    // holds to a closed set (`vela-ui::settings`), so the call is translated rather than copied.
+    if name == "Preference" {
+        return preference(rest, gaps);
+    }
     let lowered = match ACTIONS.iter().find(|(old, _)| *old == name) {
         Some((_, new)) => (*new).to_string(),
         None => snake_case(&name),
@@ -314,6 +320,80 @@ pub(super) fn action(written: &str, gaps: &mut Gaps) -> Option<String> {
         literals(rest, gaps)? // a `?` here drops the action, which is what an argument Vela cannot
                               // hold means: the entry has already named it
     ))
+}
+
+/// The settings Ren'Py names by a label, and what each is called here.
+///
+/// Measured from the sample's own settings screen (`docs/roadmap/M12.2-game-interface.md`): five
+/// names, of which `display` carries a *value* and the rest are toggles.
+const PREFERENCE_NAMES: &[(&str, &str)] = &[
+    ("display", "display_mode"),
+    ("skip", "skip_unseen"),
+    ("after choices", "skip_after_choices"),
+    ("transitions", "transitions"),
+    ("auto-forward", "auto_forward"),
+];
+
+/// The settings Ren'Py names whose system is not built: reported, never written.
+///
+/// A volume control that moves a number nothing reads is what this migration must not produce, and
+/// M12.3 is where the audio that gives those settings a meaning lands.
+const PREFERENCE_NOT_YET: &[(&str, &str)] = &[
+    ("music volume", "the music volume"),
+    ("sound volume", "the sound volume"),
+    ("voice volume", "the voice volume"),
+    ("all mute", "the mute-everything toggle"),
+];
+
+/// `Preference(name)` and `Preference(name, value)`, as this language writes them.
+///
+/// The one-argument form is a **Value** — a reader and a writer a bar holds — which a Vela bar has no
+/// counterpart for yet: a bar takes an expression, and a bar a *setting* fills and writes is this
+/// milestone's settings screens. The two-argument form is an action, and `"toggle"` is the value
+/// Ren'Py spells a flip with: here that is `toggle_preference`, an action of its own, because a value
+/// word is a second vocabulary inside an argument that only the runtime could check.
+fn preference(rest: &str, gaps: &mut Gaps) -> Option<String> {
+    let named = unquoted(rest);
+    let (name, value) = match named.as_slice() {
+        [name] => (name.clone(), None),
+        [name, value] => (name.clone(), Some(value.clone())),
+        _ => {
+            gaps.unknown
+                .push(format!("`Preference{rest}`, which this pass does not read"));
+            return None;
+        }
+    };
+    let Some((_, ours)) = PREFERENCE_NAMES.iter().find(|(renpy, _)| *renpy == name) else {
+        let why = PREFERENCE_NOT_YET
+            .iter()
+            .find(|(renpy, _)| *renpy == name)
+            .map(|(_, why)| *why);
+        gaps.unknown.push(match why {
+            Some(what) => format!("`Preference(\"{name}\")`, {what} — M12.3's audio"),
+            None => format!("`Preference(\"{name}\")`, a setting Vela has not got"),
+        });
+        return None;
+    };
+    match value.as_deref() {
+        Some("toggle") => Some(format!("toggle_preference(\"{ours}\")")),
+        Some(value) => Some(format!("preference(\"{ours}\", \"{value}\")")),
+        None => {
+            gaps.unknown.push(format!(
+                "`Preference(\"{name}\")`, a *value* a widget reads: a Vela bar takes an expression, \
+                 and a bar a setting fills and writes is M12.2's settings screens"
+            ));
+            None
+        }
+    }
+}
+
+/// A call's arguments, unquoted: what Ren'Py's `Preference(…)` names a setting and a value with.
+fn unquoted(rest: &str) -> Vec<String> {
+    let inner = rest.trim().trim_start_matches('(').trim_end_matches(')');
+    split_top_level(inner)
+        .into_iter()
+        .map(|part| unquote(part.trim()))
+        .collect()
 }
 
 /// A call's name and the `(…)` after it, however the two are spaced.

@@ -12,6 +12,21 @@ use crate::widgets::PropType;
 
 use super::decl::ActionDecl;
 
+/// The action that writes a setting (`RUNTIME.md §2.1`).
+///
+/// A constant for the reason [`SET_SCREEN_VARIABLE`] is one: the checker holds the first argument to
+/// the settings vocabulary (`vela-ui::settings`) while the runtime is what performs the write, and a
+/// literal in each place would let one of them be renamed without the other.
+pub const PREFERENCE: &str = "preference";
+
+/// The action that flips a boolean setting, for the control that cannot read it.
+///
+/// Ren'Py spells this as the *value* — `Preference("skip", "toggle")` — and a value word is a second
+/// vocabulary inside an argument that only the runtime could check. An action is the shape this
+/// language uses for a word that does something (`SCREENS.md §7`), and a checkbox is what it exists
+/// for: the button flips the setting without a screen ever reading one.
+pub const TOGGLE_PREFERENCE: &str = "toggle_preference";
+
 /// The action that writes one of a screen's *own* variables (`SCREENS.md §2.5`).
 ///
 /// A constant because two crates have to agree about the string: `vela-ui` holds the written name to
@@ -137,12 +152,18 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
         dispatched: false,
     },
     ActionDecl {
-        name: "preference",
+        name: PREFERENCE,
         args: &[
             arg("name", PropType::Word, "Which setting."),
-            arg("value", PropType::Word, "What to set it to."),
+            arg("value", PropType::Value, "What to set it to."),
         ],
-        doc: "Change a player setting.",
+        doc: "Change one of the player's settings.",
+        dispatched: false,
+    },
+    ActionDecl {
+        name: TOGGLE_PREFERENCE,
+        args: &[arg("name", PropType::Word, "Which setting to flip.")],
+        doc: "Flip a boolean setting, for a control that cannot read it.",
         dispatched: false,
     },
     ActionDecl {

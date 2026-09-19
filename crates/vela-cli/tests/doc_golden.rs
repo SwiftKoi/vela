@@ -23,7 +23,7 @@ fn reference_dir() -> PathBuf {
 }
 
 /// The pages, which is the set `vela doc` generates.
-const PAGES: [&str; 3] = ["widgets", "actions", "diagnostics"];
+const PAGES: [&str; 4] = ["widgets", "actions", "settings", "diagnostics"];
 
 /// Runs `vela doc` and returns its standard output.
 fn stdout(args: &[&str]) -> String {

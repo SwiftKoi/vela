@@ -151,9 +151,11 @@ pub struct World {
 > carries none (in the decoded world *and* in the bytes), a snapshot carries none, a rollback keeps
 > them, and a resume takes the caller's.
 >
-> **Not yet.** Persistence, and the vocabulary that names a setting: the store holds any name of any
-> type, and the `preference` action is still `dispatched: false`. Both land with the settings screens
-> (`docs/roadmap/M12.2-game-interface.md`, items 2 and 4).
+> **Not yet.** Persistence, and the two halves that make a setting do something: nothing *writes* one
+> (the `preference` action is dispatched by nobody yet) and nothing *reads* one (no screen draws a
+> setting, and the transport that would obey a text speed is item 4's). The *vocabulary* is in —
+> `vela-ui::settings` and `E5020`/`E5021`, `SCREENS.md §7.1` — and every entry says `read: false` until
+> one of those lands.
 
 ## 3. Capabilities / host interface
 

@@ -87,13 +87,14 @@ fn the_default_set_is_the_documented_one() {
         "file_action",
         "file_delete",
         "set_screen_variable",
+        "toggle_preference",
         "language",
         "end_replay",
         "gamepad_calibrate",
     ] {
         assert!(registry.get(name).is_some(), "`{name}` is missing");
     }
-    assert_eq!(registry.len(), 26, "SCREENS.md §7 lists twenty-six");
+    assert_eq!(registry.len(), 27, "SCREENS.md §7 lists twenty-seven");
 }
 
 /// The registry says which entries the runtime acts on, and most of them it does not yet.
@@ -198,7 +199,7 @@ fn a_plugin_action_is_a_registry_entry() {
         dispatched: true,
     });
     assert_eq!(registry.names(), before, "a replacement moved the list");
-    assert_eq!(registry.len(), 26, "a duplicate was added");
+    assert_eq!(registry.len(), 27, "a duplicate was added");
     assert_eq!(
         registry.get("set").unwrap().arity(),
         0,
@@ -216,7 +217,7 @@ fn a_plugin_action_is_a_registry_entry() {
         doc: "A plugin's action.",
         dispatched: true,
     });
-    assert_eq!(registry.len(), 27);
+    assert_eq!(registry.len(), 28);
     assert_eq!(registry.names().last(), Some(&"teleport"));
 }
 

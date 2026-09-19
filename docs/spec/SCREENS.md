@@ -723,10 +723,39 @@ each one takes.
 > **Implemented (M12.1).** An action is a value a screen can be given and a widget can hold, and the
 > checker holds the vocabulary to the registry: `E5012` for a name that is not registered, `E5013` for
 > the wrong number of arguments, and a bare name that is a parameter is left alone because that is how
-> an action arrives. Of the twenty-six entries, eight are dispatched (`open_screen`, `close_screen`,
+> an action arrives. Of the twenty-seven entries, eight are dispatched (`open_screen`, `close_screen`,
 > `hide`, `quit`, `quick_save`, `quick_load`, `rollback`, `set_screen_variable`) — the rest need the VM
 > or `World`, and the reference page, the hover, and an activation that reaches one all say so rather
 > than doing nothing quietly.
+
+### 7.1 Settings, the one action whose argument is a vocabulary
+
+`preference(name, value)` writes one of the player's settings and `toggle_preference(name)` flips a
+boolean one. What a setting *is* belongs to `RUNTIME.md §2.1`; what a screen may **name** is here, and
+it is a closed vocabulary rather than a value: `vela-ui::settings` holds the list, `vela doc` is where
+a reader looks it up, and the checker holds a written name to it — **`E5020`** for a name that is not a
+setting, **`E5021`** for a value the setting does not take.
+
+That is `variant`'s shape and `variant`'s reason (`§2.6`): a name the engine can see is a name it can
+refuse. Ren'Py learns this the hard way — `Preference("text speed")` is a *string* looked up at run
+time, so a misspelling is a control that silently does nothing, which is exactly what the sample's
+migrated settings screen was doing until this check existed (`TOOLING.md §8`).
+
+**A written name is what is checked.** `preference(which, 30)`, with `which` a parameter, is `E5020`
+rather than a call the checker guesses at. A *value* is checked only when it is a literal:
+`preference(text_speed, other)` is an expression, and reading `other` as a word would report a correct
+screen. A choice is therefore written as a string — `preference(display_mode, "fullscreen")`, the
+second spelling a word argument has — while a bare word stays a *name*, and where a name points is
+`E2001`'s question.
+
+**A toggle is an action rather than a value word.** Ren'Py spells a flip as the value `"toggle"`; here
+it is `toggle_preference(name)`, because a value word would be a second vocabulary inside an argument
+that only the runtime could check — and a checkbox needs to flip a setting that no screen can read yet.
+
+> **Implemented (M12.2, in part).** The registry, the checker, and the migration are in; the *write*
+> and the *read* are not. Nothing dispatches `preference` yet and nothing draws a setting, so every
+> entry in the list carries `read: false` and the reference says so — a vocabulary that runs ahead of
+> its systems, labelled rather than implied (`docs/roadmap/M12.2-game-interface.md`).
 
 ## 8. Reactivity
 
