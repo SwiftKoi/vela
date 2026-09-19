@@ -29,6 +29,7 @@ use vela_ui::actions::Action as ScreenAction;
 
 pub(crate) mod images;
 mod saves;
+mod screens;
 pub(crate) mod settings;
 
 /// The bundled default face. See `assets/fonts/README.md`.
@@ -39,6 +40,12 @@ const FACE_NAME: &str = "sans";
 pub struct Player {
     /// The module, kept so a load can restore into it.
     module: vela_bytecode::Module,
+    /// The module the game's entry point is in, which is what a screen's bare label resolves against.
+    ///
+    /// `Player::new` is handed the entry label in the program's own spelling (`main.start`), and a screen
+    /// cannot know a project's module names: the interface's `Start` is `jump(start)`, and the convention
+    /// only works if something turns the bare name into the qualified one (`SCREENS.md §2.7`).
+    entry_module: String,
     /// The story and its rollback history.
     timeline: Timeline,
     presenter: Presenter,
@@ -120,9 +127,15 @@ impl Player {
         let mut screens = screens;
         screens.set_preferences(timeline.world().preferences.clone());
 
+        // Everything before the last dot of `main.start` is the module a bare label belongs to.
+        let entry_module = label
+            .rsplit_once('.')
+            .map_or_else(String::new, |(module, _)| module.to_string());
+
         Ok(Self {
             timeline,
             module: module.clone(),
+            entry_module,
             presenter: {
                 let mut presenter = Presenter::new(text, FACE_NAME, size);
                 stage(&mut presenter, images);
@@ -234,39 +247,6 @@ impl Player {
         }
     }
 
-    /// Escape: close the top screen, or open `pause` when there is nothing to close.
-    ///
-    /// The "or open the menu" half of the host's `Cancel` binding. A project without a `pause`
-    /// screen simply has no menu, which is the one-line script staying a one-line script.
-    fn toggle_menu(&mut self) {
-        if let Some(name) = self.overlays.close() {
-            println!("screen close {name}");
-            return;
-        }
-        if !self.screens.has("pause") {
-            return;
-        }
-        if self.overlays.open(
-            self.screens.sets(),
-            "pause",
-            &[],
-            self.size,
-            self.presenter.text_mut(),
-            FACE_NAME,
-        ) {
-            println!("screen open pause");
-        }
-    }
-
-    /// Activates the focused hotspot's action.
-    fn activate(&mut self) {
-        let Some(action) = self.overlays.focused().cloned() else {
-            return;
-        };
-        println!("screen activate {action}");
-        self.run(action);
-    }
-
     /// Runs an action a screen asked for, however it asked.
     ///
     /// What the screen *stack* does with an action is `vela-ui`'s (`Stack::dispatch`), because a test
@@ -332,6 +312,20 @@ impl Player {
             "quick_save" => self.save("quick"),
             "quick_load" => self.load("quick"),
             "rollback" => self.rollback(),
+            // A screen's `jump` begins the story at a label — the one action in the vocabulary whose
+            // meaning is entirely the host's (`SCREENS.md §2.7`), because a label is the program's and a
+            // screen cannot know what labels a project has.
+            "jump" => {
+                let Some(label) = action.first() else {
+                    println!("screen jump (no label)");
+                    return;
+                };
+                if self.jump(label) {
+                    println!("screen jump {label}");
+                } else {
+                    println!("screen jump {label} (no such label)");
+                }
+            }
             // The rest need the VM or `World` and are not wired yet — `SCREENS.md §7` says which, and
             // the registry carries the same answer. Saying so beats a button that quietly does
             // nothing, which is the failure that looks like the project's mistake.

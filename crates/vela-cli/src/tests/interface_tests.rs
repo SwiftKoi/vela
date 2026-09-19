@@ -45,3 +45,39 @@ fn the_interface_draws_in_the_projects_colours() {
         "the project's `bg`, not Vela's"
     );
 }
+
+/// A screen's `jump` begins the game, which is how the interface's `Start` works (`SCREENS.md §2.7`).
+///
+/// The whole path, through a real player: the interface writes `jump(start)`, the dispatcher hands it to
+/// the host (the stack says `NotOurs`, because a label is the program's), and `Player::jump` starts the
+/// timeline again at that label — closing the screens that were open, or a menu would stay over the first
+/// line of the game it just started. A label the program does not have answers `false`, which is the
+/// difference between a button that says it could not and one that does nothing.
+#[test]
+fn a_screen_can_start_the_game() {
+    let source = "screen menu:\n    column:\n        button:\n            text \"Start\"\n            action jump(start)\n\nlabel start:\n    \"One.\"\n    return\n";
+    let project = temp_project("interface-jump", source);
+    let collected = crate::commands::check::collect(&project).expect("a valid project");
+    let (module, label, _) =
+        crate::commands::run::compile_project(&collected, &[], &mut Vec::new())
+            .expect("the project compiles");
+    let screens = crate::commands::ui::Screens::load(&collected);
+    let schema = crate::commands::ui::schema(&collected.files);
+
+    let mut player = crate::commands::play::Player::new(
+        &module,
+        &label,
+        (1280, 720),
+        screens,
+        project.join("saves"),
+        schema,
+        Vec::new(),
+    )
+    .expect("a player, which needs no window");
+
+    assert!(player.jump("start"), "the label the game begins at");
+    assert!(
+        !player.jump("nosuchlabel"),
+        "and a label no module declares is answered rather than assumed"
+    );
+}

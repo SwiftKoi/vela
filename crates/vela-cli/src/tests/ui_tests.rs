@@ -319,7 +319,16 @@ fn opening_an_undeclared_screen_does_nothing() {
 
     let mut text = text_engine();
     let mut stack = vela_ui::Stack::default();
-    assert!(!stack.open(screens.sets(), "pause", &[], (1280, 720), &mut text, "sans"));
+    // `pause` is not a name nothing declares any more — the interface has one (`SCREENS.md §2.7`), which
+    // is why this asks for a name no module and no interface has.
+    assert!(!stack.open(
+        screens.sets(),
+        "nosuchscreen",
+        &[],
+        (1280, 720),
+        &mut text,
+        "sans"
+    ));
     assert!(stack.is_empty());
     assert!(stack.focused().is_none());
     assert!(!stack.move_focus(1));

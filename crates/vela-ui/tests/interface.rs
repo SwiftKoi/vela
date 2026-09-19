@@ -216,6 +216,55 @@ fn the_settings_screen_marks_what_the_player_chose() {
     );
 }
 
+/// The pause menu: the words a player reads, and one control per button.
+///
+/// `Escape` is the runtime's binding — it closes the top screen, or opens `pause` when nothing is open
+/// (`SCREENS.md §2`) — so this screen is what makes Escape work in a project that declares no menu, and the
+/// way out of itself is the first button's `close_screen`. That the actions are *there* is the point: a
+/// button is a hotspot only if its action parsed, and a prop line that parses as a child node is a button
+/// that silently does nothing.
+#[test]
+fn the_pause_menu_offers_a_way_out() {
+    let set = vela_ui::interface::set();
+    let mut text = engine();
+
+    let (name, expected) = ("pause", ["Resume", "Settings", "About", "Quit"].as_slice());
+    let laid = vela_ui::ScreenSource::lay(
+        &set,
+        name,
+        &Args::new(),
+        &Default::default(),
+        (1280, 720),
+        &mut text,
+        "sans",
+    )
+    .unwrap_or_else(|| panic!("the interface declares `{name}`"));
+
+    let mut drawn = Vec::new();
+    words(&laid.node, &mut drawn);
+    assert_eq!(drawn, expected, "`{name}`'s buttons");
+
+    let asks: Vec<&str> = laid
+        .hotspots
+        .iter()
+        .map(|hotspot| hotspot.action.name.as_str())
+        .collect();
+    let where_: Vec<&str> = laid
+        .hotspots
+        .iter()
+        .map(|hotspot| hotspot.label.as_str())
+        .collect();
+    assert_eq!(
+        asks.len(),
+        expected.len(),
+        "one control per button: {where_:?} ask {asks:?}"
+    );
+    assert!(
+        asks.contains(&"close_screen"),
+        "`{name}` has a way out of itself: {asks:?}"
+    );
+}
+
 /// A mistyped interface name is a suggestion rather than silence.
 #[test]
 fn a_mistyped_interface_name_is_suggested() {

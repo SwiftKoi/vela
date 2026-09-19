@@ -155,7 +155,14 @@ fn a_project_without_screens_builds_a_bundle_without_them() {
     );
     let screens = crate::commands::ui::Screens::load_bundle(&project.join("dist"))
         .expect("no screens is not an error");
-    assert!(!screens.has("pause"));
+    assert_eq!(
+        screens.count(),
+        0,
+        "a bundle carries the project's screens, and this project declares none"
+    );
+    // And the interface is still there, because it is the engine's rather than the bundle's
+    // (`SCREENS.md §2.7`): a project that writes no screens draws Vela's menu, not a blank window.
+    assert!(screens.has("pause"), "the engine's own interface");
 }
 
 #[test]

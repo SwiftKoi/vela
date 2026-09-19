@@ -112,6 +112,7 @@ fn an_action_says_whether_it_is_dispatched() {
     assert_eq!(
         dispatched,
         vec![
+            "jump",
             "open_screen",
             "close_screen",
             "hide",

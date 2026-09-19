@@ -53,9 +53,9 @@ keeps rendering one-directional and testable.
 > the focused one instead of the story. The focus highlight is drawn by the runtime, not the
 > screen, because focus has to be visible and a screen can forget to draw it.
 >
-> Of the action set, **`open_screen`, `close_screen`, `hide`, `quit`, `quick_save`, `quick_load`,
+> Of the action set, **`jump`, `open_screen`, `close_screen`, `hide`, `quit`, `quick_save`, `quick_load`,
 > `rollback`, `set_screen_variable`, `preference`, and `toggle_preference` are dispatched**; the rest
-> (`jump`, `set`, `play`, `call`, …) need the VM or `World` and are not wired. A screen opened this way
+> (`set`, `play`, `call`, …) need the VM or `World` and are not wired. A screen opened this way
 > is **called**: `open_screen(save, 2)` passes values in the opened screen's parameter order and a
 > parameter the call leaves out keeps its default — §2.1's calling convention, one layer up, with the
 > values already resolved because a runtime carries values rather than the syntax that wrote them.
@@ -396,9 +396,18 @@ overrides any part of it*. It is the reason a new project gets a working menu wi
 parsed once per process (`§13`). The engine's source rather than the bundle's, because the interface
 belongs to the engine that is running rather than to the artifact that was built — so a bundle carries
 the project's screens and finds the interface in the binary. What is there today is what
-`vela_ui::interface::decls()` returns: `game_menu(title)`, the frame the app screens are built on, and
-`preferences`, the settings screen over the store (§7.1) — with a main menu, save/load, history, help and
-notify arriving as `M12.2`'s items land.
+`vela_ui::interface::decls()` returns `game_menu(title)` — the frame the app screens are built on — plus
+the screens a game is played through: `pause` (what `Escape` opens during play, `§2`), `about`, and
+`preferences` (§7.1). A title screen is next and waits on a parser defect (`M12.2`'s **Still open**: an
+action whose name is also a reserved word cannot be written as a call yet); save/load, history and notify
+follow.
+
+**A label a screen names resolves in the entry module.** A screen cannot know how a project is laid out,
+so a bare label resolves against the module the game's entry point is in — `jump(start)` in a game whose
+entry is `script.start` names `script.start` — while a name with a dot is taken as written, so a project
+can still reach the rest of its program. The action is the
+host's — the stack answers `NotOurs` — which is why `jump` is dispatched now that a player acts on one
+(`§7`), and why a headless run reports that it cannot rather than opening nothing.
 
 **A name resolves to the project first** (`§2.1`), at every site — a `use`, an `open_screen`, a hover, a
 dependency — so a project can build a screen out of the frame *and* can replace it, without a second
@@ -421,13 +430,17 @@ game that declares `bg`, `fg`, or `accent` — the three the interface names, an
 keeps Vela's value and a token only the game names is kept rather than dropped. A palette is the
 project's *data* (`M12.2`'s item 10): Vela's theme is a fallback, not the look.
 
-> **Implemented (M12.2, in part).** The module, the resolution rule, the frame, and the colours:
+> **Implemented (M12.2, in part).** The module, the resolution rule, the frame, the colours, and the
+> screens a game is played through — `main_menu` (whose `Start` is `jump(start)`, carried out by the
+> player), `pause` (which is what makes `Escape` work in a project that declares no menu), `about`, and
+> the settings screen:
 > `game_menu` is checked by the engine's own suite (nobody else's checker sees the interface — it is not a
 > project file), `crates/vela-ui/tests/interface.rs` pins that a project can `use` it and that a project's
 > own declaration of the name is the one found, `crates/vela-ui/tests/theme.rs` the palette merge, and
 > `vela run`/`vela test` search the interface's set after the project's and lay it out in the game's
 > colours (`commands/ui/screens.rs`, pinned by `crates/vela-cli/src/tests/ui_tests.rs`). **Not yet:** the
-> rest of the screens (`M12.2`'s items 4–9) and `vela doc screens`.
+> rest of the screens — save/load, history, help, notify, and the confirm and dialogue parity of items
+> 5–9 — and `vela doc screens`.
 
 ## 3. Widget tree
 
@@ -807,10 +820,13 @@ each one takes.
 > **Implemented (M12.1).** An action is a value a screen can be given and a widget can hold, and the
 > checker holds the vocabulary to the registry: `E5012` for a name that is not registered, `E5013` for
 > the wrong number of arguments, and a bare name that is a parameter is left alone because that is how
-> an action arrives. Of the twenty-seven entries, eight are dispatched (`open_screen`, `close_screen`,
-> `hide`, `quit`, `quick_save`, `quick_load`, `rollback`, `set_screen_variable`) — the rest need the VM
-> or `World`, and the reference page, the hover, and an activation that reaches one all say so rather
-> than doing nothing quietly.
+> an action arrives. Of the twenty-seven entries, eleven are dispatched (`jump`, `open_screen`,
+> `close_screen`, `hide`, `quit`, `quick_save`, `quick_load`, `rollback`, `preference`,
+> `toggle_preference`, `set_screen_variable`) — the rest need the VM or `World`, and the reference page,
+> the hover, and an activation that reaches one all say so rather than doing nothing quietly. `jump` is
+> the one whose *host* is a player rather than the stack, and it is dispatched because a player acts on
+> one: a settings screen's buttons change the player's state and a menu's `Start` begins the story
+> (`§2.7`).
 
 ### 7.1 Settings, the one action whose argument is a vocabulary
 

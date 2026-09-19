@@ -60,7 +60,8 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
         name: "jump",
         args: &[arg("label", PropType::Target, "Where to go.")],
         doc: "Transfer to a label, replacing the current one.",
-        dispatched: false,
+        // The player acts on it — a screen's `Start` — and the VM does inside a script (`§2.7`).
+        dispatched: true,
         rest: None,
     },
     ActionDecl {
