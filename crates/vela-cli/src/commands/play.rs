@@ -106,9 +106,17 @@ impl Player {
             })
             .collect();
 
+        let mut timeline =
+            Timeline::start(module, label).map_err(|fault| Error::internal(format!("{fault}")))?;
+        // The player's settings, from beside their saves (`RUNTIME.md §2.1`): a setting is the player's
+        // rather than the playthrough's, so this is where one comes back — a load keeps what the session
+        // already has, and a *start* is the moment the file is the only place they exist.
+        if let Some(settings) = read_settings(&saves) {
+            timeline.preferences_mut().clone_from(&settings.preferences);
+        }
+
         Ok(Self {
-            timeline: Timeline::start(module, label)
-                .map_err(|fault| Error::internal(format!("{fault}")))?,
+            timeline,
             module: module.clone(),
             presenter: {
                 let mut presenter = Presenter::new(text, FACE_NAME, size);
@@ -416,6 +424,25 @@ impl vela_host::App for Player {
                 surface.resize((size.0, size.1));
             }
             vela_render::Presented::Drawn => {}
+        }
+    }
+}
+
+/// The player's settings, read from beside their saves.
+///
+/// A file that is not there is the ordinary case — nobody has chosen anything yet. A file that *will
+/// not* read is said out loud and the defaults are kept, because preferences are a convenience and
+/// refusing to play over a damaged one would be a worse answer than starting with the engine's own.
+fn read_settings(dir: &std::path::Path) -> Option<vela_replay::Settings> {
+    let path = dir.join(vela_replay::settings::FILE_NAME);
+    if !path.exists() {
+        return None;
+    }
+    match vela_replay::Settings::read(&path) {
+        Ok(settings) => Some(settings),
+        Err(error) => {
+            println!("settings ignored: {error}");
+            None
         }
     }
 }

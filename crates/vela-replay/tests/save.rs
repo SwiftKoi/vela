@@ -150,7 +150,10 @@ fn an_older_save_names_the_gap() {
 #[test]
 fn a_file_that_is_not_a_save_is_refused() {
     let error = Save::from_bytes(b"this is a text file, not a save").expect_err("not a save");
-    assert!(matches!(error, ReplayError::NotASave), "{error:?}");
+    assert!(
+        matches!(error, ReplayError::NotRecognised { .. }),
+        "{error:?}"
+    );
     assert_eq!(error.code(), "E7203");
 }
 

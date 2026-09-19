@@ -205,7 +205,7 @@ impl Save {
     /// Fails if the file is too short to hold a header, or does not start with the magic.
     pub fn version_of(bytes: &[u8]) -> Result<u16, ReplayError> {
         if bytes.len() < HEADER || &bytes[..4] != MAGIC {
-            return Err(ReplayError::NotASave);
+            return Err(ReplayError::NotRecognised { what: "a save" });
         }
         Ok(u16::from_le_bytes([bytes[4], bytes[5]]))
     }
@@ -303,10 +303,10 @@ impl Decoded {
 /// refuses anything but current, and [`Save::load`] migrates.
 fn decode(bytes: &[u8]) -> Result<Decoded, ReplayError> {
     if bytes.len() < HEADER + TRAILER {
-        return Err(ReplayError::NotASave);
+        return Err(ReplayError::NotRecognised { what: "a save" });
     }
     if &bytes[..4] != MAGIC {
-        return Err(ReplayError::NotASave);
+        return Err(ReplayError::NotRecognised { what: "a save" });
     }
 
     let body_end = bytes.len() - TRAILER;

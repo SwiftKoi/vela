@@ -1,15 +1,21 @@
-//! What can go wrong reading or writing a save.
+//! What can go wrong reading or writing a persisted file.
 //!
-//! Every variant carries the diagnostic code a user would see, because a save failure is the
-//! one error a player actually reads (`RUNTIME.md §6.2` names `E7201` and `E7202`).
+//! Every variant carries the diagnostic code a user would see, because a file that will not load is the
+//! one error a player actually reads (`RUNTIME.md §6.2` names `E7201` and `E7202`). The vocabulary is
+//! deliberately about *files* rather than about saves: a settings file is versioned the same way and
+//! refused for the same reasons (`RUNTIME.md §2.1`), so the codes and the sentences are shared and the
+//! caller is what says which file it was.
 
 use std::fmt;
 
-/// A failure reading or writing a save file.
+/// A failure reading or writing a persisted file.
 #[derive(Debug)]
 pub enum ReplayError {
-    /// The file does not begin with the save magic.
-    NotASave,
+    /// The file does not begin with the magic its format starts with.
+    NotRecognised {
+        /// What the caller expected: `a save`, `a settings file`.
+        what: &'static str,
+    },
     /// The file is truncated, or its checksum does not match its payload.
     Corrupt {
         /// The checksum the file carries.
@@ -17,20 +23,20 @@ pub enum ReplayError {
         /// The checksum its bytes produce.
         computed: u64,
     },
-    /// The save is older than the engine and the step that would bridge the gap is missing.
+    /// The file is older than the engine and the step that would bridge the gap is missing.
     ///
     /// `from` and `to` name *one* version step, not the whole distance to the engine: when a
     /// chain has `4 → 5` but not `5 → 6`, the gap is `5 → 6`, and that is the migration to
-    /// write. A partially-migrated world is never loaded (`RUNTIME.md §6.2`).
+    /// write. A partially-migrated file is never loaded (`RUNTIME.md §6.2`).
     MissingMigration {
-        /// The version the world is stuck at.
+        /// The version the file is stuck at.
         from: u16,
         /// The version the missing step would produce.
         to: u16,
     },
-    /// The save is newer than the engine.
+    /// The file is newer than the engine.
     FromTheFuture {
-        /// The version the save was written at.
+        /// The version the file was written at.
         save: u16,
         /// The version the engine is at.
         engine: u16,
@@ -60,7 +66,7 @@ impl ReplayError {
         match self {
             Self::MissingMigration { .. } => "E7201",
             Self::FromTheFuture { .. } => "E7202",
-            Self::NotASave | Self::Corrupt { .. } => "E7203",
+            Self::NotRecognised { .. } | Self::Corrupt { .. } => "E7203",
             Self::SchemaMismatch { .. } => "E7204",
             Self::NonFiniteFloat { .. } | Self::Codec(_) | Self::Io(_) => "E7203",
         }
@@ -70,18 +76,18 @@ impl ReplayError {
 impl fmt::Display for ReplayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotASave => f.write_str("this file is not a save (no `VSAV` header)"),
+            Self::NotRecognised { what } => write!(f, "this is not {what} file"),
             Self::Corrupt { found, computed } => write!(
                 f,
-                "the save is truncated or altered (checksum {found:#x}, computed {computed:#x})"
+                "the file is truncated or altered (checksum {found:#x}, computed {computed:#x})"
             ),
             Self::MissingMigration { from, to } => write!(
                 f,
-                "no migration from save version {from} to {to}: the save cannot be loaded"
+                "no migration from version {from} to {to}: the file is older than this build can read"
             ),
             Self::FromTheFuture { save, engine } => write!(
                 f,
-                "this save is from a newer version of the game (save {save}, engine {engine})"
+                "this file is from a newer version of the game (file {save}, engine {engine})"
             ),
             Self::SchemaMismatch { saved, current } => write!(
                 f,

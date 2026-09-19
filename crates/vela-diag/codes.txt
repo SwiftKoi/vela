@@ -71,9 +71,9 @@ E7001|error|asset referenced by @path does not exist
 E7101|error|the bytecode format is not supported
 E7102|error|a command variant is not known to this runtime
 E7103|error|the bytecode container is corrupt
-E7201|error|no migration bridges a save's version gap
-E7202|error|a save is from a newer version of the engine
-E7203|error|a save is corrupt or truncated
+E7201|error|no migration bridges a version gap
+E7202|error|a file is from a newer version of the engine
+E7203|error|a file is corrupt or truncated
 E7204|error|a save's schema does not match the build
 E7301|error|cannot demote an error diagnostic to a warning
 W4002|warning|unreachable label

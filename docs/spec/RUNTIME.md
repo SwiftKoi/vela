@@ -143,19 +143,27 @@ pub struct World {
    them from the state the two rules above keep empty. A load passes the live player's; a rollback
    passes the ones of the session it is replacing.
 
-> **Implemented (M12.2).** `vela_world::Preferences` is an ordered name→value store — ordered because
-> the settings file is written from a walk over it (`CONVENTIONS.md §2.2`) — `World::preferences`
-> carries it, and `World::snapshot` is the story-only copy. The write path is
-> `Session::preferences_mut`, which is where a settings screen ends, and
-> `crates/vela-replay/tests/preferences.rs` asserts the three rules through the real types: a save
-> carries none (in the decoded world *and* in the bytes), a snapshot carries none, a rollback keeps
-> them, and a resume takes the caller's.
+> **Implemented (M12.2, in part).** `vela_world::Preferences` is an ordered name→value store — ordered
+> because the settings file is written from a walk over it (`CONVENTIONS.md §2.2`) — `World::preferences`
+> carries it, and `World::snapshot` is the story-only copy. The write path is `Session::preferences_mut`,
+> which is where a settings screen ends, and `crates/vela-replay/tests/preferences.rs` asserts the three
+> rules through the real types: a save carries none (in the decoded world *and* in the bytes), a snapshot
+> carries none, a rollback keeps them, and a resume takes the caller's.
 >
-> **Not yet.** Persistence, and the two halves that make a setting do something: nothing *writes* one
-> (the `preference` action is dispatched by nobody yet) and nothing *reads* one (no screen draws a
-> setting, and the transport that would obey a text speed is item 4's). The *vocabulary* is in —
-> `vela-ui::settings` and `E5020`/`E5021`, `SCREENS.md §7.1` — and every entry says `read: false` until
-> one of those lands.
+> **Where it lives is `vela-replay`'s settings file** (`settings.rs`, `settings.velaprefs` beside the
+> saves): the same envelope as a save — magic, version, checksum, a readable payload — without the schema
+> digest, because a preference has no declared *shape*: the vocabulary names them (`SCREENS.md §7.1`) and
+> the store holds any name, so a file written by a newer build is read by an older one rather than
+> refused. A rename in the store is a version bump with a step in that chain, and a gap is `E7201` naming
+> the exact step — which is what a player sees instead of preferences quietly resetting to the defaults.
+> `tests/golden/settings/` keeps a real file for every version, seeded the way the save corpus is (§6.3),
+> and `vela run` reads the file at startup: a start is the one moment those settings exist in
+> `Preferences` and nowhere else.
+>
+> **Not yet.** The two halves that make a setting *do* something: nothing writes one (the `preference`
+> action is dispatched by nobody, so there is nothing for the file to be written *from*) and nothing reads
+> one (no screen draws a setting, and the transport that would obey a text speed is item 4's). The
+> *vocabulary* and the *file* are in; every registry entry says `read: false` until one of those lands.
 
 ## 3. Capabilities / host interface
 
