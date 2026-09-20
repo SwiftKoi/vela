@@ -20,6 +20,7 @@ use crate::widgets::WidgetRegistry;
 
 mod setting;
 pub(crate) use setting::is_question as is_setting_question;
+mod slots;
 
 // Re-exported because this is the module that *reads* them: every caller of the evaluator already
 // imports `Args` and `Value` from here, and moving the types without moving the path would be churn in
@@ -117,15 +118,16 @@ pub(crate) fn action_of(expr: &Expr, values: &Args) -> Option<Action> {
 /// must agree about which two calls are questions rather than actions.
 #[must_use]
 pub(crate) fn is_question(name: &str) -> bool {
-    variants::is_question(name) || setting::is_question(name)
+    variants::is_question(name) || setting::is_question(name) || slots::is_question(name)
 }
 
 /// Whether a callee is one of the questions a screen may ask the host (`SCREENS.md §2.6`).
 ///
-/// Two of them, and they are one shape: `variant("pc")` asks *where this is running* and answers a truth
-/// value, and `setting("text_speed")` asks *what the player chose* and answers that setting
-/// (`RUNTIME.md §2.1`). Neither is an action: an action is a call a screen stores and a widget performs,
-/// and a question is a value it draws or decides from.
+/// Three of them, and they are one shape: `variant("pc")` asks *where this is running* and answers a truth
+/// value, `setting("text_speed")` asks *what the player chose* and answers that setting (`RUNTIME.md §2.1`),
+/// and `slots(6)` asks *what is in the player's page* and answers a list of records — the third is the first
+/// whose answer is not a scalar. None is an action: an action is a call a screen stores and a widget
+/// performs, and a question is a value it draws or decides from.
 pub(crate) fn is_question_call(callee: &Expr) -> bool {
     matches!(callee, Expr::Name { name, .. } if is_question(name))
 }
@@ -141,6 +143,9 @@ fn question_of(callee: &Expr, args: &[Expr], values: &Args) -> Option<Value> {
     };
     if variants::is_question(name) {
         return Some(Value::Bool(variant_answer(args, values)));
+    }
+    if slots::is_question(name) {
+        return Some(slots::answer(args, values));
     }
     setting::is_question(name).then(|| setting::answer(args, values))
 }
@@ -278,6 +283,15 @@ pub(crate) fn eval(expr: &Expr, values: &Args) -> bool {
     match expr {
         Expr::Bool { value, .. } => *value,
         Expr::Name { name, .. } => values.get(name).is_some_and(Value::truthy),
+        // A *field* of a record the screen holds — `if cell.empty`, `if option.locked` — which is what §2.2
+        // means by "what the screen has" just as much as a bare name is: a loop binds its element, and the
+        // element's fields are that element. The read is [`value_of`]'s, the same one a text and an action
+        // argument make, so the three positions cannot disagree about what `cell.empty` is.
+        //
+        // Without this arm the condition fell to `_ => false` — a *silent* wrong branch, where the screen
+        // draws the else and nothing reports it. That is how it was found: `slots(3)`'s answer is the first
+        // list of records a screen can walk, and a save screen's cells are drawn by exactly this test.
+        Expr::Field { .. } => value_of(expr, values).truthy(),
         Expr::Paren { inner, .. } => eval(inner, values),
         // Both negations evaluate the same way: the tree already says where each binds, so all
         // that is left here is the truth value.

@@ -145,3 +145,30 @@ fn boolean_operators_combine_conditions() {
         assert_eq!(drawn(condition, value.clone()), expected, "`{condition}`");
     }
 }
+
+/// A record's *field* decides a branch, not only a text or an argument.
+///
+/// `SCREENS.md §2.2` says a condition is over "what the screen has — its parameters, its variables, what a
+/// loop walks", and a field of one of those is that value *read*, not a new source. The arm was missing:
+/// the condition walk had one for a name, a comparison and a question, and everything else was `false` — so
+/// `if value.empty` drew the else branch of a correct screen and nothing reported it. Found by writing the
+/// first thing that needs it: `slots(3)` answers a list of records, and a save screen draws an empty cell by
+/// testing one.
+#[test]
+fn a_records_field_decides_a_branch() {
+    let empty = Value::Record(vec![("empty".to_string(), Value::Bool(true))]);
+    let used = Value::Record(vec![("empty".to_string(), Value::Bool(false))]);
+
+    assert_eq!(drawn("value.empty", empty), "yes");
+    assert_eq!(drawn("value.empty", used.clone()), "no");
+    assert_eq!(
+        drawn("value.empty is true", used.clone()),
+        "no",
+        "and a comparison the field feeds is the same read"
+    );
+    assert_eq!(
+        drawn("value.missing", used),
+        "no",
+        "a field that is not there is false rather than a crash"
+    );
+}
