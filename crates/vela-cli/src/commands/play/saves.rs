@@ -20,7 +20,11 @@ impl Player {
             println!("save failed: cannot create {}", self.saves.display());
             return;
         }
-        let save = Save::new(self.timeline.snapshot(), self.schema.digest(), slot);
+        let mut save = Save::new(self.timeline.snapshot(), self.schema.digest(), slot);
+        // The platform's clock, injected at the one place that writes a real save (`RUNTIME.md §5`):
+        // the stamp is display data beside the world, so a slot can say when it was written without
+        // anything a story does being able to see it.
+        save.header.created_at = vela_host::stamp();
         let path = path_of(&self.saves, slot);
         match save.write_atomic(&path) {
             Ok(()) => println!("save {slot}"),

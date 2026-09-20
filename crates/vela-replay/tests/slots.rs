@@ -57,8 +57,35 @@ fn a_directory_lists_its_slots_by_name() {
     for slot in &found {
         assert!(slot.loadable, "{slot:?}");
         assert_eq!(slot.version, Some(SAVE_VERSION));
-        assert_eq!(slot.time, 0, "the host stamps this, not the store");
+        assert_eq!(slot.time, 0, "the store invents no time of its own");
     }
+    std::fs::remove_dir_all(&dir).expect("clean up");
+}
+
+/// The time a save was written is what a list reports, which is what the stamp is for.
+///
+/// The host injects it (`vela_host::stamp`, seconds since the epoch), the store carries it, and this is
+/// the journey it makes: into the file, out of the metadata, and onto the list a screen draws.
+#[test]
+fn a_slots_time_is_the_one_it_was_written_with() {
+    let dir = directory("time");
+    let mut save = slot_save("quick");
+    save.header.created_at = 1_700_000_000;
+    save.write_atomic(&path_of(&dir, "quick")).expect("write");
+
+    assert_eq!(
+        slots(&dir).expect("list")[0].time,
+        1_700_000_000,
+        "the list lost the stamp"
+    );
+    assert_eq!(
+        Save::read(&path_of(&dir, "quick"))
+            .expect("read")
+            .header
+            .created_at,
+        1_700_000_000,
+        "the whole save lost the stamp"
+    );
     std::fs::remove_dir_all(&dir).expect("clean up");
 }
 

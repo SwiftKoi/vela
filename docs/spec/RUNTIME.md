@@ -287,11 +287,14 @@ pub struct SaveHeader {
 > envelope and the checksum and then parses the metadata *alone*, so `vela_replay::slots` answers what is
 > in a directory — name, time, version, loadable — with no schema, no migrator, and no `World`.
 > `crates/vela-replay/tests/slots.rs` pins it, including the corpus's oldest save: its metadata reads
-> while `Save::from_bytes` refuses its world. Two things are still missing for the save screen this was
-> built for, and both are recorded in `M12.2`: **nothing stamps `created_at`**, so every save reads as
-> time zero (the clock is `vela-host`'s — the one crate the determinism check allows to read it — and a
-> save's stamp is display data written outside the world), and the *thumbnail* is still only the plan
-> this section describes.
+> while `Save::from_bytes` refuses its world. The stamp comes with it: `vela_host::stamp` is the engine's
+> one reading of wall time (the crate `check-determinism` allows it in, because the alternative is a
+> clock read from wherever it is convenient), and the player injects it into the save it writes, so a
+> slot's `created_at` is a real time rather than the zero `Save::new` leaves. Two things are still
+> missing for the save screen this was built for, and both are recorded in `M12.2`: **showing** a stamp
+> is unanswered — it is a `u64`, and a time a player reads has a locale and a time zone, which is the
+> host's business and nobody has asked it yet — and the *thumbnail* is still only the plan this section
+> describes.
 >
 > **Note.** A suspension is anchored, not indexed. Naming the body is only half of surviving a
 > rebuild: the machine is also suspended at a *statement*, and an instruction index is a
