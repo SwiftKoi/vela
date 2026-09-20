@@ -31,18 +31,26 @@ screen pause:
 
 screen save:
     column gap 12:
-        button:
-            text \"First\"
-            action file_action(1)
+        for cell in slots(3):
+            button:
+                action file_action(cell.number)
+                if cell.empty:
+                    text cell.number
+                else:
+                    text cell.name
         button:
             text \"Back\"
             action close_screen()
 
 screen load:
     column gap 12:
-        button:
-            text \"First\"
-            action file_action(1)
+        for cell in slots(3):
+            button:
+                action file_action(cell.number)
+                if cell.empty:
+                    text cell.number
+                else:
+                    text cell.name
         button:
             text \"Back\"
             action close_screen()
@@ -85,9 +93,13 @@ fn root() -> PathBuf {
 /// command the slot was taken at — which is what `expect shown` after the load is for.
 #[test]
 fn a_slot_a_run_saves_is_a_file_it_comes_back_to() {
-    let directives = "    run from start\n    click \"Save\"\n    click \"First\"\n    click \"Back\"\n    \
+    // The whole journey through the *screen*, which is what the criterion asks for: an empty cell is pressed
+    // to save (`1`, the number it draws), the story leaves the line, and the slot the screen now lists is
+    // what is pressed to come back (`1-1`, the name it draws) — on the screen named `load`, which is what
+    // tells the same action to load rather than to save.
+    let directives = "    run from start\n    click \"Save\"\n    click \"1\"\n    click \"Back\"\n    \
                       advance 1\n    choose \"Right\"\n    expect shown \"Done.\"\n    \
-                      click \"Load\"\n    click \"First\"\n    expect shown \"One.\"\n";
+                      click \"Load\"\n    click \"1-1\"\n    expect shown \"One.\"\n";
     let text = format!("{STORY}\ntest \"a test\":\n{directives}");
     let (module, plans) = suite(&text);
     let screens = screens();

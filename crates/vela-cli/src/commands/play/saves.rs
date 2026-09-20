@@ -11,7 +11,7 @@
 
 use vela_replay::{Save, Timeline, path_of};
 
-use super::Player;
+use super::{FACE_NAME, Player};
 
 impl Player {
     /// Writes the current state to a slot.
@@ -95,5 +95,48 @@ impl super::Player {
         if let Some(command) = self.timeline.current() {
             self.presenter.apply(command);
         }
+    }
+}
+
+impl super::Player {
+    /// One store slot as the screen-facing data a save screen reads (`vela-ui::slots::Slot`).
+    ///
+    /// `None` for a slot with no position — `quick`, which `quick_save` writes, is not a cell of a page and
+    /// so is not part of what `slots(6)` answers.
+    fn offered(slot: &vela_replay::Slot) -> Option<vela_ui::Slot> {
+        Some(vela_ui::Slot {
+            page: slot.page?,
+            number: slot.number?,
+            name: slot.name.clone(),
+            time: slot.time,
+            loadable: slot.loadable,
+        })
+    }
+
+    /// Reads the saves directory and tells every screen what is in it (`vela-ui::slots`).
+    ///
+    /// A screen cannot ask the file system, so `slots(6)` answers what the host last handed over — which
+    /// means the hand-over is refreshed whenever the set changes: once at startup, after a save, and after a
+    /// delete. The stack is laid out again for the same reason a settings press re-lays it: a save screen
+    /// that did not redraw would show the page as it was before the press.
+    pub(in crate::commands) fn refresh_slots(&mut self) {
+        let found = match vela_replay::slots(&self.saves) {
+            Ok(found) => found,
+            Err(error) => {
+                // Said rather than drawn as an empty page: a save screen showing no slots would be a lie
+                // about the player's own files, and the store's words are the honest answer.
+                println!("saves unreadable: {error}");
+                return;
+            }
+        };
+        let offered: Vec<vela_ui::Slot> = found.iter().filter_map(Self::offered).collect();
+        self.screens.set_slots(offered.clone());
+        self.overlays.set_slots(offered);
+        self.overlays.relaid(
+            self.screens.sets(),
+            self.size,
+            self.presenter.text_mut(),
+            FACE_NAME,
+        );
     }
 }

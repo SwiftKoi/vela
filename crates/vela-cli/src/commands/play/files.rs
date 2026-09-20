@@ -26,7 +26,11 @@ impl Player {
             return;
         };
         match mode {
-            FileMode::Save => self.save(&name),
+            FileMode::Save => {
+                self.save(&name);
+                // The set changed, so what a save screen draws changed with it (`Player::refresh_slots`).
+                self.refresh_slots();
+            }
             FileMode::Load => self.load(&name),
         }
     }
@@ -48,6 +52,9 @@ impl Player {
             }
             Err(error) => println!("delete failed: {error}"),
         }
+        // Whether it removed a file or found none, the page is not what it was: a deleted slot draws as an
+        // empty cell, which is the cell a player saves into next.
+        self.refresh_slots();
     }
 
     /// The slot a file action names, as the file it lives in.

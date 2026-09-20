@@ -361,7 +361,12 @@ screen main_menu:
   call, not Ren'Py's silent `False` — a migration that writes `tablet` or `touch` hears about it now
   rather than drawing the `else` arm forever. The name has to be written out, because a name the engine
   cannot see whole cannot be checked. `setting("…")` is the second question (`§7.1`) and the same shape:
-  a value rather than an action, checked at the call — except that it answers a setting.
+  a value rather than an action, checked at the call — except that it answers a setting. `slots(count)` is
+  the third and the first whose answer is a **list** (`§7`): one record per cell of the page the player is
+  on, empty cells included, each carrying `number`, `name`, `time`, `loadable` and `empty` — so a save
+  screen's body is `for cell in slots(6)` and its drawing is `if cell.empty`. The page is the player's
+  setting rather than an argument, because a page is a position the player is on; the count is the
+  caller's, because how many cells a page has is a layout decision and the store has no opinion about it.
 - **Two sources, one set.** `pc`, `web` and `mobile` come from the bundle's descriptor
   (`target.json`'s `variants`, written per target by `commands/target.rs`; a *source* run declares `pc`,
   because the platform the process is on is the answer). `small` comes from the **frame** the screen is
@@ -846,7 +851,10 @@ project that writes its own load screen therefore keeps that name. The page is n
 *player's* setting (`setting("file_page")`, §7.1's store, which is where Ren'Py keeps it too), moved by
 `file_page(page)` and the pair that step either side, so a slot number means the slot of the page the
 player is looking at. A slot's file is named for both — `1-3` (`vela_replay::slot_name`) — which is what
-makes one page's slots contiguous in the listing a save screen reads.
+makes one page's slots contiguous in the listing a save screen reads, and the page a screen *draws* comes
+from the same place: `slots(6)` (§2.6) answers the cells of the player's page, so a screen that draws an
+empty one is testing the record it was handed (`if cell.empty`, and an absent file is `empty` **and**
+`loadable == false`: there is nothing there to load).
 
 Two things the registry also says, because a reader of the reference deserves both. An entry is
 either **dispatched** — the runtime acts on it, the stack or the host — or *declared, not dispatched

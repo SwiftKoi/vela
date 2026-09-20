@@ -45,6 +45,13 @@ pub struct Slot {
     /// The name it is filed under — the file's stem, which is the slot's *position*. The header records
     /// the name too, and a file renamed by hand keeps the header's: the stem is what the screen lists.
     pub name: String,
+    /// The page it is on, when its name says one (`1-3` is on page one, slot three).
+    ///
+    /// Read out of the name rather than stored, because the name *is* the position: `slot_name` writes
+    /// both halves, and a screen drawing a page needs to know which of the slots belong to it.
+    pub page: Option<u32>,
+    /// Its number within that page.
+    pub number: Option<u32>,
     /// When it was written, in whatever unit the host chose. Display only (`SaveHeader::created_at`).
     pub time: u64,
     /// The format version the file was written at, when its envelope could be read.
@@ -52,6 +59,17 @@ pub struct Slot {
     /// Whether this build can load it: the envelope and its checksum hold, and the version is not from
     /// the future. An older version is loadable — `Save::load` carries it forward.
     pub loadable: bool,
+}
+
+/// The page and number a slot's name says, when it says one.
+///
+/// `1-3` is page one, slot three; `quick` — what `quick_save` writes — is a *named* slot with no
+/// position, which is the difference `slot_name` describes. A name that is neither is nobody's position:
+/// `None` here, and the slot is simply not on any page.
+#[must_use]
+pub fn numbered(name: &str) -> Option<(u32, u32)> {
+    let (page, number) = name.split_once('-')?;
+    Some((page.parse().ok()?, number.parse().ok()?))
 }
 
 /// Every slot in `dir`, by name.
@@ -89,9 +107,13 @@ fn slot_of(path: &Path) -> Slot {
         .and_then(|stem| stem.to_str())
         .unwrap_or_default()
         .to_string();
+    let (page, number) =
+        numbered(&name).map_or((None, None), |(page, number)| (Some(page), Some(number)));
     let Ok(bytes) = fs::read(path) else {
         return Slot {
             name,
+            page,
+            number,
             time: 0,
             version: None,
             loadable: false,
@@ -101,12 +123,16 @@ fn slot_of(path: &Path) -> Slot {
     match Save::header_of(&bytes) {
         Ok(header) => Slot {
             name,
+            page,
+            number,
             time: header.created_at,
             version: Some(header.save_version),
             loadable: header.save_version <= SAVE_VERSION,
         },
         Err(_) => Slot {
             name,
+            page,
+            number,
             time: 0,
             version,
             loadable: false,

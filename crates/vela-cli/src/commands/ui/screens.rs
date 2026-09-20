@@ -23,6 +23,9 @@ pub struct Screens {
     /// a story, and the caller that owns the session is what says what the player has chosen — the same
     /// shape the pictures and the variants arrive in.
     preferences: vela_world::Preferences,
+    /// The slots the host found, for the same reason: a save screen asks `slots(6)` and the answer comes
+    /// from the saves directory, which this layer is what knows about.
+    slots: Vec<vela_ui::Slot>,
 }
 
 impl Screens {
@@ -40,6 +43,7 @@ impl Screens {
             project: project_screens,
             paths: project.files.clone(),
             preferences: vela_world::Preferences::new(),
+            slots: Vec::new(),
         }
     }
 
@@ -56,6 +60,7 @@ impl Screens {
             project: 0,
             paths: Vec::new(),
             preferences: vela_world::Preferences::new(),
+            slots: Vec::new(),
         }
     }
 
@@ -97,6 +102,7 @@ impl Screens {
             project: 0,
             paths,
             preferences: vela_world::Preferences::new(),
+            slots: Vec::new(),
         })
     }
 
@@ -212,7 +218,10 @@ impl Screens {
     ) -> bool {
         // The player's settings travel with the call, the way the variants do (`RUNTIME.md §2.1`): a screen
         // drawn straight to a frame reads `setting("…")` and has to be answered.
-        let args = args.clone().with_preferences(self.preferences.clone());
+        let args = args
+            .clone()
+            .with_preferences(self.preferences.clone())
+            .with_slots(self.slots.clone());
         for set in &self.sets {
             if set.has(name) {
                 return set.draw(name, &args, size, text, font, draw);
@@ -224,6 +233,14 @@ impl Screens {
     /// Tells every set what the player has chosen, so a screen can read a setting (`RUNTIME.md §2.1`).
     pub fn set_preferences(&mut self, preferences: vela_world::Preferences) {
         self.preferences = preferences;
+    }
+
+    /// Tells every set what slots the host found, so a save screen can draw a page of them.
+    ///
+    /// The third answer a scope carries beside the variants and the settings, and the same shape: the layer
+    /// that knows about files is this one, and a screen asks (`vela-ui::slots`).
+    pub fn set_slots(&mut self, slots: Vec<vela_ui::Slot>) {
+        self.slots = slots;
     }
 }
 

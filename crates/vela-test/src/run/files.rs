@@ -15,6 +15,36 @@ use vela_vm::Session;
 
 use crate::report::Reason;
 use crate::saves::Saves;
+use crate::stage::Stage;
+
+/// Reads the run's directory and tells the stage what is in it (`vela-ui::slots`).
+///
+/// The same hand-over the windowed player makes, for the same reason: a screen cannot ask the file system,
+/// so `slots(6)` answers what the run last found — which is why this is called when the set changes, and why
+/// the stage is laid out again: a save screen that did not redraw would show the page as it was before the
+/// press.
+pub(super) fn refresh(stage: &mut Stage<'_>, saves: &Saves) {
+    // A directory that cannot be read is *no slots* rather than a step failure: it is the run's own, and a
+    // step that saved into it would have failed where it saved.
+    let found: Vec<vela_replay::Slot> = vela_replay::slots(saves.dir()).unwrap_or_default();
+    let offered: Vec<vela_ui::Slot> = found.iter().filter_map(offered).collect();
+    stage.set_slots(offered);
+    stage.relaid();
+}
+
+/// One store slot as the screen-facing data a save screen reads (`vela_ui::slots::Slot`).
+///
+/// `None` for a slot with no position — `quick`, which `quick_save` writes, is not a cell of a page and so is
+/// not part of what `slots(6)` answers.
+fn offered(slot: &vela_replay::Slot) -> Option<vela_ui::Slot> {
+    Some(vela_ui::Slot {
+        page: slot.page?,
+        number: slot.number?,
+        name: slot.name.clone(),
+        time: slot.time,
+        loadable: slot.loadable,
+    })
+}
 
 /// Carries out a file action against a test's own slots, answering whether it was one.
 ///

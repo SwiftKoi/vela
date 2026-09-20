@@ -117,6 +117,15 @@ impl<'a> Stage<'a> {
         self.overlays.set_preferences(preferences);
     }
 
+    /// Tells the stack what slots the run has, so a save screen can draw a page of them.
+    ///
+    /// The same shape as the settings above, and for the same reason: a screen cannot ask the file system,
+    /// so the run hands over what it found (`vela-ui::slots`). Only the *stack* is told, because a screen
+    /// this stage opens is laid out by it — the fixtures a test uses are borrowed sets, not the run's.
+    pub fn set_slots(&mut self, slots: Vec<vela_ui::Slot>) {
+        self.overlays.set_slots(slots);
+    }
+
     /// Lays every open screen out again, at the store the stack now holds.
     ///
     /// What a step that changed a setting calls: a checkbox draws its own new state, so the *next* click

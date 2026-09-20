@@ -8,6 +8,7 @@
 use vela_world::Preferences;
 
 use crate::actions::Action;
+use crate::slots::Slot;
 use crate::variants::Variants;
 
 /// A value a screen argument can hold.
@@ -119,6 +120,7 @@ pub struct Args {
     values: Vec<(String, Value)>,
     variants: Variants,
     preferences: Preferences,
+    slots: Vec<Slot>,
 }
 
 impl Args {
@@ -164,6 +166,28 @@ impl Args {
         self
     }
 
+    /// The slots the host found (`slots::page`).
+    ///
+    /// The third thing a scope carries besides its names, for the same reason the other two are here: a
+    /// save screen asks about slots from an arm, a loop body and a `use` argument, and an answer that
+    /// depended on which walk was asking would be an answer about the walk rather than about the store.
+    #[must_use]
+    pub fn slots(&self) -> &[Slot] {
+        &self.slots
+    }
+
+    /// Sets the slots this scope answers with.
+    pub fn set_slots(&mut self, slots: Vec<Slot>) {
+        self.slots = slots;
+    }
+
+    /// This scope, with the slots the host found.
+    #[must_use]
+    pub fn with_slots(mut self, slots: Vec<Slot>) -> Self {
+        self.set_slots(slots);
+        self
+    }
+
     /// Binds a name.
     ///
     /// A name already bound keeps the *earlier* value when read, because [`get`](Self::get) answers with
@@ -201,8 +225,10 @@ impl Args {
             values,
             variants: self.variants,
             // A loop's shadow is about the *element*, and what the host says does not change with it
-            // (`SCREENS.md §2.4`): the variants and the player's settings travel unchanged.
+            // (`SCREENS.md §2.4`): the variants and the player's settings travel unchanged — and so do the
+            // slots, which are a save screen's *data* rather than its arguments.
             preferences: self.preferences.clone(),
+            slots: self.slots.clone(),
         }
     }
 }

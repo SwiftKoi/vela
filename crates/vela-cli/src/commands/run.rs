@@ -358,6 +358,9 @@ pub(crate) fn play(
 
     let mut player =
         crate::commands::play::Player::new(module, label, size, screens, saves, schema, images)?;
+    // The player's own slots, read before the first frame for the same reason its settings are: a save
+    // screen opened from the title has to draw what is in the player's directory, not an empty page.
+    player.refresh_slots();
     // The first command is presented before the window opens, so the first frame has
     // something to draw rather than appearing blank for a moment.
     player.begin(out);

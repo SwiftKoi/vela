@@ -23,6 +23,7 @@ use vela_world::Preferences;
 
 use crate::actions::Action as ScreenAction;
 use crate::screens::Laid;
+use crate::slots::Slot;
 use crate::{Args, ImageTable, Rect, ScreenSet, ScreenState, Value};
 
 /// A screen a *runtime* opened: the values a call passed, and what the host says (`SCREENS.md §2.1`).
@@ -154,6 +155,9 @@ pub struct Stack {
     /// `setting("text_speed")` has to answer the same value in an arm, a loop body and a `use` argument,
     /// which is what makes the store part of the scope rather than a lookup (`SCREENS.md §2.6`).
     preferences: Preferences,
+    /// The slots the host found, for the same reason and through the same door: a save screen over the
+    /// story asks `slots(6)` and has to be answered with what is on disk (`vela-ui::slots`).
+    slots: Vec<Slot>,
 }
 
 impl Stack {
@@ -165,9 +169,20 @@ impl Stack {
         self.preferences = preferences;
     }
 
+    /// Sets the slots every screen this stack lays out is offered.
+    ///
+    /// A caller that changes one re-lays the stack, which is how a save screen draws the slot it just
+    /// wrote — and a screen over the story is laid out by *this* stack rather than by a screen set, so the
+    /// two have to be told separately.
+    pub fn set_slots(&mut self, slots: Vec<Slot>) {
+        self.slots = slots;
+    }
+
     /// The scope a screen of this stack is laid out in: no arguments, and what the host says.
     fn args(&self) -> Args {
-        Args::new().with_preferences(self.preferences.clone())
+        Args::new()
+            .with_preferences(self.preferences.clone())
+            .with_slots(self.slots.clone())
     }
 
     /// Whether nothing is open.
