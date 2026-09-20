@@ -18,6 +18,8 @@ A `*` marks a prop a screen has to give. A prop that takes *a label or screen* i
 | `grow` | a number |  | Flex weight along the parent's main axis. |
 | `anchor` | an anchor |  | Where this node sits inside its parent's slot. |
 | `at` | a word |  | Position, scale, and alpha offset. |
+| `xoffset` | a number |  | How far to move this node from where the layout placed it, horizontally. |
+| `yoffset` | a number |  | How far to move this node from where the layout placed it, vertically. |
 | `id` | a word |  | A stable name, so an edit keeps this node's state. |
 | `style` | a word |  | A `style` declaration to draw with. |
 | `background` | a word |  | A fill colour behind this node, as a theme token (`theme.bg`). |

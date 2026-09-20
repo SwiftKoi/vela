@@ -101,6 +101,14 @@ pub struct Props {
     pub height: SizeSpec,
     /// Flex weight along the parent's main axis.
     pub grow: f32,
+    /// How far this node is moved from where its slot put it, horizontally (`SCREENS.md §4.2`).
+    ///
+    /// A *distance from a place*, not a coordinate: the place comes from `anchor` and the parent's
+    /// arrangement, and this is applied after the slot is assigned, so it changes nothing about
+    /// measurement — the node simply draws somewhere other than the box it was given.
+    pub offset_x: f32,
+    /// The same, vertically.
+    pub offset_y: f32,
 }
 
 impl Default for Props {
@@ -113,6 +121,8 @@ impl Default for Props {
             width: SizeSpec::Auto,
             height: SizeSpec::Auto,
             grow: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
         }
     }
 }

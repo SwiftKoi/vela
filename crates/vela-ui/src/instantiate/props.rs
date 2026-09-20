@@ -180,6 +180,12 @@ fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx, valu
         // because the second `auto` in such a line is read as another prop's name.
         "width" => set_dimension(&mut node.props.width, value),
         "height" => set_dimension(&mut node.props.height, value),
+        // A distance from the place the layout gave the node, and two props rather than one pair for a
+        // reason `vela-syntax`'s `a_nudge_is_two_names_with_one_value_each` pins: a second number
+        // written after a name is an *expression* (`yoffset -30` is `yoffset - 30`), so a pair form
+        // would depend on a comma that its absence turns into a silent wrong answer.
+        "xoffset" => set_number(&mut node.props.offset_x, value),
+        "yoffset" => set_number(&mut node.props.offset_y, value),
         "background" => {
             if let Some(color) = value.color(ctx) {
                 node.paint.background = Some(color);

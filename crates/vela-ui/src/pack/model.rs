@@ -47,7 +47,10 @@ use crate::theme::{Fonts, Palette};
 /// wide is laid out content-wide, which is a wrong screen rather than a refused one. That is version
 /// 6's rule (a table an older reader never sees) rather than version 9's (a byte read as another tag):
 /// dropped data bumps the version, because nothing downstream can tell it was ever written.
-pub const PACK_VERSION: u16 = 11;
+/// Version 12 adds the nudge, `xoffset` and `yoffset` (`SCREENS.md §4.2`), by version 11's rule: a
+/// version-11 reader drops the arg and draws the node where the layout put it — a Return button 30
+/// pixels off the bottom edge is a wrong screen rather than a refused one.
+pub const PACK_VERSION: u16 = 12;
 
 /// The four bytes every pack starts with.
 ///

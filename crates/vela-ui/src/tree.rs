@@ -342,4 +342,12 @@ impl Node {
         self.props.height = height;
         self
     }
+
+    /// Moves the node from wherever its parent placed it (`SCREENS.md §4.2`).
+    #[must_use]
+    pub fn offset(mut self, x: f32, y: f32) -> Self {
+        self.props.offset_x = x;
+        self.props.offset_y = y;
+        self
+    }
 }

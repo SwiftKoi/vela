@@ -107,10 +107,25 @@ impl Frame {
 #[must_use]
 pub fn layout(node: &Node, constraints: Constraints) -> Frame {
     let (size, children) = measure(node, constraints);
-    let rect = Rect::at_origin(size);
+    let rect = nudged(Rect::at_origin(size), node);
     Frame {
         rect,
         children: arrange(node, &children, size),
+    }
+}
+
+/// Moves a rect by a node's `xoffset`/`yoffset`, which is the whole of what a nudge does.
+///
+/// Applied where the node is *placed* rather than where it is measured, and that is the design: the
+/// parent's arrangement, its size, and its other children are decided as if the node had not moved,
+/// so a nudge is one node's business rather than a second layout mode (`SCREENS.md §4.2`). The
+/// consequence is stated rather than hidden: a nudged node can draw outside the box it was given,
+/// because nothing re-measures around it.
+fn nudged(rect: Rect, node: &Node) -> Rect {
+    Rect {
+        x: rect.x + node.props.offset_x,
+        y: rect.y + node.props.offset_y,
+        ..rect
     }
 }
 
@@ -436,6 +451,7 @@ pub(crate) fn align(slot: Rect, child_size: Size, anchor: Anchor) -> Rect {
 /// that ended up larger than its content must lay its children out against the space it has,
 /// or they would be arranged inside a box smaller than the one drawn.
 pub(crate) fn place(child: &Node, rect: Rect) -> Frame {
+    let rect = nudged(rect, child);
     let size = Size::new(rect.width, rect.height);
     let (_, measured) = measure(child, Constraints::exact(size));
     Frame {

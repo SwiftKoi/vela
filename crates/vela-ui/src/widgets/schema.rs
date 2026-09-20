@@ -159,6 +159,18 @@ pub const COMMON: &[PropDecl] = &[
         doc: "Position, scale, and alpha offset.",
     },
     PropDecl {
+        name: "xoffset",
+        ty: PropType::Number,
+        required: false,
+        doc: "How far to move this node from where the layout placed it, horizontally.",
+    },
+    PropDecl {
+        name: "yoffset",
+        ty: PropType::Number,
+        required: false,
+        doc: "How far to move this node from where the layout placed it, vertically.",
+    },
+    PropDecl {
         name: "id",
         ty: PropType::Word,
         required: false,

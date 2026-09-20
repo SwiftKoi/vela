@@ -549,6 +549,7 @@ of coordinate math:
 | `gap <n>` | `row`/`column`/`grid`/`flow` | Space between children |
 | `align <anchor>` | containers | Child alignment within available space |
 | `anchor <anchor>` | any | Self-positioning in parent |
+| `xoffset <n>` / `yoffset <n>` | any | How far to move the node from where the layout placed it |
 | `size <n>` | any | Both axes fixed at once |
 | `width <n>` / `height <n>` | any | One axis fixed; the other still follows the content |
 | `min` / `max` | any | Size bounds. Declared, and read by nothing yet |
@@ -572,6 +573,20 @@ implementation**).
 > writes one draws as if it had not written anything. That is a silent no-op of the kind this spec
 > exists to prevent, and it is recorded in `M12.2`'s **Still open** rather than implemented with
 > semantics nobody has argued for.
+
+**A place, then a distance.** `anchor` is *where* a node sits in the slot its parent gave it;
+`xoffset`/`yoffset` are how far from there it is moved — Ren'Py's two ideas without the six interacting
+props it spells them with (`xpos`/`ypos`/`xanchor`/`yanchor`/`xoffset`/`yoffset`, each with rules about
+which beats which). The move happens *after* the slot is assigned, so measurement does not see it: the
+parent is the size it was, the siblings keep their slots, and only this node is drawn somewhere else.
+That makes a coordinate expressible — `at top_left, xoffset 40, yoffset 300` is the point (40, 300),
+which is what a port needs — without the layout gaining a second mode in which a child is not part of
+its parent's arrangement; that mode is what turns every containing box's size into hand arithmetic, and
+it is what Ren'Py's own default template pays for. The trade is stated rather than hidden: a nudged node
+may draw outside the box it was given, because nothing re-measures around it. It is two props rather
+than one pair because the grammar reads a second number written after a name as an *expression* —
+`yoffset -30` is `yoffset - 30` — so a pair-of-numbers prop would have no spelling that a missing comma
+would not silently change the meaning of.
 
 Both `align` and `anchor` compose: a node that names its own `anchor` positions itself in the
 slot its parent offers, and one that does not takes the parent's `align`. They are separate
@@ -1075,7 +1090,7 @@ actually arrives broken — a truncated transfer and a half-written file. It is 
   than reading it as if the fields it did not recognize were absent. The version is bumped for any
   change to the container or to the declaration fields it carries, because those *are* the format —
   and a **prop a screen may write is one of those fields**: an older reader decodes it happily and
-  then drops it (§4.2's `width`), so a screen would draw as if the line had never been written.
+  then drops it (§4.2's `width`, `xoffset`), so a screen would draw as if the line had never been written.
   Dropped data bumps the version for the same reason version 6 bumped it for the font table: a wrong
   screen is worse than a refused one, because nothing downstream can tell the line was ever there.
 - **Binary, not text.** A pack is not source and is not meant to be edited; a readable form would
