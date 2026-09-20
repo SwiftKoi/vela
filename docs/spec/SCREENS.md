@@ -839,11 +839,20 @@ leaves the menu rather than walking back through it. Ren'Py spells that pair `Sh
 the migration maps `ShowMenu` onto `replace_screen`, which is why the sample's `navigation` no longer
 piles: until this existed, every menu press in a migrated project was another layer.
 
+**A save is a page and a slot, and one action serves both screens.** `file_action(slot)` loads when the
+screen that asked is named `load` and saves otherwise — Ren'Py's own rule (`FileAction`) rather than one
+invented here, and the reason the sample's `save` and `load` are one `file_slots` body under two titles; a
+project that writes its own load screen therefore keeps that name. The page is not an argument: it is the
+*player's* setting (`setting("file_page")`, §7.1's store, which is where Ren'Py keeps it too), moved by
+`file_page(page)` and the pair that step either side, so a slot number means the slot of the page the
+player is looking at. A slot's file is named for both — `1-3` (`vela_replay::slot_name`) — which is what
+makes one page's slots contiguous in the listing a save screen reads.
+
 Two things the registry also says, because a reader of the reference deserves both. An entry is
-either **dispatched** — the runtime acts on it — or *declared, not dispatched yet*, which is the
-state of most of the vocabulary: `preference`, `file_page`, `language`, and the rest are this
-language's words for systems the later milestones build, named now because a screen that uses one has
-to check now. And the set is not a list of Ren'Py's names: `ShowMenu`, `Start`, and `MainMenu` are
+either **dispatched** — the runtime acts on it, the stack or the host — or *declared, not dispatched
+yet*, which is still the state of much of the vocabulary: `language`, `end_replay`, `gamepad_calibrate`,
+and the rest are this language's words for systems the later milestones build, named now because a screen
+that uses one has to check now. And the set is not a list of Ren'Py's names: `ShowMenu`, `Start`, and `MainMenu` are
 absent because a menu is a screen (`open_screen`) and the beginning is a label (`jump`).
 
 An argument is either a **name** or a **value**, and the difference is who resolves it. A name —

@@ -144,6 +144,51 @@ fn a_controls_selection_is_the_setting_it_writes() {
     assert!(is_chosen(&store, &skip));
 }
 
+/// The file page is a setting, and the three actions that move it are writes like any other.
+///
+/// `RUNTIME.md §2.1` is why it is a setting rather than a variable of a screen: which page a player was
+/// looking at is *the player's* state, so it survives closing the game and is in no save — Ren'Py keeps
+/// it in `persistent._file_page` for exactly that reason. What the stepping actions do at the edges is
+/// the other half: the first page has nothing before it, so `previous` answers the page it is on rather
+/// than zero.
+#[test]
+fn a_file_screen_moves_pages_through_the_settings_store() {
+    use vela_ui::actions::{Action, FILE_PAGE, FILE_PAGE_NEXT, FILE_PAGE_PREVIOUS};
+    use vela_ui::settings::{next_page, page, previous_page, write};
+    use vela_world::Value;
+
+    let mut store = vela_world::Preferences::new();
+    // Nobody has paged: the declaration is the first page, and there is nothing before it.
+    assert_eq!(page(&store), 1);
+    assert_eq!(previous_page(&store), 1);
+    assert_eq!(next_page(&store), 2);
+
+    assert_eq!(
+        write(
+            &mut store,
+            &Action::new(FILE_PAGE, vec![vela_ui::value::Value::Num(3.0)])
+        ),
+        Some("file_page".to_string())
+    );
+    assert_eq!(page(&store), 3, "the page the action named");
+    assert_eq!(store.get("file_page"), Some(&Value::Int(3)));
+
+    write(&mut store, &Action::new(FILE_PAGE_NEXT, vec![]));
+    assert_eq!(page(&store), 4);
+    write(&mut store, &Action::new(FILE_PAGE_PREVIOUS, vec![]));
+    assert_eq!(page(&store), 3);
+    write(&mut store, &Action::new(FILE_PAGE_PREVIOUS, vec![]));
+    write(&mut store, &Action::new(FILE_PAGE_PREVIOUS, vec![]));
+    assert_eq!(page(&store), 1, "and it stops at the first page");
+
+    // A page that cannot be a position reads as the first one: the store keeps whatever a newer build
+    // wrote (`RUNTIME.md §2.1`) and this build reads what it understands.
+    store.set("file_page", Value::Int(0));
+    assert_eq!(page(&store), 1);
+    store.set("file_page", Value::Str("second".to_string()));
+    assert_eq!(page(&store), 1);
+}
+
 /// A setting's name, as a screen writes it.
 fn name(text: &str) -> vela_ui::value::Value {
     vela_ui::value::Value::Str(text.to_string())

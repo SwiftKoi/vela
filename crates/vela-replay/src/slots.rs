@@ -25,6 +25,20 @@ pub fn path_of(dir: &Path, name: &str) -> PathBuf {
     dir.join(format!("{name}.{SLOT_EXTENSION}"))
 }
 
+/// The name a numbered slot is filed under: its page, then the slot — Ren'Py's spelling
+/// (`__slotname`), and the one the corpus's `file_slots` grid is built on.
+///
+/// `1-1` is the first slot of the first page. The name is what a screen's slot number and a file have in
+/// common, and the page is a *prefix*, which is why a page's slots are contiguous in the listing `slots`
+/// returns and why a screen can draw one page by reading the names that start with it.
+///
+/// A named slot — `quick`, from `quick_save` — has no page: the page is a *grid position* rather than a
+/// namespace, and the actions that write one are the host's (`vela-ui::settings::PAGE`).
+#[must_use]
+pub fn slot_name(page: u32, slot: u32) -> String {
+    format!("{page}-{slot}")
+}
+
 /// One slot, as its file describes it.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Slot {

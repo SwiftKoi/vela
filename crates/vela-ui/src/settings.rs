@@ -10,11 +10,14 @@
 //! twelve `Preference(…)` uses, nine distinct settings
 //! (`docs/roadmap/M12.2-game-interface.md`, "Found during implementation") — minus the ones whose
 //! system is not built: the volumes and the mute toggle are M12.3's audio, and the migration reports
-//! those by name rather than writing a button that does nothing.
+//! those by name rather than writing a button that does nothing. One entry comes from the *file*
+//! screens instead of the settings screen: the page, which Ren'Py keeps in `persistent._file_page` —
+//! the same lifetime, so the same store.
 //!
-//! **The `read` flag is the honest half of a vocabulary that runs ahead of its systems.** Nothing
-//! reads a setting yet: the screens that draw one and the transport that obeys one are this
-//! milestone's item 4. Saying so here is the same shape `ActionDecl::dispatched` has, and it is what
+//! **The `read` flag is the honest half of a vocabulary that runs ahead of its systems.** Most of them
+//! are read by nothing yet: the screens that draw one and the transport that obeys one are this
+//! milestone's item 4, and the page is the exception — the file actions are its system, and they are
+//! here. Saying so per setting is the same shape `ActionDecl::dispatched` has, and it is what
 //! stops "Vela has a text speed" from reading as "Vela types your dialogue out".
 
 use vela_world::{Preferences, Value};
@@ -149,7 +152,54 @@ pub const SETTINGS: &[SettingDecl] = &[
         doc: "How the game's window is shown.",
         read: false,
     },
+    SettingDecl {
+        name: PAGE,
+        ty: SettingTy::Number,
+        default: "1",
+        doc: "Which page of save slots a file screen is on, counting from one. Ren'Py keeps it in \
+              `persistent._file_page` for the same reason it is here: which page the player was \
+              looking at is the player's state, not the save's (`RUNTIME.md §2.1`). A page's slots \
+              are the ones whose names start with it (`vela_replay::slot_name`).",
+        read: true,
+    },
 ];
+
+/// The setting that holds the page a file screen is on.
+///
+/// Public because three actions move it and a screen reads it: `file_page(p)` and the pair that step
+/// are [`write`]'s, and `setting("file_page")` is the read the screens use.
+pub const PAGE: &str = "file_page";
+
+/// Which page a file screen is on, counting from one.
+///
+/// A page is a *position*, so a value that cannot be one — absent, zero, negative, or something a newer
+/// build wrote that this one cannot read — answers the first page rather than being propagated. That is
+/// the same rule `RUNTIME.md §2.1` gives a store with no vocabulary: hold what a newer build wrote,
+/// read what this one understands.
+#[must_use]
+pub fn page(preferences: &Preferences) -> u32 {
+    match preferences.get(PAGE) {
+        Some(vela_world::Value::Int(number)) => u32::try_from(*number).unwrap_or(1).max(1),
+        Some(vela_world::Value::Float(number)) if *number >= 1.0 => *number as u32,
+        _ => 1,
+    }
+}
+
+/// The page after this one.
+#[must_use]
+pub fn next_page(preferences: &Preferences) -> u32 {
+    page(preferences) + 1
+}
+
+/// The page before this one, never below the first.
+///
+/// Ren'Py's `FilePagePrevious` is *insensitive* on the first page rather than wrapping — a screen says
+/// so with `enable_if`, which is why the button greys out — and this clamps anyway, because a disabled
+/// control is not a guarantee.
+#[must_use]
+pub fn previous_page(preferences: &Preferences) -> u32 {
+    page(preferences).saturating_sub(1).max(1)
+}
 
 impl SettingDecl {
     /// The declaration of this name.
@@ -252,23 +302,64 @@ fn declared(setting: &SettingDecl) -> Value {
     }
 }
 
-/// Writes what a `preference` or `toggle_preference` action asks for, and answers the name it wrote.
+/// Whether an action's subject is a setting rather than the story: the gate a caller applies before
+/// [`write`].
 ///
-/// One place, because both callers carry the same two actions out: the windowed player, where a
-/// settings screen's button is the only way a player can change one, and the test runner, where a click
-/// is. What they do with the answer differs — a player rewrites its settings file, a run says nothing —
-/// and what a setting *means* is here.
+/// One list, because a player and a test run that disagreed about which actions are the *player's* state
+/// would write different worlds from the same press (`RUNTIME.md §2.1`) — and because the file page is
+/// three more names in the same family, moved by the same [`write`].
+#[must_use]
+pub fn is_write(action: &Action) -> bool {
+    matches!(
+        action.name.as_str(),
+        PREFERENCE
+            | TOGGLE_PREFERENCE
+            | crate::actions::FILE_PAGE
+            | crate::actions::FILE_PAGE_NEXT
+            | crate::actions::FILE_PAGE_PREVIOUS
+    )
+}
+
+/// Writes what a `preference`, `toggle_preference`, or file-page action asks for, and answers the name it
+/// wrote.
 ///
-/// `None` when the action is neither of the two; when it names a setting this build does not have (not a
-/// typo the checker would have let through — `E5020` is where it is written — but a bundle built by a
-/// build whose vocabulary was different); or when the value is one the world cannot hold, which is an
-/// action or a record. Each of those is a caller's to report, and a caller that says so beats one that
-/// writes a setting nothing reads.
+/// One place, because both callers carry the same actions out: the windowed player, where a settings
+/// screen's button is the only way a player can change one, and the test runner, where a click is. What
+/// they do with the answer differs — a player rewrites its settings file, a run says nothing — and what a
+/// setting *means* is here. The file page rides the same path for the same reason: it is the player's
+/// state, and Ren'Py keeps it in the same store (`persistent._file_page`).
+///
+/// `None` when the action is none of them; when it names a setting this build does not have (not a typo
+/// the checker would have let through — `E5020` is where it is written — but a bundle built by a build
+/// whose vocabulary was different); or when the value is one the world cannot hold, which is an action or
+/// a record. Each of those is a caller's to report, and a caller that says so beats one that writes a
+/// setting nothing reads.
 ///
 /// A **toggle flips**, reading the declaration's default when nothing is stored yet — which is what lets
 /// a checkbox flip a setting that no screen can read (`SCREENS.md §7.1`).
 pub fn write(preferences: &mut Preferences, action: &Action) -> Option<String> {
     match action.name.as_str() {
+        crate::actions::FILE_PAGE => {
+            let page = match action.args.first() {
+                Some(ScreenValue::Num(number)) if *number >= 1.0 => *number as u32,
+                // A page a screen computed and got wrong is the first page, which is `page`'s rule for
+                // anything that cannot be a position: the press still moves the screen somewhere it can
+                // draw (`SCREENS.md §7`).
+                _ => 1,
+            };
+            preferences.set(PAGE, Value::Int(i64::from(page)));
+            Some(PAGE.to_string())
+        }
+        crate::actions::FILE_PAGE_NEXT => {
+            let next = next_page(preferences);
+            preferences.set(PAGE, Value::Int(i64::from(next)));
+            Some(PAGE.to_string())
+        }
+        crate::actions::FILE_PAGE_PREVIOUS => {
+            let previous = previous_page(preferences);
+            preferences.set(PAGE, Value::Int(i64::from(previous)));
+            Some(PAGE.to_string())
+        }
         PREFERENCE => {
             let (name, value) = (action.first()?, action.args.get(1)?);
             SettingDecl::named(name)?;

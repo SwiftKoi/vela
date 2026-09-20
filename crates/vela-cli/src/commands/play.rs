@@ -27,6 +27,7 @@ use vela_ui::Done;
 use vela_ui::Stack;
 use vela_ui::actions::Action as ScreenAction;
 
+mod files;
 pub(crate) mod images;
 mod saves;
 mod screens;
@@ -277,11 +278,10 @@ impl Player {
     fn host_action(&mut self, action: ScreenAction) {
         // The player's settings come first, because they are the one vocabulary whose subject is the
         // *player's* state rather than the story's (`RUNTIME.md §2.1`) — and the file is rewritten at
-        // once: a setting a player chose and a crash did not keep is one they have to choose again.
-        if matches!(
-            action.name.as_str(),
-            vela_ui::actions::PREFERENCE | vela_ui::actions::TOGGLE_PREFERENCE
-        ) {
+        // once: a setting a player chose and a crash did not keep is one they have to choose again. Which
+        // actions those are is `vela-ui`'s list rather than a second one here: a press that a player
+        // treats as a setting and a test does not would write two different worlds.
+        if vela_ui::settings::is_write(&action) {
             match vela_ui::settings::write(self.timeline.preferences_mut(), &action) {
                 Some(name) => {
                     println!("screen setting {name}");
@@ -312,6 +312,11 @@ impl Player {
             }
             "quick_save" => self.save("quick"),
             "quick_load" => self.load("quick"),
+            // A slot of the current page. Which of the two it is, is Ren'Py's rule about the screen's
+            // name (`vela_ui::actions::file_mode`), and the page is the player's setting — both of them
+            // questions the file screen asks by writing the action, never by passing the answers.
+            vela_ui::actions::FILE_ACTION => self.file_action(&action),
+            vela_ui::actions::FILE_DELETE => self.file_delete(&action),
             "rollback" => self.rollback(),
             // A screen's `jump` begins the story at a label — the one action in the vocabulary whose
             // meaning is entirely the host's (`SCREENS.md §2.7`), because a label is the program's and a

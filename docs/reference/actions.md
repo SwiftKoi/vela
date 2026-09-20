@@ -133,37 +133,37 @@ Flip a boolean setting, for a control that cannot read it.
 | --- | --- | --- |
 | `name` | a word | Which setting to flip. |
 
-## `file_page(name)`
+## `file_page(page)`
 
-Show a page of save slots. Declared, not dispatched yet: the runtime does not act on it.
+Show a page of save slots.
 
 | argument | takes | meaning |
 | --- | --- | --- |
-| `name` | a word | Which page. |
+| `page` | a number | Which page of slots. |
 
 ## `file_page_previous()`
 
-Show the page of slots before this one. Declared, not dispatched yet: the runtime does not act on it.
+Show the page of slots before this one.
 
 ## `file_page_next()`
 
-Show the page of slots after this one. Declared, not dispatched yet: the runtime does not act on it.
+Show the page of slots after this one.
 
 ## `file_action(slot)`
 
-Save into a slot, or load from it, depending on the screen. Declared, not dispatched yet: the runtime does not act on it.
+Save into a slot, or load from it, depending on the screen.
 
 | argument | takes | meaning |
 | --- | --- | --- |
-| `slot` | a number | Which slot. |
+| `slot` | a number | Which slot of the current page. |
 
 ## `file_delete(slot)`
 
-Delete what is in a slot. Declared, not dispatched yet: the runtime does not act on it.
+Delete what is in a slot.
 
 | argument | takes | meaning |
 | --- | --- | --- |
-| `slot` | a number | Which slot. |
+| `slot` | a number | Which slot of the current page. |
 
 ## `set_screen_variable(name, value)`
 

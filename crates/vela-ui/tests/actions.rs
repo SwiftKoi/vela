@@ -126,6 +126,13 @@ fn an_action_says_whether_it_is_dispatched() {
             // run both carry them out, and nothing draws one yet (`RUNTIME.md §2.1`).
             "preference",
             "toggle_preference",
+            // The file page, which is the same store and the same write (`vela-ui::settings::PAGE`), and
+            // the two slot actions — a save a *screen* can press rather than the `quick_save` key.
+            "file_page",
+            "file_page_previous",
+            "file_page_next",
+            "file_action",
+            "file_delete",
             // The action that writes a screen's *own* store, and the first of them that is a *value*
             // rather than a name (`SCREENS.md §2.5`).
             "set_screen_variable"
@@ -415,5 +422,30 @@ fn a_loops_iterable_is_a_value_rather_than_an_action() {
         codes("screen s():\n    for a in [quitt()]:\n        text \"x\"\n"),
         vec!["E5012"],
         "an action written inside the iterable is still an action"
+    );
+}
+
+/// A `file_action` loads when the screen that asked is named `load`, and saves otherwise.
+///
+/// The rule is Ren'Py's, copied rather than invented (`renpy/common/00action_file.rpy`'s `FileAction`
+/// is exactly this test) because the corpus depends on it: the sample's `save` and `load` are the same
+/// `file_slots` body under two titles, and the *screen's name* is the only thing that tells the two
+/// presses apart. It is also the reason a project that writes its own load screen has to keep the name,
+/// which is the half worth pinning here.
+#[test]
+fn a_file_action_loads_only_for_the_screen_named_load() {
+    use vela_ui::actions::{FileMode, file_mode};
+
+    assert_eq!(file_mode(Some("load")), FileMode::Load);
+    assert_eq!(file_mode(Some("save")), FileMode::Save);
+    assert_eq!(
+        file_mode(Some("file_slots")),
+        FileMode::Save,
+        "a screen that is not named `load` saves"
+    );
+    assert_eq!(
+        file_mode(None),
+        FileMode::Save,
+        "nothing open is Ren'Py's `else` branch"
     );
 }

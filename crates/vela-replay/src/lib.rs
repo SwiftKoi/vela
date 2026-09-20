@@ -40,4 +40,4 @@ pub use migrations::registry::chain;
 pub use save::{MAGIC, SAVE_VERSION, Save, SaveHeader};
 pub use schema::{Entry, Schema};
 pub use settings::{SETTINGS_VERSION, Settings};
-pub use slots::{SLOT_EXTENSION, Slot, path_of, slots};
+pub use slots::{SLOT_EXTENSION, Slot, path_of, slot_name, slots};

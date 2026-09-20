@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use vela_replay::{SAVE_VERSION, Save, checksum, path_of, slots};
+use vela_replay::{SAVE_VERSION, Save, checksum, path_of, slot_name, slots};
 use vela_vm::{Snapshot, VmState};
 use vela_world::{Value, World};
 
@@ -180,5 +180,33 @@ fn an_older_saves_metadata_reads_without_a_migrator() {
         "an older save is loadable: `Save::load` migrates it"
     );
     assert_eq!(found[0].version, Some(1));
+    std::fs::remove_dir_all(&dir).expect("clean up");
+}
+
+/// A numbered slot's name is its page and its number, which is what a screen and a file have in common.
+///
+/// The page is a *prefix* rather than a namespace, and that is the property the listing depends on: a
+/// page's slots are contiguous in `slots()`'s sort, so a screen can draw one page from the names that
+/// start with it.
+#[test]
+fn a_numbered_slot_is_named_by_its_page() {
+    assert_eq!(slot_name(1, 1), "1-1");
+    assert_eq!(slot_name(2, 10), "2-10");
+    assert_ne!(slot_name(1, 2), slot_name(2, 1));
+
+    let dir = directory("numbered");
+    for (page, slot) in [(1, 1), (1, 2), (2, 1)] {
+        slot_save(&slot_name(page, slot))
+            .write_atomic(&path_of(&dir, &slot_name(page, slot)))
+            .expect("write");
+    }
+    let names: Vec<String> = slots(&dir)
+        .expect("list")
+        .into_iter()
+        .map(|slot| slot.name)
+        .collect();
+    assert_eq!(names, vec!["1-1", "1-2", "2-1"], "a page is contiguous");
+    let first_page: Vec<&String> = names.iter().filter(|name| name.starts_with("1-")).collect();
+    assert_eq!(first_page.len(), 2, "one page, read by prefix");
     std::fs::remove_dir_all(&dir).expect("clean up");
 }

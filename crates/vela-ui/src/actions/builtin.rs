@@ -51,6 +51,50 @@ pub const TOGGLE_PREFERENCE: &str = "toggle_preference";
 /// action: the store belongs to the screen rather than to the world, and `set` is the world's.
 pub const SET_SCREEN_VARIABLE: &str = "set_screen_variable";
 
+/// The action that puts a file screen on a page, and the two that step either side of it.
+///
+/// Constants, and one family rather than three unrelated names, because all three move the *same*
+/// setting: `vela-ui::settings::write` is what carries them out, and a page a screen reads with
+/// `setting("file_page")` has to be the page these write.
+pub const FILE_PAGE: &str = "file_page";
+/// The page before this one.
+pub const FILE_PAGE_PREVIOUS: &str = "file_page_previous";
+/// The page after it.
+pub const FILE_PAGE_NEXT: &str = "file_page_next";
+
+/// The action that saves into a slot or loads from it, by which screen asked.
+///
+/// A constant because the rule that decides which — [`file_mode`] — is the *screen's name*, and both the
+/// runtime that carries it out and the checker that holds the vocabulary need the same word.
+pub const FILE_ACTION: &str = "file_action";
+
+/// The action that deletes what a slot holds.
+pub const FILE_DELETE: &str = "file_delete";
+
+/// Whether a [`FILE_ACTION`] saves or loads, decided by which screen asked.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FileMode {
+    /// Write the current state into the slot.
+    Save,
+    /// Read the slot back into the story.
+    Load,
+}
+
+/// Ren'Py's rule for [`FILE_ACTION`], copied because the corpus depends on it: the action **loads when
+/// the screen that asked is named `load`** and saves otherwise (`renpy/common/00action_file.rpy`, whose
+/// `FileAction` is exactly this test).
+///
+/// It is why one `file_slots` screen can serve both screens — the sample's `save` and `load` are the same
+/// body under different titles — and it is why a project that writes its own load screen has to keep the
+/// name. No screen open saves, which is what Ren'Py's `else` branch does.
+#[must_use]
+pub fn file_mode(top_screen: Option<&str>) -> FileMode {
+    match top_screen {
+        Some("load") => FileMode::Load,
+        _ => FileMode::Save,
+    }
+}
+
 /// An argument a screen writes, in order.
 const fn arg(name: &'static str, ty: PropType, doc: &'static str) -> crate::widgets::PropDecl {
     crate::widgets::PropDecl {
@@ -221,38 +265,46 @@ pub(crate) const BUILTIN: &[ActionDecl] = &[
         rest: None,
     },
     ActionDecl {
-        name: "file_page",
-        args: &[arg("name", PropType::Word, "Which page.")],
+        name: FILE_PAGE,
+        args: &[arg("page", PropType::Number, "Which page of slots.")],
         doc: "Show a page of save slots.",
-        dispatched: false,
+        dispatched: true,
         rest: None,
     },
     ActionDecl {
-        name: "file_page_previous",
+        name: FILE_PAGE_PREVIOUS,
         args: &[],
         doc: "Show the page of slots before this one.",
-        dispatched: false,
+        dispatched: true,
         rest: None,
     },
     ActionDecl {
-        name: "file_page_next",
+        name: FILE_PAGE_NEXT,
         args: &[],
         doc: "Show the page of slots after this one.",
-        dispatched: false,
+        dispatched: true,
         rest: None,
     },
     ActionDecl {
-        name: "file_action",
-        args: &[arg("slot", PropType::Number, "Which slot.")],
+        name: FILE_ACTION,
+        args: &[arg(
+            "slot",
+            PropType::Number,
+            "Which slot of the current page.",
+        )],
         doc: "Save into a slot, or load from it, depending on the screen.",
-        dispatched: false,
+        dispatched: true,
         rest: None,
     },
     ActionDecl {
-        name: "file_delete",
-        args: &[arg("slot", PropType::Number, "Which slot.")],
+        name: FILE_DELETE,
+        args: &[arg(
+            "slot",
+            PropType::Number,
+            "Which slot of the current page.",
+        )],
         doc: "Delete what is in a slot.",
-        dispatched: false,
+        dispatched: true,
         rest: None,
     },
     ActionDecl {

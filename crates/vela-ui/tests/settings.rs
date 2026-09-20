@@ -77,6 +77,11 @@ fn the_settings_are_the_ones_the_sample_asks_for() {
             "skip_after_choices",
             "transitions",
             "display_mode",
+            // The one the *file* screens ask for rather than the settings screen: Ren'Py keeps the page
+            // in `persistent._file_page`, which is the same lifetime this store is for (`RUNTIME.md §2.1`),
+            // so it is a setting here too rather than a second kind of player state
+            // (`docs/reference/actions.md`, `file_page`).
+            "file_page",
         ]
     );
     // Audio's, and M12.3's: the migration reports them by name rather than writing a control that
@@ -115,14 +120,19 @@ fn a_setting_declares_its_type_and_its_default() {
 /// systems is fine, and a reader being able to tell which are which is what makes it fine.
 #[test]
 fn a_setting_says_whether_anything_reads_it() {
+    // The page is the exception, and it earns it: the *file actions* read it
+    // (`vela-ui::settings::page`), so it is the one setting a press changes the behaviour of today.
+    // Everything else waits on item 4's screens and transport, which is what the sentence says.
     for setting in vela_ui::SETTINGS {
-        assert!(
-            !setting.read,
-            "`{}` is read by nothing yet: the screens and the transport are item 4",
+        let read = setting.name == vela_ui::settings::PAGE;
+        assert_eq!(
+            setting.read, read,
+            "`{}` says the wrong thing about whether anything reads it",
             setting.name
         );
-        assert!(
+        assert_eq!(
             setting.summary().contains("not read yet"),
+            !read,
             "{}",
             setting.summary()
         );
