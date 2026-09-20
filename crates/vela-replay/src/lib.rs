@@ -30,6 +30,7 @@ mod migrations;
 mod save;
 mod schema;
 pub mod settings;
+mod slots;
 
 pub use digest::{checksum, digest, hex};
 pub use error::ReplayError;
@@ -39,3 +40,4 @@ pub use migrations::registry::chain;
 pub use save::{MAGIC, SAVE_VERSION, Save, SaveHeader};
 pub use schema::{Entry, Schema};
 pub use settings::{SETTINGS_VERSION, Settings};
+pub use slots::{SLOT_EXTENSION, Slot, path_of, slots};

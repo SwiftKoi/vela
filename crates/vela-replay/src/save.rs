@@ -236,6 +236,40 @@ impl Save {
         Self::from_bytes(&fs::read(path)?)
     }
 
+    /// Reads a save's metadata without decoding its world.
+    ///
+    /// The question a *list* of slots asks (`crate::slots`, `RUNTIME.md §5`): what is in each slot,
+    /// before any of them is loaded. The envelope and the checksum are checked, so a damaged file is an
+    /// error rather than a slot that looks healthy; the payload is then read for its metadata alone. No
+    /// schema, no migrator, no `World` — a version this build cannot load still has a name and a time,
+    /// which is what a player needs to be able to see the slot and delete it.
+    ///
+    /// # Errors
+    ///
+    /// Fails for anything that makes the file not a save: short, a wrong magic, a checksum that does not
+    /// match, or a payload that does not parse.
+    pub fn header_of(bytes: &[u8]) -> Result<SaveHeader, ReplayError> {
+        let (save_version, schema_digest, body) = envelope(bytes)?;
+        let meta: Meta =
+            serde_json::from_slice(body).map_err(|error| ReplayError::Codec(error.to_string()))?;
+        Ok(SaveHeader {
+            save_version,
+            schema_digest,
+            engine_build: meta.engine_build,
+            created_at: meta.created_at,
+            slot: meta.slot,
+        })
+    }
+
+    /// The metadata of the save at `path`, without loading it.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the file cannot be read, or for any reason [`header_of`](Self::header_of) does.
+    pub fn header_at(path: &Path) -> Result<SaveHeader, ReplayError> {
+        Self::header_of(&fs::read(path)?)
+    }
+
     /// Writes the save to `path`, atomically.
     ///
     /// A temporary file in the same directory is written and flushed, then renamed over the
@@ -302,6 +336,23 @@ impl Decoded {
 /// deliberately not: what to do with a version is the caller's question — [`Save::from_bytes`]
 /// refuses anything but current, and [`Save::load`] migrates.
 fn decode(bytes: &[u8]) -> Result<Decoded, ReplayError> {
+    let (version, schema_digest, body) = envelope(bytes)?;
+    let payload: Payload =
+        serde_json::from_slice(body).map_err(|error| ReplayError::Codec(error.to_string()))?;
+
+    Ok(Decoded {
+        version,
+        schema_digest,
+        payload,
+    })
+}
+
+/// The envelope: its version, its schema digest, and the payload's bytes.
+///
+/// Split out of [`decode`] when a *list* of slots needed a save's metadata without its world. One
+/// implementation for both readers, because the questions the envelope answers — is this a save at all,
+/// is it short, does the checksum hold — have one answer, and a second copy is a second answer.
+fn envelope(bytes: &[u8]) -> Result<(u16, [u8; 32], &[u8]), ReplayError> {
     if bytes.len() < HEADER + TRAILER {
         return Err(ReplayError::NotRecognised { what: "a save" });
     }
@@ -319,14 +370,23 @@ fn decode(bytes: &[u8]) -> Result<Decoded, ReplayError> {
     let version = u16::from_le_bytes([bytes[4], bytes[5]]);
     let mut schema_digest = [0u8; 32];
     schema_digest.copy_from_slice(&bytes[6..38]);
-    let payload: Payload = serde_json::from_slice(&bytes[HEADER..body_end])
-        .map_err(|error| ReplayError::Codec(error.to_string()))?;
+    Ok((version, schema_digest, &bytes[HEADER..body_end]))
+}
 
-    Ok(Decoded {
-        version,
-        schema_digest,
-        payload,
-    })
+/// The payload's metadata, for a reader that wants no part of the world.
+///
+/// Deserializing *this* rather than [`Payload`] is the point rather than an optimization: a slot's
+/// metadata is what a list shows, and a payload whose world this build cannot read is still a slot with
+/// a name, a time, and a version. Every field defaults, so a payload written before one of them existed
+/// still describes its slot.
+#[derive(Deserialize)]
+struct Meta {
+    #[serde(default)]
+    engine_build: String,
+    #[serde(default)]
+    created_at: u64,
+    #[serde(default)]
+    slot: String,
 }
 
 /// The name of the first non-finite float in the world, if there is one.

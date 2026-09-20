@@ -9,7 +9,7 @@
 //! *from* the running story, and paperwork that had to be handed a copy of the timeline would be a
 //! second thing to keep in step.
 
-use vela_replay::{Save, Timeline};
+use vela_replay::{Save, Timeline, path_of};
 
 use super::Player;
 
@@ -21,7 +21,7 @@ impl Player {
             return;
         }
         let save = Save::new(self.timeline.snapshot(), self.schema.digest(), slot);
-        let path = self.saves.join(format!("{slot}.velasave"));
+        let path = path_of(&self.saves, slot);
         match save.write_atomic(&path) {
             Ok(()) => println!("save {slot}"),
             Err(error) => println!("save failed: {error}"),
@@ -30,7 +30,7 @@ impl Player {
 
     /// Reads a slot back into the running story, migrating it if it is from an older build.
     pub(super) fn load(&mut self, slot: &str) {
-        let path = self.saves.join(format!("{slot}.velasave"));
+        let path = path_of(&self.saves, slot);
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => bytes,
             Err(error) => {

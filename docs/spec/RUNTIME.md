@@ -253,6 +253,11 @@ pub struct SaveHeader {
 - **Checksum over payload**, so a truncated write is detected and the previous save is used.
 - **Atomic writes**: write to a temp file in the save dir, fsync, rename. A crash mid-save
   never destroys the previous slot.
+- **A slot is a file, and a file that cannot be read is still a slot.** A save screen lists what a
+  directory holds *before* it loads any of it: the name, the time, and whether this build can load it
+  (`Save::header_of`, `vela_replay::slots`). A version from the future, a half-written file, or something
+  that is not a save at all keeps its place in that list, unloadable — the alternative is a slot that
+  disappears from the screen while still occupying the directory, which is a slot nobody can delete.
 
 > **Implemented (M8).** The container, the schema digest, and the version discipline
 > exist (`vela-replay`). The file is `magic | version | schema_digest | payload | checksum`, and
@@ -277,6 +282,16 @@ pub struct SaveHeader {
 > is checked against the build's schema, and an older one is carried forward by the migration
 > chain (§6) first. What a caller holds is always current — the returned save carries the
 > current version and schema digest — so a partly-migrated world never escapes the loader.
+>
+> **Extended (M12.2).** Listing a directory no longer needs any of that: `Save::header_of` checks the
+> envelope and the checksum and then parses the metadata *alone*, so `vela_replay::slots` answers what is
+> in a directory — name, time, version, loadable — with no schema, no migrator, and no `World`.
+> `crates/vela-replay/tests/slots.rs` pins it, including the corpus's oldest save: its metadata reads
+> while `Save::from_bytes` refuses its world. Two things are still missing for the save screen this was
+> built for, and both are recorded in `M12.2`: **nothing stamps `created_at`**, so every save reads as
+> time zero (the clock is `vela-host`'s — the one crate the determinism check allows to read it — and a
+> save's stamp is display data written outside the world), and the *thumbnail* is still only the plan
+> this section describes.
 >
 > **Note.** A suspension is anchored, not indexed. Naming the body is only half of surviving a
 > rebuild: the machine is also suspended at a *statement*, and an instruction index is a
