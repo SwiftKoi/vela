@@ -21,13 +21,15 @@ fn engine() -> TextEngine {
     text
 }
 
-/// A slot as a host would hand one over.
+/// A slot as a host would hand one over: the store's fields, and the readable time — which is the *host's* to
+/// format (`vela_host::format_time`), so this fixture is the host here and makes one up.
 fn slot(page: u32, number: u32, name: &str, time: u64) -> Slot {
     Slot {
         page,
         number,
         name: name.to_string(),
         time,
+        when: format!("at {time}"),
         loadable: true,
     }
 }
@@ -73,6 +75,11 @@ fn a_page_is_one_record_per_cell() {
     assert_eq!(answer[0].field("empty"), Some(&Value::Bool(false)));
     assert_eq!(answer[0].field("time"), Some(&Value::Num(1_700_000_000.0)));
     assert_eq!(answer[0].field("loadable"), Some(&Value::Bool(true)));
+    assert_eq!(
+        answer[0].field("when"),
+        Some(&Value::Str("at 1700000000".to_string())),
+        "the readable half of the stamp travels beside it"
+    );
     assert_eq!(
         answer[2].field("name"),
         Some(&Value::Str("1-3".to_string()))

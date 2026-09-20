@@ -193,9 +193,10 @@ pub fn next_page(preferences: &Preferences) -> u32 {
 
 /// The page before this one, never below the first.
 ///
-/// Ren'Py's `FilePagePrevious` is *insensitive* on the first page rather than wrapping — a screen says
-/// so with `enable_if`, which is why the button greys out — and this clamps anyway, because a disabled
-/// control is not a guarantee.
+/// Ren'Py's `FilePagePrevious` is *insensitive* on the first page rather than wrapping, and this clamps for
+/// the same reason a disabled control is not a guarantee: *nothing evaluates `enable_if` yet*
+/// (`paint.rs` says so), so the first page's Prev button is pressable and pressing it stays on page one
+/// (`M12.2`'s **Still open**).
 #[must_use]
 pub fn previous_page(preferences: &Preferences) -> u32 {
     page(preferences).saturating_sub(1).max(1)

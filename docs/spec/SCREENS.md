@@ -403,8 +403,9 @@ belongs to the engine that is running rather than to the artifact that was built
 the project's screens and finds the interface in the binary. What is there today is what
 `vela_ui::interface::decls()` returns `game_menu(title)` — the frame the app screens are built on — plus
 the screens a game is played through: `main_menu` (whose `Start` is `jump(start)`, below), `pause` (what
-`Escape` opens during play, `§2`), `about`, and `preferences` (§7.1). Save/load, history, help and notify
-arrive as `M12.2`'s items land.
+`Escape` opens during play, `§2`), `about`, `preferences` (§7.1), and `file_slots`/`save`/`load` — one body
+under two names, because the name is what tells the two apart (§7). History, help and notify arrive as
+`M12.2`'s items land.
 
 **A label a screen names resolves in the entry module.** A screen cannot know how a project is laid out,
 so a bare label resolves against the module the game's entry point is in — `jump(start)` in a game whose

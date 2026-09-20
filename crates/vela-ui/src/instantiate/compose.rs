@@ -95,12 +95,15 @@ impl<'a> Compose<'a> {
 /// keeps its default, which is [`crate::compose::with_defaults`] — the same rule an `open_screen` a
 /// runtime performs follows, so the two ways a screen is called cannot drift apart.
 fn bind(callee: &ScreenDecl, args: &[ScreenArg], caller: &Args) -> Args {
-    // What the host says travels with the call: `variant(...)` and `setting(...)` must answer the same
-    // in a *used* screen as in the caller, and a scope built from nothing would answer the defaults —
-    // which is the one way a `use` could draw differently from the same screen opened by name.
+    // What the host says travels with the call: `variant(...)`, `setting(...)` and `slots(...)` must answer
+    // the same in a *used* screen as in the caller, and a scope built from nothing would answer the defaults
+    // — which is the one way a `use` could draw differently from the same screen opened by name. The slots
+    // are the third of those, and the one this list forgot until the interface's own file screen was written
+    // against a `use`: its cells all drew as empty, which is exactly the failure the comment above predicts.
     let mut bound = Args::new()
         .with_variants(caller.variants())
-        .with_preferences(caller.preferences().clone());
+        .with_preferences(caller.preferences().clone())
+        .with_slots(caller.slots().to_vec());
     let mut next = 0usize;
 
     for arg in args {

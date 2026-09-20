@@ -46,6 +46,9 @@ screen main_menu:
                 action jump(start)
                 text "Start", style = interface_choice
             button:
+                action open_screen("load")
+                text "Load", style = interface_choice
+            button:
                 action open_screen("preferences")
                 text "Settings", style = interface_choice
             button:
@@ -72,6 +75,12 @@ screen pause:
                 action close_screen()
                 text "Resume", style = interface_choice
             button:
+                action replace_screen("save")
+                text "Save", style = interface_choice
+            button:
+                action replace_screen("load")
+                text "Load", style = interface_choice
+            button:
                 action replace_screen("preferences")
                 text "Settings", style = interface_choice
             button:
@@ -84,6 +93,41 @@ screen pause:
 screen about:
     use game_menu("About"):
         text "A game made with Vela."
+
+# A page of slots, which `save` and `load` are the same body of — Ren'Py's shape, and the reason the
+# difference between them is the *screen's name*: `vela-ui::actions::file_mode` loads when the screen that
+# asked is called `load` and saves otherwise, so one action serves both and a project that writes its own
+# load screen keeps the name.
+#
+# The page is the player's setting, so the buttons move it and the screen redraws; the *count* is here,
+# because a grid is a layout — six cells, like the sample's own 3x2. An empty cell is what a player saves
+# into, which is why every cell is a button and only the occupied ones have anything to say.
+screen file_slots(title):
+    use game_menu(title):
+        column gap = 8:
+            for cell in slots(6):
+                button:
+                    action file_action(cell.number)
+                    row gap = 12:
+                        if cell.empty:
+                            text cell.number, style = interface_choice
+                        else:
+                            text cell.when, style = interface_choice
+                            text cell.name, style = interface_choice
+            row gap = 12:
+                button:
+                    action file_page_previous()
+                    text "Prev", style = interface_choice
+                text setting("file_page"), style = interface_choice
+                button:
+                    action file_page_next()
+                    text "Next", style = interface_choice
+
+screen save:
+    use file_slots("Save")
+
+screen load:
+    use file_slots("Load")
 
 # The settings, one section per group of `vela-ui::settings`' list. Every control is a *button*: the
 # engine marks the one whose action writes what the store holds (`SCREENS.md §5.1`), so a choice needs no

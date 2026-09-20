@@ -25,9 +25,14 @@ pub struct Slot {
     pub number: u32,
     /// The name it is filed under (`1-3`), which is what a delete or a migration message says.
     pub name: String,
-    /// When it was written, seconds since the epoch: `RUNTIME.md §5`'s `created_at`, kept raw. Showing one
-    /// to a player is a locale and a time zone, which is a separate question (`M12.2`'s **Still open**).
+    /// When it was written, seconds since the epoch: `RUNTIME.md §5`'s `created_at`, kept raw.
     pub time: u64,
+    /// The same time as a player reads it — `2026-09-20 12:34` — formatted by the *host*, because a locale
+    /// and a time zone are the platform's business (`vela_host::format_time`) and a screen has no date type.
+    ///
+    /// Carried beside the raw stamp rather than instead of it: a screen draws this one, and a test or a
+    /// comparison keeps the number that means something.
+    pub when: String,
     /// Whether this build can load it: a version from the future or a half-written file answers false.
     pub loadable: bool,
 }
@@ -59,7 +64,7 @@ fn find(slots: &[Slot], page: u32, number: u32) -> Option<&Slot> {
 fn drawn(slot: &Slot) -> Value {
     record(
         slot.number,
-        slot.name.clone(),
+        (slot.name.clone(), slot.when.clone()),
         slot.time,
         slot.loadable,
         false,
@@ -71,14 +76,16 @@ fn drawn(slot: &Slot) -> Value {
 /// It carries its *number*, because that is what a save screen's button acts on: "save into slot three" is a
 /// press on an empty cell, and a record with no number would leave the control with nothing to say.
 fn empty(number: u32) -> Value {
-    record(number, String::new(), 0, false, true)
+    record(number, (String::new(), String::new()), 0, false, true)
 }
 
 /// One record, with the fields in one order for every cell.
-fn record(number: u32, name: String, time: u64, loadable: bool, empty: bool) -> Value {
+fn record(number: u32, text: (String, String), time: u64, loadable: bool, empty: bool) -> Value {
+    let (name, when) = text;
     Value::Record(vec![
         ("number".to_string(), Value::Num(f64::from(number))),
         ("name".to_string(), Value::Str(name)),
+        ("when".to_string(), Value::Str(when)),
         ("time".to_string(), Value::Num(time as f64)),
         ("loadable".to_string(), Value::Bool(loadable)),
         ("empty".to_string(), Value::Bool(empty)),

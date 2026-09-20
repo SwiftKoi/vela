@@ -229,17 +229,27 @@ fn the_doorway_screens_ask_for_what_they_say() {
     let mut text = engine();
 
     for (name, expected, actions) in [
+        // The doorway's list is the milestone's first exit criterion, in its own words: "start, load,
+        // settings, about, quit" from the title, and "save, load, settings, …" once the game is running.
         (
             "main_menu",
-            ["Start", "Settings", "About", "Quit"].as_slice(),
-            ["jump", "open_screen", "open_screen", "quit"].as_slice(),
+            ["Start", "Load", "Settings", "About", "Quit"].as_slice(),
+            ["jump", "open_screen", "open_screen", "open_screen", "quit"].as_slice(),
         ),
         (
             "pause",
-            ["Resume", "Settings", "About", "Quit"].as_slice(),
+            ["Resume", "Save", "Load", "Settings", "About", "Quit"].as_slice(),
             // Pages *replace* the menu, which is what keeps it one page deep; the title's buttons stack
             // over the title instead, because a title has something to come back to.
-            ["close_screen", "replace_screen", "replace_screen", "quit"].as_slice(),
+            [
+                "close_screen",
+                "replace_screen",
+                "replace_screen",
+                "replace_screen",
+                "replace_screen",
+                "quit",
+            ]
+            .as_slice(),
         ),
     ] {
         let laid = vela_ui::ScreenSource::lay(
@@ -263,6 +273,72 @@ fn the_doorway_screens_ask_for_what_they_say() {
             .map(|hotspot| hotspot.action.name.as_str())
             .collect();
         assert_eq!(asks, actions, "`{name}`'s controls, one per button");
+    }
+}
+
+/// The file screens are one body: a page of cells, and the same action in `save` and in `load`.
+///
+/// The *name* is what tells the two apart (`vela_ui::actions::file_mode`), which is why this asserts the
+/// actions rather than the words: two screens that asked for different things would be two screens, and the
+/// corpus's whole `file_slots` shape — one body, two titles — would be wrong. And the page is what a save
+/// screen draws *from*: six cells, an empty one showing its number (so it can be pressed) and a used one
+/// showing when it was written and what it is called.
+#[test]
+fn the_file_screens_offer_the_page_and_ask_for_the_same_slot_action() {
+    let set = vela_ui::interface::set();
+    let mut text = engine();
+    // One slot in the middle of the page, so a single drawing shows both states.
+    let slots = vec![vela_ui::Slot {
+        page: 1,
+        number: 2,
+        name: "1-2".to_string(),
+        time: 1_700_000_000,
+        when: "2023-11-14 22:13".to_string(),
+        loadable: true,
+    }];
+
+    for (name, title) in [("save", "Save"), ("load", "Load")] {
+        let laid = vela_ui::ScreenSource::lay(
+            &set,
+            name,
+            &Args::new().with_slots(slots.clone()),
+            &Default::default(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
+        .unwrap_or_else(|| panic!("the interface declares `{name}`"));
+
+        let mut drawn = Vec::new();
+        words(&laid.node, &mut drawn);
+        assert_eq!(
+            drawn,
+            vec![
+                title,
+                "1",
+                "2023-11-14 22:13",
+                "1-2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "Prev",
+                "1",
+                "Next",
+                // The frame's own Return, which every app screen gets from `game_menu`.
+                "Return"
+            ],
+            "`{name}`: the title, the page's cells, the page buttons, and the frame's Return"
+        );
+
+        let asks: Vec<&str> = laid
+            .hotspots
+            .iter()
+            .map(|hotspot| hotspot.action.name.as_str())
+            .collect();
+        let mut expected = vec!["file_action"; 6];
+        expected.extend(["file_page_previous", "file_page_next", "close_screen"]);
+        assert_eq!(asks, expected, "`{name}`: every cell, then the page");
     }
 }
 

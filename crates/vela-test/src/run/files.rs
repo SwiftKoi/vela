@@ -42,6 +42,7 @@ fn offered(slot: &vela_replay::Slot) -> Option<vela_ui::Slot> {
         number: slot.number?,
         name: slot.name.clone(),
         time: slot.time,
+        when: vela_host::format_time(slot.time),
         loadable: slot.loadable,
     })
 }

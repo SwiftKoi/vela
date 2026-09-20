@@ -16,7 +16,7 @@ pub use action::{Action, Bindings, Key};
 
 pub mod clock;
 
-pub use clock::stamp;
+pub use clock::{format_time, stamp};
 
 pub mod window;
 

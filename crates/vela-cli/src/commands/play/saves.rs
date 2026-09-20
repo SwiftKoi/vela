@@ -109,6 +109,9 @@ impl super::Player {
             number: slot.number?,
             name: slot.name.clone(),
             time: slot.time,
+            // The readable half of the stamp, which is the *host's* to produce: a locale and a time zone are
+            // the platform's business and a screen has no date type (`vela-ui::slots::Slot::when`).
+            when: vela_host::format_time(slot.time),
             loadable: slot.loadable,
         })
     }

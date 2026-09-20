@@ -79,9 +79,14 @@ fn engine() -> TextEngine {
     text
 }
 
-/// A root for the run's slots, removed first so a previous run cannot be the answer.
-fn root() -> PathBuf {
-    let root = std::env::temp_dir().join(format!("vela-test-slots-{}", std::process::id()));
+/// A root for one test's slots: its own directory, named for the test, removed first so a previous run
+/// cannot be the answer.
+///
+/// Named per test rather than per process, because the tests in this file run in parallel: one `root()` for
+/// all of them is one `remove_dir_all` that deletes another test's slot mid-run, which is exactly the flake
+/// it caused when a third test joined the two that had been passing by luck.
+fn root(name: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("vela-test-slots-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     root
 }
@@ -107,7 +112,7 @@ fn a_slot_a_run_saves_is_a_file_it_comes_back_to() {
     let mut stage = Stage::new(&screens, &mut text_engine, "sans");
     assert!(stage.open("pause"), "the fixture declares `pause`");
 
-    let root = root();
+    let root = root("through-a-screen");
     let saves = Saves::new(&root, schema(&text));
     let report = run(&module, "start", &plans, Some(&mut stage), Some(&saves));
     let outcome = report.outcomes.into_iter().next().expect("one outcome");
@@ -133,13 +138,65 @@ fn a_slot_a_run_saves_is_a_file_it_comes_back_to() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The engine's own file screens, end to end: a press saves into a cell, and the slot it then lists loads
+/// back.
+///
+/// This is the milestone's exit criterion with the *interface's* screens rather than a fixture's. The
+/// doorway is still a fixture, because what opens the first screen is not the test language's yet
+/// (`TOOLING.md §5`) — and everything past the doorway is the engine's: `save`'s page, the empty cell a
+/// player presses, the frame's Return, and `load`'s listed slot, which is what comes back to the line the
+/// slot was taken at.
+#[test]
+fn the_interfaces_file_screens_save_and_load() {
+    const DOOR: &str = "\
+screen door:
+    column gap 12:
+        button:
+            text \"Save\"
+            action open_screen(\"save\")
+        button:
+            text \"Load\"
+            action open_screen(\"load\")
+";
+    let parsed = vela_syntax::parse(FileId::from_raw(0), DOOR);
+    assert!(parsed.diagnostics.is_empty(), "the fixture must parse");
+    let screens = [
+        ScreenSet::from_items(&parsed.program.items),
+        vela_ui::interface::set(),
+    ];
+
+    let directives = "    run from start\n    click \"Save\"\n    click \"1\"\n    click \"Return\"\n    \
+                      advance 1\n    choose \"Right\"\n    expect shown \"Done.\"\n    \
+                      click \"Load\"\n    click \"1-1\"\n    expect shown \"One.\"\n";
+    let text = format!("{STORY}\ntest \"a test\":\n{directives}");
+    let (module, plans) = suite(&text);
+    let mut text_engine = engine();
+    let mut stage = Stage::new(&screens, &mut text_engine, "sans");
+    assert!(stage.open("door"), "the fixture declares `door`");
+
+    let root = root("interface");
+    let saves = Saves::new(&root, schema(&text));
+    let report = run(&module, "start", &plans, Some(&mut stage), Some(&saves));
+    let outcome = report.outcomes.into_iter().next().expect("one outcome");
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+
+    let found = slots(saves.of(0).dir()).expect("the slots list");
+    assert_eq!(
+        found.len(),
+        1,
+        "the interface's save screen wrote one slot: {found:?}"
+    );
+    assert_eq!(found[0].name, "1-1");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 /// Two tests in one run cannot see each other's slots.
 ///
 /// The property that makes a run's slots usable in a suite: a test asserting "this page is empty" has to be
 /// right whatever ran before it, and `Saves::of` is what keeps them apart.
 #[test]
 fn two_tests_do_not_share_their_slots() {
-    let root = root();
+    let root = root("apart");
     let saves = Saves::new(&root, schema(STORY));
 
     assert!(
