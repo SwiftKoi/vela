@@ -6,6 +6,7 @@
 //! `current` — so the loop below is the same twenty lines the driver is built from, with the script
 //! answering instead of a host.
 
+mod files;
 mod shown;
 
 use vela_bytecode::Module;
@@ -14,6 +15,7 @@ use vela_world::{Command, Input};
 
 use crate::plan::{Plan, StepKind};
 use crate::report::{Failure, Outcome, Reason, Report};
+use crate::saves::Saves;
 use crate::stage::Stage;
 use shown::{assert, click, shown_assert, shown_text, shows, text};
 
@@ -31,17 +33,30 @@ pub fn run(
     entry: &str,
     plans: &[Plan],
     mut stage: Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
 ) -> Report {
     Report {
         outcomes: plans
             .iter()
-            .map(|plan| one(module, entry, plan, stage.as_deref_mut()))
+            .enumerate()
+            .map(|(index, plan)| {
+                // One test's slots are its own: two tests share a run, and an assertion about an empty
+                // page must not be broken by whatever ran before it (`vela_test::Saves`).
+                let slots = saves.map(|saves| saves.of(index));
+                one(module, entry, plan, stage.as_deref_mut(), slots.as_ref())
+            })
             .collect(),
     }
 }
 
 /// Runs one test.
-fn one(module: &Module, entry: &str, plan: &Plan, mut stage: Option<&mut Stage<'_>>) -> Outcome {
+fn one(
+    module: &Module,
+    entry: &str,
+    plan: &Plan,
+    mut stage: Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
+) -> Outcome {
     let mut outcome = Outcome {
         name: plan.name.clone(),
         span: plan.span,
@@ -54,7 +69,14 @@ fn one(module: &Module, entry: &str, plan: &Plan, mut stage: Option<&mut Stage<'
     };
 
     let mut script = Script::default();
-    drive(&mut session, plan, &mut script, &mut outcome, &mut stage);
+    drive(
+        &mut session,
+        plan,
+        &mut script,
+        &mut outcome,
+        &mut stage,
+        saves,
+    );
     tail(
         module,
         &mut session,
@@ -62,6 +84,7 @@ fn one(module: &Module, entry: &str, plan: &Plan, mut stage: Option<&mut Stage<'
         &mut script,
         &mut outcome,
         &mut stage,
+        saves,
     );
     outcome
 }
@@ -95,6 +118,7 @@ fn tail(
     script: &mut Script,
     outcome: &mut Outcome,
     stage: &mut Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
 ) {
     let failed = !outcome.failures.is_empty();
     while !failed && let Some(next) = plan.steps.get(script.index) {
@@ -114,7 +138,7 @@ fn tail(
             // ended is still on the stack, and a press on it is still a press.
             StepKind::Click { function, source } => {
                 if let Some(wanted) = text(session, function, source, next.span, outcome) {
-                    click(session, stage, &wanted, next.span, outcome);
+                    click(session, stage, saves, &wanted, next.span, outcome);
                 }
             }
             // A wait the story never satisfied is why the run stopped, and saying *what it wanted*
@@ -152,6 +176,7 @@ fn drive(
     script: &mut Script,
     outcome: &mut Outcome,
     stage: &mut Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
 ) {
     let mut step = session.advance();
 
@@ -167,7 +192,7 @@ fn drive(
             // `Continue` is what `execute` says when there is more to do in the same step, and
             // `Session::advance` never hands it back: it runs to the next suspension or to the end.
             Step::Halt | Step::Continue => return,
-            Step::Yield(_) => match answer(session, plan, script, outcome, stage) {
+            Step::Yield(_) => match answer(session, plan, script, outcome, stage, saves) {
                 Some(next) => step = next,
                 None => return,
             },
@@ -185,11 +210,12 @@ fn answer(
     script: &mut Script,
     outcome: &mut Outcome,
     stage: &mut Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
 ) -> Option<Step> {
     // Assertions that sit before the answer to this command run here, because the world they are about
     // is the world as it is *at* this command — and they do not consume it, so the answer below is still
     // the answer to the command on screen.
-    if !assertions(session, stage, plan, script, outcome) {
+    if !assertions(session, stage, saves, plan, script, outcome) {
         return None;
     }
 
@@ -263,6 +289,7 @@ fn answer(
 fn assertions(
     session: &mut Session,
     stage: &mut Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
     plan: &Plan,
     script: &mut Script,
     outcome: &mut Outcome,
@@ -285,7 +312,7 @@ fn assertions(
                 let Some(wanted) = text(session, function, source, next.span, outcome) else {
                     return false;
                 };
-                click(session, stage, &wanted, next.span, outcome);
+                click(session, stage, saves, &wanted, next.span, outcome);
                 script.index += 1;
             }
             StepKind::AdvanceUntil { function, source } => {

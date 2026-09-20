@@ -250,13 +250,19 @@ pub enum Reason {
         /// Every word the top screen's controls read.
         offered: Vec<String>,
     },
-    /// A control asked for an action a headless run does not carry out: a `jump`, a save, a
-    /// preference — everything that is the VM's or the host's rather than the screen stack's.
+    /// A control asked for an action a headless run does not carry out: a `jump`, a preference —
+    /// everything that is the VM's or the host's rather than the screen stack's. The *file* actions are
+    /// no longer among them: a run has slots of its own (`vela_test::Saves`) and carries those out.
     NotOurs {
         /// The action, as the screen wrote it: `quit`, `jump(forest)`, …
         action: String,
         /// Every word the top screen's controls read.
         offered: Vec<String>,
+    },
+    /// A slot could not be read or written: the file system or the save format said why.
+    File {
+        /// What the store said, in its own words.
+        message: String,
     },
 }
 
@@ -283,6 +289,9 @@ impl fmt::Display for Reason {
                  screen offers {}",
                 quoted(offered)
             ),
+            Self::File { message } => {
+                write!(f, "a save slot could not be read or written: {message}")
+            }
         }
     }
 }

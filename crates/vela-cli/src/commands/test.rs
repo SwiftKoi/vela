@@ -19,7 +19,7 @@ use vela_compile::Session;
 use vela_diag::Severity;
 use vela_span::{FileId, Span};
 use vela_syntax::{Item, ScreenDecl, parse};
-use vela_test::{Plan, Report, Stage};
+use vela_test::{Plan, Report, Saves, Stage};
 use vela_text::{Font, TextEngine};
 use vela_ui::WidgetRegistry;
 use vela_ui::a11y::A11yNode;
@@ -128,6 +128,11 @@ fn tests(project: &Project, args: &[String], out: &mut dyn Write) -> Result<(), 
         ));
     }
 
+    // What a slot a run writes is checked against: the same schema `vela run` writes saves with, derived
+    // from the project's own source, so a slot saved by a test is one the project could read back
+    // (`RUNTIME.md §5`).
+    let schema = crate::commands::ui::schema(&project.files);
+
     // The screens a step may click, and the face to lay them out with: the same compiled sets and the
     // same bundled font `vela run` uses, so a test presses the control a player would press and the
     // two cannot disagree about what a button does (`TOOLING.md §5`).
@@ -135,7 +140,14 @@ fn tests(project: &Project, args: &[String], out: &mut dyn Write) -> Result<(), 
     let mut text = text_engine()?;
     let mut stage = Stage::new(screens.sets(), &mut text, FACE_NAME);
 
-    let report = vela_test::run(&module, &entry, &plans, Some(&mut stage));
+    // A run's own slots, in a directory of its own under the system's temporary directory: a test that
+    // saved into the slots a person plays from would be a test that overwrites their progress. Removed
+    // once the run is over — what a failing test leaves behind is the report, not a save file.
+    let saves = temp_saves();
+    let slots = Saves::new(&saves, schema);
+    let report = vela_test::run(&module, &entry, &plans, Some(&mut stage), Some(&slots));
+    let _ = fs::remove_dir_all(&saves);
+
     render(&session, &report, out);
 
     if report.is_ok() {
@@ -145,6 +157,14 @@ fn tests(project: &Project, args: &[String], out: &mut dyn Write) -> Result<(), 
         "{} test(s) failed",
         report.failed()
     )))
+}
+
+/// The directory one run's save slots live in, under the system's temporary directory.
+///
+/// Named for the process rather than the project: two runs of the same project are two runs, and a test
+/// that found another one's slots would be a test whose result depended on what ran before it.
+fn temp_saves() -> PathBuf {
+    std::env::temp_dir().join(format!("vela-test-saves-{}", std::process::id()))
 }
 
 /// The text engine a laid screen is sized with: the face the windowed runner uses, under the same

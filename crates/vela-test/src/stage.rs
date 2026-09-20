@@ -54,6 +54,16 @@ impl<'a> Stage<'a> {
             .open(self.screens, name, &[], FRAME, self.text, self.font)
     }
 
+    /// The name of the screen on top, or nothing when the stack is empty.
+    ///
+    /// What a file action's save-or-load rule reads (`vela_ui::actions::file_mode`): the rule is Ren'Py's,
+    /// and it is about the *screen*, so a run that carries the action out has to ask the same question the
+    /// windowed player asks of its own stack.
+    #[must_use]
+    pub fn top_name(&self) -> Option<&str> {
+        self.overlays.top().map(|top| top.name.as_str())
+    }
+
     /// Whether nothing is open.
     #[must_use]
     pub fn is_empty(&self) -> bool {

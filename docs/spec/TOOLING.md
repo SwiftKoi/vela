@@ -258,6 +258,7 @@ Capabilities:
 | Story-graph assertions | `cover labels`, `cover variants`, `no_dead_ends` |
 | World assertions | Typed expressions evaluated against `World` |
 | Screen steps | `click "<control>"` presses a control on the screen on top |
+| Save slots | The file actions work in a run, against slots of its own (`RUNTIME.md §5`) |
 | Command assertions | Assert the *exact* command stream (golden) or a shape (matcher) |
 | Golden frames | Render at a scripted point, compare to a stored PNG (tolerance-based) |
 | Locale sweep | Re-run the suite under every locale, failing on overflow/missing strings |
@@ -287,13 +288,30 @@ is always reviewed.
 > what `vela run` holds minus the window — so a click is a player's press: the control is *focused*
 > first and the action is read from the focused hotspot, which is why a click and a keypress cannot
 > disagree about what a button does. The action is then carried out by the same dispatcher a window uses
-> (`SCREENS.md §7`); anything the screen stack does not own — a `jump`, a save, `quit` — fails with the
-> action named, because a headless run has no VM answer behind it.
+> (`SCREENS.md §7`); anything the screen stack does not own — a `jump`, `quit` — fails with the
+> action named, because a headless run has no VM answer behind it. (Two vocabularies have stopped being
+> failures since: the settings, and the file actions — see M12.2 below.)
 >
 > A click is consumed where the *assertions* are, not where the answers are, and that is the difference
 > between a test and a recording: a player clicking a pause menu is not advancing the line behind it, so
 > `click "History"` then `click "Return"` then `advance 1` is one sequence — two presses and one line —
 > rather than three advances.
+>
+> **Implemented (M12.2).** Two vocabularies a press can ask for stopped being failures, because a run is a
+> host for them. The **settings** (`preference`, a toggle, a page) are written into the session's world and
+> the screens are laid out again, so the next click sees what the press changed. The **file actions** are
+> carried out against slots of the run's own (`vela_test::Saves`): one directory per *test* under a root the
+> caller supplies, so two tests cannot read each other's slots and a run cannot touch a player's. The root is
+> the caller's question — `vela test` makes one under the system temporary directory and removes it — and the
+> schema comes from the project's own source, so a slot a test writes is one the project could read back
+> (`RUNTIME.md §5`).
+>
+> What a file action *means* is still not the runner's: which of the two it is, is Ren'Py's rule about the
+> screen's name (`vela_ui::actions::file_mode`), the page is the player's setting, and the file is named for
+> both (`vela_replay::slot_name`). The run joins those to a session and a directory. A slot that cannot be
+> read or written fails with the store's own words (`Reason::File`), while a load of an *empty* slot carries
+> out nothing — that is Ren'Py's insensitive button rather than a mistake, and the test's own next assertion
+> is what notices it.
 >
 > **Not yet.** What *opens the first screen* is not the test language's: a screen is opened by a
 > control's `open_screen` or by the host, so the game's own menu (`M12.2`) and the key bindings that open

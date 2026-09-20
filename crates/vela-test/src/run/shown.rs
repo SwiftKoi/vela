@@ -13,7 +13,10 @@ use vela_vm::Session;
 use vela_world::{Command, Value};
 
 use crate::report::{Failure, Outcome, Reason};
+use crate::saves::Saves;
 use crate::stage::Stage;
+
+use super::files;
 
 /// Calls an assertion and reports it if it is not `true`.
 pub(super) fn assert(
@@ -157,6 +160,7 @@ pub(super) fn text(
 pub(super) fn click(
     session: &mut Session,
     stage: &mut Option<&mut Stage<'_>>,
+    saves: Option<&Saves>,
     wanted: &str,
     span: Span,
     outcome: &mut Outcome,
@@ -201,6 +205,22 @@ pub(super) fn click(
         stage.set_preferences(session.world().preferences.clone());
         stage.relaid();
         return;
+    }
+
+    // A *file* action is carried out here too, against slots of the run's own (`vela_test::Saves`): item
+    // 5's evidence is that a save screen works end to end, and a run that refused the press could not
+    // produce it. What the action means is not decided here — the screen's name decides save-or-load, the
+    // player's setting decides the page — so this is a join rather than a second implementation.
+    if let Some(saves) = saves {
+        let result = files::carry_out(session, saves, stage.top_name(), &action);
+        if let Some(result) = result {
+            if let Err(reason) = result {
+                // The store said why: a slot that cannot be written or read is a real failure rather than
+                // a headless run's limit, so it is reported in the store's own words.
+                outcome.failures.push(Failure::Uncarried { span, reason });
+            }
+            return;
+        }
     }
 
     // Everything the stack does not own needs the VM or the host, and a headless run has neither. Saying

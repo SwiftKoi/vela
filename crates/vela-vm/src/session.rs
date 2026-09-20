@@ -126,6 +126,31 @@ impl Session {
         })
     }
 
+    /// Puts *this* session back to a snapshot, with the settings of the player it is resumed for.
+    ///
+    /// The mirror of [`Session::restore`] for a caller that is already holding a session: a resume needs
+    /// the module only to rebuild the machine's frames, and a live session's machine has one. What it
+    /// does not keep is the run: the input log starts empty, because rollback history is not persisted
+    /// (`RUNTIME.md §7.3`), and the command the snapshot was waiting on is restored for the caller to
+    /// answer.
+    ///
+    /// # Errors
+    ///
+    /// Fails if a frame names a body this module does not have, which leaves the session as it was.
+    pub fn resume(&mut self, snapshot: &Snapshot, preferences: Preferences) -> Result<(), Fault> {
+        // The machine first, and only then the state around it: a frame that cannot be found is a
+        // refusal rather than a half-resumed session.
+        let mut vm = Vm::new(self.vm.module().clone());
+        vm.restore_state(&snapshot.vm)?;
+        self.vm = vm;
+        self.world = snapshot.world.clone();
+        self.world.preferences = preferences;
+        self.log = Vec::new();
+        self.current = snapshot.current.clone();
+        self.finished = snapshot.vm.finished;
+        Ok(())
+    }
+
     /// Runs until the story suspends, ends, or faults.
     pub fn advance(&mut self) -> Step {
         if self.finished {

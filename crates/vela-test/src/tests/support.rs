@@ -96,7 +96,7 @@ pub(super) fn with_test(directives: &str) -> String {
 pub(super) fn failures(directives: &str) -> Vec<Failure> {
     let (module, plans) = suite(&with_test(directives));
     assert_eq!(plans.len(), 1, "one test");
-    let report = run(&module, "start", &plans, None);
+    let report = run(&module, "start", &plans, None, None);
     report
         .outcomes
         .into_iter()

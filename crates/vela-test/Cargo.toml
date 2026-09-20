@@ -12,6 +12,8 @@ rank = 9
 [dependencies]
 vela-bytecode.workspace = true
 vela-diag.workspace = true
+vela-host.workspace = true
+vela-replay.workspace = true
 vela-span.workspace = true
 vela-syntax.workspace = true
 vela-text.workspace = true

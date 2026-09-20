@@ -73,7 +73,7 @@ fn clicked(directives: &str) -> (Vec<Failure>, Vec<String>) {
     let mut stage = Stage::new(&screens, &mut text, "sans");
     assert!(stage.open("pause"), "the fixture declares `pause`");
 
-    let report = run(&module, "start", &plans, Some(&mut stage));
+    let report = run(&module, "start", &plans, Some(&mut stage), None);
     let outcome = report.outcomes.into_iter().next().expect("one outcome");
     (outcome.failures, stage.controls())
 }
@@ -217,7 +217,7 @@ screen flags:
     let mut stage = Stage::new(&screens, &mut text, "sans");
     assert!(stage.open("flags"), "the fixture declares `flags`");
 
-    let report = run(&module, "start", &plans, Some(&mut stage));
+    let report = run(&module, "start", &plans, Some(&mut stage), None);
     let outcome = report.outcomes.into_iter().next().expect("one outcome");
     assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
     // Two presses, and the label is back where it started: the second press flipped the setting back.
@@ -229,7 +229,7 @@ screen flags:
 #[test]
 fn a_click_without_a_stage_says_so() {
     let (module, plans) = suite(&with_test("    run from start\n    click \"Settings\"\n"));
-    let report = run(&module, "start", &plans, None);
+    let report = run(&module, "start", &plans, None, None);
 
     assert_eq!(report.failed(), 1);
     let Failure::Uncarried {
@@ -252,7 +252,7 @@ fn a_click_with_nothing_open_says_what_is_missing() {
     let screens = [screens()];
     let mut text = engine();
     let mut stage = Stage::new(&screens, &mut text, "sans");
-    let report = run(&module, "start", &plans, Some(&mut stage));
+    let report = run(&module, "start", &plans, Some(&mut stage), None);
 
     assert_eq!(report.failed(), 1);
     let Failure::Uncarried {

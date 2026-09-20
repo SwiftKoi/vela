@@ -26,6 +26,7 @@
 mod plan;
 mod report;
 mod run;
+mod saves;
 mod stage;
 #[cfg(test)]
 mod tests;
@@ -33,4 +34,5 @@ mod tests;
 pub use plan::{Plan, Prepared, Step, StepKind, prepare};
 pub use report::{Failure, Outcome, Reason, Report};
 pub use run::run;
+pub use saves::Saves;
 pub use stage::{FRAME, Stage};

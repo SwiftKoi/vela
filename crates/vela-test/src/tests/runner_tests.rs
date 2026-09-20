@@ -121,7 +121,7 @@ fn cover_labels_passes_when_the_run_reaches_everything() {
         format!("{text}\ntest \"all of it\":\n    run\n    choose \"Right\"\n    cover labels\n");
 
     let (module, plans) = suite(&text);
-    let report = run(&module, "start", &plans, None);
+    let report = run(&module, "start", &plans, None, None);
 
     assert!(report.is_ok(), "{:?}", report.outcomes[0].failures);
 }
@@ -135,7 +135,7 @@ fn a_suite_reports_each_test() {
          test \"does not\":\n    run from start\n    advance 1\n    expect trust == 9\n"
     );
     let (module, plans) = suite(&text);
-    let report = run(&module, "start", &plans, None);
+    let report = run(&module, "start", &plans, None, None);
 
     assert_eq!(report.outcomes.len(), 2);
     assert_eq!(report.passed(), 1);
@@ -214,7 +214,7 @@ test \"after it is over\":
     expect trust == 2
 ";
     let (module, plans) = suite(text);
-    let report = run(&module, "start", &plans, None);
+    let report = run(&module, "start", &plans, None, None);
 
     assert!(report.is_ok(), "{:?}", report.outcomes[0].failures);
 }
