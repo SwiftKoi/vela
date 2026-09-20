@@ -42,7 +42,12 @@ use crate::theme::{Fonts, Palette};
 /// Version 10 adds `default` (`SCREENS.md §2.5`). A version-9 reader would read the tag as a widget
 /// named `""` and then take the variable's *name* for the next line's tag — so a screen that declared
 /// one would decode as a tree nobody wrote, rather than being refused.
-pub const PACK_VERSION: u16 = 10;
+/// Version 11 adds the per-axis size props, `width` and `height` (`SCREENS.md §4.2`). A prop is not a
+/// tag, so a version-10 reader decodes the tree faithfully and *drops* the arg — a rail that was 280
+/// wide is laid out content-wide, which is a wrong screen rather than a refused one. That is version
+/// 6's rule (a table an older reader never sees) rather than version 9's (a byte read as another tag):
+/// dropped data bumps the version, because nothing downstream can tell it was ever written.
+pub const PACK_VERSION: u16 = 11;
 
 /// The four bytes every pack starts with.
 ///

@@ -160,6 +160,68 @@ fn a_background_prop_resolves_a_theme_token() {
     );
 }
 
+/// One axis at a time: `width` fixes the width and leaves the height to the content, which is what a
+/// side rail is and what `size` cannot express — it sets both axes, and `size 280 auto` is not a line
+/// the grammar can write (the second `auto` is read as another prop's name).
+#[test]
+fn a_written_width_fixes_one_axis_and_leaves_the_other_to_the_content() {
+    const RAIL: &str = "screen rail:\n    row:\n        box width 280:\n            pad 8\n            text \"rail\"\n        box grow 1:\n            pad 8\n            text \"content\"\n";
+
+    let root = built_screen(RAIL, "rail", &Args::new());
+    let rail = &root.children[0].children[0];
+    assert_eq!(
+        rail.props.width,
+        vela_ui::SizeSpec::Fixed(280.0),
+        "`width 280` was not applied"
+    );
+    assert_eq!(
+        rail.props.height,
+        vela_ui::SizeSpec::Auto,
+        "`width` should say nothing about the other axis"
+    );
+
+    let mut text = engine();
+    let laid = set(RAIL)
+        .lay(
+            "rail",
+            &Args::new(),
+            &vela_ui::ScreenState::new(),
+            (1280, 720),
+            &mut text,
+            "sans",
+        )
+        .expect("rail is declared");
+    let row = &laid.frame.children[0];
+    assert_eq!(
+        row.children[0].rect.width, 280.0,
+        "the rail was not 280 wide"
+    );
+    assert!(
+        row.children[0].rect.height < 280.0,
+        "the rail was not as tall as its content: {}",
+        row.children[0].rect.height
+    );
+    assert_eq!(
+        row.children[1].rect.x, 280.0,
+        "the content starts where the rail ends"
+    );
+}
+
+/// `size` keeps its both-axes meaning, and `height` sets the axis `width` does not.
+#[test]
+fn size_sets_both_axes_and_height_sets_one() {
+    const BOXES: &str = "screen boxes:\n    stack:\n        box size 90:\n            text \"a\"\n        box height 120:\n            text \"b\"\n";
+
+    let root = built_screen(BOXES, "boxes", &Args::new());
+    let both = &root.children[0].children[0];
+    assert_eq!(both.props.width, vela_ui::SizeSpec::Fixed(90.0));
+    assert_eq!(both.props.height, vela_ui::SizeSpec::Fixed(90.0));
+
+    let tall = &root.children[0].children[1];
+    assert_eq!(tall.props.height, vela_ui::SizeSpec::Fixed(120.0));
+    assert_eq!(tall.props.width, vela_ui::SizeSpec::Auto);
+}
+
 /// An unknown screen is not a screen.
 #[test]
 fn an_undeclared_screen_builds_nothing() {

@@ -549,14 +549,29 @@ of coordinate math:
 | `gap <n>` | `row`/`column`/`grid`/`flow` | Space between children |
 | `align <anchor>` | containers | Child alignment within available space |
 | `anchor <anchor>` | any | Self-positioning in parent |
-| `size <w> <h>` | any | Fixed size (`auto`, `<n>`, `<pct>%`) |
-| `min` / `max` | any | Size bounds |
+| `size <n>` | any | Both axes fixed at once |
+| `width <n>` / `height <n>` | any | One axis fixed; the other still follows the content |
+| `min` / `max` | any | Size bounds. Declared, and read by nothing yet |
 | `grow <n>` | any | Flex weight along the parent's main axis |
 | `at <transform>` | any | Position/scale/alpha offset |
 | `stretch_x` / `stretch_y` | any | Shorthand for the matching axis |
 | `background <colour>` | any | Fill painted behind the node, as a theme token (`theme.bg`) |
 | `style <name>` | any | A `style` declaration whose `color`, `size`, and `font` this node draws with |
 | `action <call>` | interactive | What activating the node does: `action open_screen(settings)` |
+
+**Sizing an axis has three answers and no fourth.** Unwritten, an axis follows the content — which is
+the default, so `auto` is not a value worth writing. `stretch_x`/`stretch_y` fill the parent. `width`
+and `height` fix one axis and `size <n>` fixes both. A *percentage* is not among them, and it was
+promised here once: `50%` never parsed, because `%` is the modulo operator (`LANGUAGE.md §2`), and an
+axis that is some fraction of the parent is two `spacer`s with `grow` weights. The pair form went the
+same way for a grammar reason rather than a design one: in `size 280 auto` the second word is read as
+another prop's name, so it is not a line this language can write (`M12.2`'s **Found during
+implementation**).
+
+> **Note.** `min` and `max` are declared in the prop schema and read by no layout pass — a screen that
+> writes one draws as if it had not written anything. That is a silent no-op of the kind this spec
+> exists to prevent, and it is recorded in `M12.2`'s **Still open** rather than implemented with
+> semantics nobody has argued for.
 
 Both `align` and `anchor` compose: a node that names its own `anchor` positions itself in the
 slot its parent offers, and one that does not takes the parent's `align`. They are separate
@@ -1058,7 +1073,11 @@ actually arrives broken — a truncated transfer and a half-written file. It is 
 
 - **Versioned.** A reader refuses a `pack_version` it does not know, naming the version, rather
   than reading it as if the fields it did not recognize were absent. The version is bumped for any
-  change to the container or to the declaration fields it carries, because those *are* the format.
+  change to the container or to the declaration fields it carries, because those *are* the format —
+  and a **prop a screen may write is one of those fields**: an older reader decodes it happily and
+  then drops it (§4.2's `width`), so a screen would draw as if the line had never been written.
+  Dropped data bumps the version for the same reason version 6 bumped it for the font table: a wrong
+  screen is worse than a refused one, because nothing downstream can tell the line was ever there.
 - **Binary, not text.** A pack is not source and is not meant to be edited; a readable form would
   be a second thing to keep in step with the language.
 - **One per module.** A `ScreenSet` is one file's worth, because styles resolve where they are

@@ -11,7 +11,12 @@
 pub enum PropType {
     /// A number: `pad 8`.
     Number,
-    /// A dimension: `size 320`, `size 50%`, or `auto`.
+    /// A size in pixels: `size 320`, `width 280`.
+    ///
+    /// A *number* rather than a wildcard: an axis that follows its content is the default, and one
+    /// that fills its parent is `stretch_x`/`stretch_y` (`SCREENS.md §4.2`), so there is nothing
+    /// left for a value to say. `50%` was documented here and never parsed — `%` is the modulo
+    /// operator — which is why the row now names the spelling that exists.
     Dimension,
     /// One of a fixed set: `align center`.
     Anchor,
@@ -109,19 +114,31 @@ pub const COMMON: &[PropDecl] = &[
         name: "size",
         ty: PropType::Dimension,
         required: false,
-        doc: "Fixed size; `auto` follows the content.",
+        doc: "Both axes at once; `width` and `height` set one each.",
+    },
+    PropDecl {
+        name: "width",
+        ty: PropType::Dimension,
+        required: false,
+        doc: "A fixed width; the height still follows the content.",
+    },
+    PropDecl {
+        name: "height",
+        ty: PropType::Dimension,
+        required: false,
+        doc: "A fixed height; the width still follows the content.",
     },
     PropDecl {
         name: "min",
         ty: PropType::Dimension,
         required: false,
-        doc: "Smallest size this node may take.",
+        doc: "Smallest size this node may take. Declared, but nothing reads it yet.",
     },
     PropDecl {
         name: "max",
         ty: PropType::Dimension,
         required: false,
-        doc: "Largest size this node may take.",
+        doc: "Largest size this node may take. Declared, but nothing reads it yet.",
     },
     PropDecl {
         name: "grow",

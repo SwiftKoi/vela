@@ -175,6 +175,11 @@ fn apply_prop(node: &mut Node, name: &str, value: PropValue<'_>, ctx: &Ctx, valu
                 node.props.height = SizeSpec::Fixed(size);
             }
         }
+        // One axis at a time, which is what a fixed width and a content-driven height need — the
+        // shape `SCREENS.md §4.2` used to promise as `size <w> <h>` and the grammar cannot write,
+        // because the second `auto` in such a line is read as another prop's name.
+        "width" => set_dimension(&mut node.props.width, value),
+        "height" => set_dimension(&mut node.props.height, value),
         "background" => {
             if let Some(color) = value.color(ctx) {
                 node.paint.background = Some(color);
@@ -317,6 +322,16 @@ pub(super) fn measure_image(node: &mut Node, images: &ImageTable) {
     };
     if let Some(picture) = images.get(name) {
         *size = Size::new(picture.width as f32, picture.height as f32);
+    }
+}
+
+/// Sets one axis's size from a value, leaving it following the content when there is none.
+///
+/// Only a number is a size: `auto` is what an unwritten prop already means, and a *percentage* has no
+/// spelling, so neither is read here (`SCREENS.md §4.2`).
+fn set_dimension(field: &mut SizeSpec, value: PropValue<'_>) {
+    if let Some(number) = value.number() {
+        *field = SizeSpec::Fixed(number);
     }
 }
 

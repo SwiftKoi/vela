@@ -10,9 +10,11 @@ A `*` marks a prop a screen has to give. A prop that takes *a label or screen* i
 
 | prop | takes | | meaning |
 | --- | --- | --- | --- |
-| `size` | a size |  | Fixed size; `auto` follows the content. |
-| `min` | a size |  | Smallest size this node may take. |
-| `max` | a size |  | Largest size this node may take. |
+| `size` | a size |  | Both axes at once; `width` and `height` set one each. |
+| `width` | a size |  | A fixed width; the height still follows the content. |
+| `height` | a size |  | A fixed height; the width still follows the content. |
+| `min` | a size |  | Smallest size this node may take. Declared, but nothing reads it yet. |
+| `max` | a size |  | Largest size this node may take. Declared, but nothing reads it yet. |
 | `grow` | a number |  | Flex weight along the parent's main axis. |
 | `anchor` | an anchor |  | Where this node sits inside its parent's slot. |
 | `at` | a word |  | Position, scale, and alpha offset. |
