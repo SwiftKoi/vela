@@ -55,6 +55,11 @@ pub struct SaveHeader {
     /// The schema the world was saved against.
     pub schema_digest: [u8; 32],
     /// The build that wrote it, for a bug report.
+    ///
+    /// **Nothing fills this yet**: `Save::new` leaves it empty and no caller sets it, so a save does not
+    /// actually say which build wrote it (`M12.2`'s **Still open**). What *identifies* a build — the
+    /// engine's version, a bundle descriptor's, a source revision — is the question to answer first,
+    /// because the answer is written into a file people keep for years.
     pub engine_build: String,
     /// When it was written, in whatever unit the host chose. Display only.
     pub created_at: u64,
